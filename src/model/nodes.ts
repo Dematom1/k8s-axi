@@ -1,6 +1,7 @@
 import { object, objects, text, type Obj } from "../kubectl.js";
 import { redactText } from "../redact.js";
 import { age } from "./time.js";
+import { preview } from "../commands/common.js";
 import type { Row, ListSpec } from "../render.js";
 export const nodeSpec: ListSpec = {
   noun: "nodes",
@@ -50,15 +51,17 @@ export function conditionRows(
     condition: text(c.type),
     status: text(c.status),
     reason: text(c.reason),
-    message: redactText(text(c.message)).text.slice(0, full ? undefined : 500),
+    message: preview(redactText(text(c.message)).text, full, 500),
   }));
 }
-export function nodeDetail(raw: Obj): Record<string, unknown> {
+export function nodeDetail(raw: Obj, full = false): Record<string, unknown> {
   const status = object(raw.status);
   return {
     node: text(object(raw.metadata).name),
-    ...nodeRow(raw).cells,
-    conditions: conditionRows(status.conditions),
+    status: nodeRow(raw).cells.status,
+    role: nodeRow(raw).cells.role,
+    version: nodeRow(raw).cells.version,
+    conditions: conditionRows(status.conditions, full),
     taints: objects(object(raw.spec).taints).map((t) => ({
       key: text(t.key),
       value: redactText(text(t.value)).text,

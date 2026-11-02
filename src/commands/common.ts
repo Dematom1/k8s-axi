@@ -1,6 +1,7 @@
 import { encodeObject } from "../toon.js";
 import { fail } from "../errors.js";
 import { parseArgs, type Parsed } from "../args.js";
+import { COMMAND_LINES } from "../help.js";
 export function refuse(command: string): never {
   return fail(
     "REFUSED",
@@ -31,7 +32,11 @@ export async function dispatch(
   const p = parseArgs(command, args);
   if (p.help)
     return encodeObject({
-      command: `k8s-axi ${command}`,
+      command: `k8s-axi ${command}${p.action === "list" ? "" : " " + p.action}`,
+      commands: COMMAND_LINES.filter(
+        (line) =>
+          line.startsWith(command + " ") || line.startsWith(command + ":"),
+      ),
       flags: [
         "--context <name>",
         "--timeout <seconds> (20)",
@@ -55,7 +60,17 @@ export async function dispatch(
           ? ["--warnings", "--since <duration>", "--for Kind/name"]
           : []),
       ],
-      examples: [`k8s-axi ${command}`, `k8s-axi ${command} --help`],
+      examples:
+        command === "setup"
+          ? [
+              "k8s-axi setup hooks",
+              "k8s-axi setup status",
+              "k8s-axi setup uninstall",
+            ]
+          : [
+              `k8s-axi ${command}${["view", "logs"].includes(p.action) ? " " + p.action + " <name>" : ""}`,
+              `k8s-axi ${command} --help`,
+            ],
     });
   const run = implementations[command];
   if (!run) fail("REFUSED", `${command} not built yet`);

@@ -46,9 +46,11 @@
     "format:check": "prettier --check .",
     "pretest": "npm run build",
     "test": "vitest run",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && node dist/scripts/build-skill.js --check",
     "prepublishOnly": "npm run check",
-    "test:real": "npm run build && vitest run test/real-kubectl.test.ts"
+    "test:real": "npm run build && vitest run test/real-kubectl.test.ts",
+    "build:skill": "npm run build && node dist/scripts/build-skill.js",
+    "check:skill": "npm run build && node dist/scripts/build-skill.js --check"
   },
   "dependencies": {
     "@toon-format/toon": "2.3.1",

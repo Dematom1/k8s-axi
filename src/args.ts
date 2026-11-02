@@ -129,7 +129,13 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
   const flags = new Map<string, string | true>();
   const allowed = [
     ...globalFlags,
-    ...(["ctx", "context", "setup"].includes(command) ? [] : listFlags),
+    ...(["ctx", "context", "setup"].includes(command)
+      ? []
+      : listFlags.filter(
+          (f) =>
+            f !== "selector" ||
+            ["pods", "deployments", "jobs"].includes(command),
+        )),
     ...(command === "events" ? ["warnings", "since", "for"] : []),
     ...(command === "pods" ? ["container", "tail", "since", "previous"] : []),
   ];
@@ -178,8 +184,9 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     if (!actions.includes(action))
       usage(`Unknown subcommand ${action}`, command);
     if (["view", "logs"].includes(action)) {
-      if (pos.length !== 2) usage(`${action} requires one name`, command);
-      name = validateResourceName(pos[1] ?? "");
+      if (pos.length !== 2 && !(flags.has("help") && pos.length === 1))
+        usage(`${action} requires one name`, command);
+      if (pos[1]) name = validateResourceName(pos[1]);
     } else if (pos.length !== 1) usage("Surplus positional arguments", command);
   }
   if (flags.has("all-namespaces") && flags.has("namespace"))
@@ -197,6 +204,13 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     ["namespace", "all-namespaces", "selector"].some((x) => flags.has(x))
   )
     usage("cluster-scoped command does not accept scope flags", command);
+  if (command === "pods" && flags.has("since") && action !== "logs")
+    usage("--since requires pods logs", command);
+  if (
+    ["view", "logs"].includes(action) &&
+    ["selector", "problems", "limit", "fields"].some((f) => flags.has(f))
+  )
+    usage("list flags require a list command", command);
   const forObject = str("for");
   if (
     forObject &&

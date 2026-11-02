@@ -1,3 +1,35 @@
 export const DESCRIPTION =
   "Strictly read-only Kubernetes diagnostics for agents";
-export const TOP_HELP = ["k8s-axi --help", "k8s-axi --version"];
+export const COMMAND_LINES = [
+  "triage: cluster checks and problems, all namespaces by default",
+  "ctx: context, server, namespace and client version, local only",
+  "nodes: node readiness, pressure, scheduling and version",
+  "nodes view <node>: conditions, taints, resources and recent events",
+  "namespaces: discover namespaces",
+  "pods: pod readiness, status and restarts",
+  "pods view <pod>: containers, last termination, owner and recent events",
+  "pods logs <pod>: bounded logs, redaction is best effort",
+  "deployments: rollout readiness and conditions",
+  "deployments view <name>: rollout conditions and recent events",
+  "jobs: completion, failure and suspension",
+  "pvcs: claim phase and capacity",
+  "services: ready EndpointSlice counts",
+  "events: newest first, absolute time, count and message",
+  "secrets: metadata and key counts only",
+  "secrets view <name>: metadata and key names, never values",
+  "setup hooks: opt-in local agent integrations",
+  "setup status: inspect integrations without writes",
+  "setup uninstall: remove managed hooks, preserve unrelated config",
+  "context: last session summary for this directory",
+  "context end: record command counts and most-used context from stdin hook payload",
+];
+export const TOP_HELP = [
+  DESCRIPTION,
+  "No command: live cluster overview. Reads must complete before health is known.",
+  ...COMMAND_LINES,
+  "Global: --context <name>, --timeout <seconds> (20, range 1..120), --help, --version (-v, -V)",
+  "Lists: -n <namespace> or -A, --limit <n> (100, max 1000), --fields <a,b>, --problems",
+  "Output is TOON. Exit 0: completed reads, including problems. Exit 1: failed or partial reads. Exit 2: usage.",
+  "Secret values never enter this process. --full only untruncates allowlisted text.",
+  "Writes, raw output, exec, streaming and self-update are refused.",
+];
