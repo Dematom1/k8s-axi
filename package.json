@@ -21,7 +21,8 @@
     "toon"
   ],
   "bin": {
-    "k8s-axi": "./dist/bin/k8s-axi.js"
+    "k8s-axi": "./dist/bin/k8s-axi.js",
+    "k8s-axi-ctx": "./dist/bin/k8s-axi-ctx.js"
   },
   "files": [
     "dist/bin",
@@ -38,7 +39,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && chmod +x dist/bin/*.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "lint": "eslint .",
     "format": "prettier --write .",

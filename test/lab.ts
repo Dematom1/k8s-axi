@@ -37,6 +37,8 @@ export function lab(
   const env = {
     PATH: bin,
     HOME: join(dir, "home"),
+    XDG_CONFIG_HOME: join(dir, "home/.config"),
+    XDG_CACHE_HOME: join(dir, "home/.cache"),
     K8S_AXI_SCENARIO: join(dir, "scenario"),
     K8S_AXI_CALLS: join(dir, "calls"),
     K8S_AXI_PID: join(dir, "pid"),

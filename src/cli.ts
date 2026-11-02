@@ -14,6 +14,8 @@ import { workloadsCommand } from "./commands/workloads.js";
 import { servicesCommand } from "./commands/services.js";
 import { secretsCommand } from "./commands/secrets.js";
 import { triageCommand } from "./commands/triage.js";
+import { setupCommand } from "./commands/setup.js";
+import { contextCommand } from "./commands/context.js";
 Object.assign(implementations, {
   nodes: nodesCommand,
   pods: podsCommand,
@@ -23,6 +25,8 @@ Object.assign(implementations, {
   pvcs: workloadsCommand,
   services: servicesCommand,
   secrets: secretsCommand,
+  setup: setupCommand,
+  context: contextCommand,
   triage: triageCommand,
   home: triageCommand,
   ctx: ctxCommand,
