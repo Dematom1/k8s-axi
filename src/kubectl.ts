@@ -14,6 +14,11 @@ export const OUTPUT_CAP = 128 * 1024 * 1024;
 export function mapKubectlFailure(stderr: string): AxiError {
   const cases: [RegExp, ErrorCode, string][] = [
     [
+      /previous terminated container.*not found|previous.*not available/i,
+      "NOT_FOUND",
+      "no previous terminated container logs are available",
+    ],
+    [
       /context.*(?:was not found|not found)/i,
       "CONTEXT_NOT_FOUND",
       "configured context not found",

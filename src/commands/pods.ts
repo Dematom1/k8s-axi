@@ -5,11 +5,11 @@ import { kubectl, parseObject, readList } from "../kubectl.js";
 import { podRow, podDetail, podSpec } from "../model/pods.js";
 import { renderList, validateFields } from "../render.js";
 import { encodeObject } from "../toon.js";
-import { fail } from "../errors.js";
+import { logsCommand } from "./logs.js";
 import { recentEvents } from "./events.js";
 export async function podsCommand(p: Parsed): Promise<string> {
   validateFields(podSpec, p);
-  if (p.action === "logs") fail("REFUSED", "logs not built yet");
+  if (p.action === "logs") return logsCommand(p);
   const d = deadline(p.timeout),
     t = await resolveTarget(p.context, d),
     s = resolveScope(p, t);
