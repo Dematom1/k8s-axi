@@ -21,5 +21,7 @@ test("version, help, unknown command", () => {
   expect(cli(["--version"]).stdout).toBe("0.1.0\n");
   expect(cli(["--help"]).status).toBe(0);
   expect(cli(["nonsense"]).status).toBe(2);
-  expect(cli([]).status).toBe(1);
+  expect(
+    cli([], { PATH: "", KUBECONFIG: "/nonexistent/k8s-axi-test" }).status,
+  ).toBe(1);
 });

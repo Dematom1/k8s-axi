@@ -13,6 +13,7 @@ import { eventsCommand } from "./commands/events.js";
 import { workloadsCommand } from "./commands/workloads.js";
 import { servicesCommand } from "./commands/services.js";
 import { secretsCommand } from "./commands/secrets.js";
+import { triageCommand } from "./commands/triage.js";
 Object.assign(implementations, {
   nodes: nodesCommand,
   pods: podsCommand,
@@ -22,6 +23,8 @@ Object.assign(implementations, {
   pvcs: workloadsCommand,
   services: servicesCommand,
   secrets: secretsCommand,
+  triage: triageCommand,
+  home: triageCommand,
   ctx: ctxCommand,
   namespaces: namespacesCommand,
 });
