@@ -28,5 +28,5 @@ else
   setTimeout(() => {
     process.stdout.write(r.stdout ?? "");
     process.stderr.write(r.stderr ?? "");
-    process.exit(r.code ?? 0);
+    process.exitCode = r.code ?? 0;
   }, r.delayMs ?? 0);

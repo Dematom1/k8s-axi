@@ -7,7 +7,9 @@ import { REFUSALS } from "./registry.js";
 import { dispatch, refuse, implementations } from "./commands/common.js";
 import { ctxCommand } from "./commands/ctx.js";
 import { namespacesCommand } from "./commands/namespaces.js";
+import { nodesCommand } from "./commands/nodes.js";
 Object.assign(implementations, {
+  nodes: nodesCommand,
   ctx: ctxCommand,
   namespaces: namespacesCommand,
 });
