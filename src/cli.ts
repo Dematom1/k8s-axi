@@ -10,10 +10,16 @@ import { namespacesCommand } from "./commands/namespaces.js";
 import { nodesCommand } from "./commands/nodes.js";
 import { podsCommand } from "./commands/pods.js";
 import { eventsCommand } from "./commands/events.js";
+import { workloadsCommand } from "./commands/workloads.js";
+import { servicesCommand } from "./commands/services.js";
 Object.assign(implementations, {
   nodes: nodesCommand,
   pods: podsCommand,
   events: eventsCommand,
+  deployments: workloadsCommand,
+  jobs: workloadsCommand,
+  pvcs: workloadsCommand,
+  services: servicesCommand,
   ctx: ctxCommand,
   namespaces: namespacesCommand,
 });
