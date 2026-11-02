@@ -46,7 +46,8 @@
     "pretest": "npm run build",
     "test": "vitest run",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
-    "prepublishOnly": "npm run check"
+    "prepublishOnly": "npm run check",
+    "test:real": "npm run build && vitest run test/real-kubectl.test.ts"
   },
   "dependencies": {
     "@toon-format/toon": "2.3.1",
