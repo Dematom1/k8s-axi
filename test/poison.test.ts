@@ -2,6 +2,7 @@ import { test, expect } from "vitest";
 import { cli } from "./helpers.js";
 import { lab, targetRules } from "./lab.js";
 import { podDetail } from "../src/model/pods.js";
+import { object, objects } from "../src/kubectl.js";
 const CANARY = "CANARY_UNREAD_FIELD_7db";
 const when = "2020-01-01T00:00:00Z";
 const base = {
@@ -69,9 +70,10 @@ function assertClean(value: unknown) {
   expect(JSON.stringify(value)).not.toContain(CANARY);
 }
 test("poison sweep detects an env projection regression", () => {
-  const detail = podDetail(base);
+  const detail = podDetail(object(raw));
   assertClean(detail);
-  expect(() => assertClean({ ...detail, env: CANARY })).toThrow();
+  const env = object(objects(object(object(raw).spec).containers)[0]).env;
+  expect(() => assertClean({ ...detail, env })).toThrow();
 });
 for (const args of [
   ["nodes"],

@@ -30,12 +30,19 @@ export function renderList(
   );
   const shown = filtered.slice(0, p.limit);
   const fields = p.fields ?? [...spec.defaults];
+  const identity = ` --context ${JSON.stringify(context)}${scope.startsWith("namespace ") ? " -n " + scope.slice(10) : p.all ? " -A" : ""}`;
+  const detail = ["nodes", "pods", "deployments", "secrets"].includes(
+    spec.noun,
+  );
+  const detailFlags = identity.replace(" -A", " -n <namespace>");
   const help = [
-    `Run \`k8s-axi ${spec.noun}${["nodes", "pods", "deployments", "secrets"].includes(spec.noun) ? " view <name>" : " --help"}${carriedFlags(p).replace(" -A", "")}\``,
+    shown.length
+      ? `Run \`k8s-axi ${spec.noun}${detail ? " view <name>" : " --help"}${detail ? detailFlags : identity}\``
+      : `Run \`k8s-axi ${spec.noun}${scope.startsWith("namespace ") ? " -A" : ""} --context ${JSON.stringify(context)}\` to search a wider scope`,
   ];
   if (shown.length < filtered.length)
     help.push(
-      `Run \`k8s-axi ${spec.noun}${carriedFlags(p)} --limit ${Math.min(1000, filtered.length)}\` to see more (${filtered.length} matching rows)`,
+      `Run \`k8s-axi ${spec.noun}${carriedFlags({ ...p, context })}${!p.all && !p.namespace && scope.startsWith("namespace ") ? " -n " + scope.slice(10) : ""}${p.problems ? " --problems" : ""}${p.warnings ? " --warnings" : ""}${p.since ? " --since " + p.since + "s" : ""}${p.forObject ? " --for " + p.forObject : ""} --limit ${Math.min(1000, filtered.length)}\` to see more (${filtered.length} matching rows)`,
     );
   return encodeObject({
     context,

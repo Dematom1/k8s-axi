@@ -21,12 +21,10 @@ export function preview(text: string, full: boolean, size = 120): string {
 export function carriedFlags(p: Parsed): string {
   return `${p.context ? ` --context ${JSON.stringify(p.context)}` : ""}${p.all ? " -A" : p.namespace ? ` -n ${p.namespace}` : ""}${p.selector ? ` -l ${JSON.stringify(p.selector)}` : ""}`;
 }
-export const implementations: Partial<
-  Record<Parsed["command"], (p: Parsed) => Promise<string>>
-> = {};
 export async function dispatch(
   command: Parsed["command"],
   args: string[],
+  run: (p: Parsed) => Promise<string>,
 ): Promise<string> {
   if (command === "ctx" && args[0] === "use") refuse("ctx use");
   const p = parseArgs(command, args);
@@ -44,16 +42,33 @@ export async function dispatch(
         ...(["ctx", "setup", "context"].includes(command)
           ? []
           : [
-              "-n <namespace> | -A",
-              "--limit <1..1000> (100)",
-              "--fields <a,b>",
-              "--problems",
-              "--full",
+              ...(["nodes", "namespaces"].includes(command)
+                ? []
+                : [
+                    p.action === "list"
+                      ? "-n <namespace> | -A"
+                      : "-n <namespace>",
+                  ]),
+              ...(p.action === "list"
+                ? [
+                    "--limit <1..1000> (100)",
+                    ...(["home", "triage"].includes(command)
+                      ? []
+                      : ["--fields <a,b>", "--problems"]),
+                  ]
+                : []),
+              ...(["home", "triage"].includes(command) ? [] : ["--full"]),
+              ...(["pods", "deployments", "jobs"].includes(command) &&
+              p.action === "list"
+                ? ["-l, --selector <selector>"]
+                : []),
             ]),
-        ...(command === "pods"
+        ...(command === "pods" && p.action === "logs"
           ? [
-              "view <pod>",
-              "logs <pod> [-c <container>] [--tail <n>] [--since <duration>] [--previous]",
+              "-c, --container <name> (annotation, then sole container)",
+              "--tail <1..1000> (100)",
+              "--since <duration>",
+              "--previous",
             ]
           : []),
         ...(command === "events"
@@ -72,7 +87,5 @@ export async function dispatch(
               `k8s-axi ${command} --help`,
             ],
     });
-  const run = implementations[command];
-  if (!run) fail("REFUSED", `${command} not built yet`);
   return run(p);
 }

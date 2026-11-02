@@ -16,7 +16,7 @@ import {
 } from "../session-hook.js";
 import type { Parsed } from "../args.js";
 import { fail, usage } from "../errors.js";
-import { object } from "../kubectl.js";
+import { object, objects, text } from "../kubectl.js";
 import { encodeObject } from "../toon.js";
 function entrypoint(): string {
   return realpathSync(
@@ -40,6 +40,21 @@ export function hookStatus() {
         const v: unknown = JSON.parse(raw);
         if (typeof v !== "object" || v === null || Array.isArray(v))
           throw new Error("not an object");
+        const hooks = object(v).hooks;
+        if (
+          hooks !== undefined &&
+          (typeof hooks !== "object" || hooks === null || Array.isArray(hooks))
+        )
+          throw new Error("invalid hooks");
+        for (const event of ["SessionStart", "SessionEnd"]) {
+          const groups = object(hooks)[event];
+          if (
+            groups !== undefined &&
+            (!Array.isArray(groups) ||
+              groups.some((g) => !Array.isArray(object(g).hooks)))
+          )
+            throw new Error("invalid hook groups");
+        }
       }
     } catch (e) {
       if (e && typeof e === "object" && "code" in e && e.code === "ENOENT")
@@ -47,23 +62,60 @@ export function hookStatus() {
       fail("CONFIG_INVALID", `cannot read or parse hook destination ${file}`);
     }
   }
+  const expected = `${quote(process.execPath)} ${quote(entrypoint())}`;
+  const starts = (file: string) =>
+    objects(
+      object(object(JSON.parse(readFileSync(file, "utf8"))).hooks).SessionStart,
+    )
+      .flatMap((g) => objects(g.hooks))
+      .filter((h) => text(h.command).includes("k8s-axi"))
+      .every((h) => h.command === expected);
+  const claude = s.claude.installed
+    ? starts(s.claude.path)
+      ? "installed"
+      : "partial"
+    : "absent";
+  const codex = s.codex.installed
+    ? starts(s.codex.path) && s.codex.userFeatureEnabled
+      ? "installed"
+      : "partial"
+    : "absent";
+  const end = sessionEndHookStatus();
+  const expectedEnd = `${quote(process.execPath)} ${quote(join(dirname(entrypoint()), "k8s-axi.js"))} context end`;
+  const endCurrent =
+    end &&
+    objects(
+      object(object(JSON.parse(readFileSync(s.claude.path, "utf8"))).hooks)
+        .SessionEnd,
+    )
+      .flatMap((g) => objects(g.hooks))
+      .some((h) => h.command === expectedEnd);
   return {
-    claude: s.claude.installed ? "installed" : "absent",
-    codex:
-      s.codex.installed && s.codex.userFeatureEnabled
+    claude,
+    codex,
+    opencode: s.opencode.installed
+      ? readFileSync(s.opencode.path, "utf8").includes(
+          `const command = ${JSON.stringify(entrypoint())};`,
+        )
         ? "installed"
-        : s.codex.installed
-          ? "partial"
-          : "absent",
-    opencode: s.opencode.installed ? "installed" : "absent",
-    sessionEnd: sessionEndHookStatus() ? "installed" : "absent",
+        : "partial"
+      : "absent",
+    sessionEnd: end ? (endCurrent ? "installed" : "partial") : "absent",
   };
 }
 export async function setupCommand(p: Parsed): Promise<string> {
   if (!["hooks", "status", "uninstall"].includes(p.action))
     usage("choose setup hooks, setup status or setup uninstall", "setup");
   const before = hookStatus();
-  if (p.action === "status") return encodeObject(before);
+  if (p.action === "status") {
+    if (Object.values(before).includes("partial"))
+      fail(
+        "CONFIG_INVALID",
+        `partial hook installation: ${JSON.stringify(before)}`,
+        ["Run `k8s-axi setup hooks` to repair paths"],
+      );
+    return encodeObject(before);
+  }
   const errors: string[] = [];
   if (p.action === "uninstall") {
     uninstallSessionStartHooks({
@@ -86,9 +138,6 @@ export async function setupCommand(p: Parsed): Promise<string> {
       ) &&
       readFileSync(observed.opencode.path, "utf8").includes(
         JSON.stringify(entry),
-      ) &&
-      readFileSync(observed.claude.path, "utf8").includes(
-        join(dirname(entry), "k8s-axi.js"),
       )
     )
       return encodeObject({ ...before, changed: false });

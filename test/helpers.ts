@@ -8,7 +8,11 @@ export function cli(args: string[], env: NodeJS.ProcessEnv = {}) {
       resolve(process.env.K8S_AXI_TEST_PACKAGE ?? ".", "dist/bin/k8s-axi.js"),
       ...args,
     ],
-    { encoding: "utf8", env: { ...process.env, ...env }, timeout: 10000 },
+    {
+      encoding: "utf8",
+      env: { ...process.env, PATH: "", ...env },
+      timeout: 10000,
+    },
   );
   if (p.error) throw p.error;
   const data = args.some((x) => ["--version", "-v", "-V"].includes(x))

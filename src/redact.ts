@@ -25,7 +25,7 @@ export function redactText(input: string): { text: string; count: number } {
   );
   // Match both JSON and escaped JSON without decoding attacker-controlled text.
   replace(
-    /((?:[\\]*["'])?(?:[A-Za-z0-9_]*(?:password|passwd|secret|token|api[_-]?key|private[_-]?key)|[A-Za-z0-9_]+_(?:PASS|PWD|KEY))(?:[\\]*["'])?\s*[:=]\s*)(?:[\\]*["'][^\r\n]*?(?=[\\]*["'](?:\s*[,}\r\n]|$))[\\]*["']|[^\s,;}]+)/gi,
+    /(?<![A-Za-z0-9_\\])((?:[\\]*["'])?(?:[A-Za-z0-9_]*(?:password|passwd|secret|token|api[_-]?key|private[_-]?key)|[A-Za-z0-9_]+_(?:PASS|PWD|KEY))(?:[\\]*["'])?\s*[:=]\s*)(?:[\\]*["'][^\r\n]*?["'](?=\s*(?:[,}\r\n]|$))|[\\]*["'][^\r\n]*|[^\s,;}]+)/gi,
     (_m, p = "") => p + "[REDACTED]",
   );
   replace(/\b[A-Za-z0-9+/]{32,}={1,2}(?![A-Za-z0-9+/=])/g, "[REDACTED BASE64]");

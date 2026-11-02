@@ -109,8 +109,7 @@ export async function kubectl(
     };
     const terminate = (error: AxiError) => {
       kill("SIGTERM");
-      const escalation = setTimeout(() => kill("SIGKILL"), 2000);
-      escalation.unref();
+      setTimeout(() => kill("SIGKILL"), 2000);
       finish(error);
     };
     const timer = setTimeout(

@@ -2,6 +2,7 @@ import { test, expect } from "vitest";
 import { cli } from "./helpers.js";
 import { REFUSALS } from "../src/registry.js";
 import { parseArgs } from "../src/args.js";
+import { lab } from "./lab.js";
 for (const args of [
   ["--limit", "10junk"],
   ["--limit", "-5"],
@@ -21,16 +22,28 @@ for (const args of [
   ["__proto__"],
 ])
   test(`reject ${args.join(" ")}`, () => {
-    const p = cli(["pods", ...args]);
-    expect(p.status).toBe(2);
-    expect(p.stdout).toContain("VALIDATION_ERROR");
-    expect(p.stderr).toBe("");
+    const l = lab();
+    try {
+      const p = cli(["pods", ...args], l.env);
+      expect(p.status).toBe(2);
+      expect(p.stdout).toContain("VALIDATION_ERROR");
+      expect(p.stderr).toBe("");
+      expect(l.calls()).toHaveLength(0);
+    } finally {
+      l.clean();
+    }
   });
 for (const name of REFUSALS)
   test(`refuse ${name}`, () => {
-    const p = cli(name.split(" "));
-    expect(p.status).toBe(1);
-    expect(p.stdout).toContain("REFUSED");
+    const l = lab();
+    try {
+      const p = cli(name.split(" "), l.env);
+      expect(p.status).toBe(1);
+      expect(p.stdout).toContain("REFUSED");
+      expect(l.calls()).toHaveLength(0);
+    } finally {
+      l.clean();
+    }
   });
 test("typed scope and whole values", () => {
   expect(parseArgs("pods", ["-A", "--limit", "15"]).all).toBe(true);

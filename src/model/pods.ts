@@ -2,6 +2,7 @@ import { object, objects, text, number, type Obj } from "../kubectl.js";
 import { redactText } from "../redact.js";
 import { conditionRows } from "./nodes.js";
 import { age, elapsed } from "./time.js";
+import { preview } from "../commands/common.js";
 import type { ListSpec, Row } from "../render.js";
 export type PodHealth =
   | { state: "completed" }
@@ -28,13 +29,13 @@ export function classifyPod(pod: Obj, now = Date.now()): PodHealth {
     spec = object(pod.spec),
     s = object(pod.status),
     phase = text(s.phase, "Unknown");
+  if (phase === "Succeeded") return { state: "completed" };
   if (
     meta.deletionTimestamp &&
     elapsed(text(meta.deletionTimestamp), now) >
       number(spec.terminationGracePeriodSeconds, 30) + 60
   )
     return { state: "problem", reason: "StuckTerminating" };
-  if (phase === "Succeeded") return { state: "completed" };
   const waiting = [
     ...objects(s.initContainerStatuses),
     ...objects(s.containerStatuses),
@@ -129,17 +130,15 @@ export function podDetail(raw: Obj, full = false): Record<string, unknown> {
         ready: c.ready === true,
         restarts: number(c.restartCount),
         waiting: text(object(state.waiting).reason),
-        message: redactText(text(object(state.waiting).message)).text.slice(
-          0,
-          full ? undefined : 500,
+        message: preview(
+          redactText(text(object(state.waiting).message)).text,
+          full,
+          500,
         ),
         terminated: text(current.reason),
         "last-exit": text(last.reason),
         "exit-code": number(last.exitCode),
-        "last-message": redactText(text(last.message)).text.slice(
-          0,
-          full ? undefined : 500,
-        ),
+        "last-message": preview(redactText(text(last.message)).text, full, 500),
       };
     }),
   };

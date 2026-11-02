@@ -19,6 +19,9 @@ export async function fakeAPI() {
           stringData: { token: "CANARY_STRING" },
         }),
         free: "CANARY_ANNOTATION",
+        doubleEscaped: JSON.stringify(
+          JSON.stringify({ password: "CANARY_DOUBLE_ESCAPED" }),
+        ),
         escaped: String.raw`{\"password\":\"CANARY_ESCAPED\"}`,
       },
       labels: { free: "CANARY_LABEL" },

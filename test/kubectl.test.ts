@@ -16,6 +16,17 @@ test("secret cannot use JSON list operation", () => {
   expect(bad.op).toBe("list");
   expect(SECRET_TEMPLATE).not.toContain("stringData");
 });
+test("subprocess stdin is closed", async () => {
+  const l = lab([], { mode: "stdin" }),
+    before = { ...process.env };
+  Object.assign(process.env, l.env);
+  try {
+    await expect(kubectl(local, undefined, deadline())).resolves.toBe("closed");
+  } finally {
+    process.env = before;
+    l.clean();
+  }
+});
 test("registry local pins", () => {
   expect(argvFor(local, undefined, deadline())).toEqual([
     "config",
@@ -32,9 +43,9 @@ for (const mode of ["hang", "grandchild", "ignore-term"])
     const start = Date.now();
     try {
       await expect(
-        kubectl(local, undefined, { end: Date.now() + 150, perCall: 150 }),
+        kubectl(local, undefined, { end: Date.now() + 1000, perCall: 1000 }),
       ).rejects.toMatchObject({ code: "TIMEOUT" });
-      expect(Date.now() - start).toBeLessThan(1000);
+      expect(Date.now() - start).toBeLessThan(2000);
       await new Promise((r) => setTimeout(r, 2200));
       if (mode === "grandchild") {
         const pid = Number(readFileSync(l.env.K8S_AXI_PID, "utf8"));

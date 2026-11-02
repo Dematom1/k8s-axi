@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { cli } from "./helpers.js";
+import { VERSION } from "../src/version.js";
 test("metadata and packed boundary", () => {
   const p = JSON.parse(readFileSync("package.json", "utf8"));
   expect(p.repository.url).toBe("git+https://github.com/Dematom1/k8s-axi.git");
@@ -18,7 +19,7 @@ test("metadata and packed boundary", () => {
     expect(f.path).not.toMatch(/^(test|src|\.claude)\//);
 });
 test("version, help, unknown command", () => {
-  expect(cli(["--version"]).stdout).toBe("0.1.0\n");
+  expect(cli(["--version"]).stdout).toBe(`${VERSION}\n`);
   expect(cli(["--help"]).status).toBe(0);
   expect(cli(["nonsense"]).status).toBe(2);
   expect(
