@@ -2,6 +2,9 @@ import { runAxiCli, AxiError, exitCodeForError } from "axi-sdk-js";
 import { encodeObject } from "./toon.js";
 import { VERSION } from "./version.js";
 import { DESCRIPTION, TOP_HELP } from "./help.js";
+import { NOUNS } from "./args.js";
+import { REFUSALS } from "./registry.js";
+import { dispatch, refuse } from "./commands/common.js";
 
 export function formatError(error: unknown): {
   output: string;
@@ -33,16 +36,19 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     version: VERSION,
     argv,
     topLevelHelp: encodeObject({ help: TOP_HELP }),
-    commands: {
-      update: async () => {
-        throw new AxiError("self-update is not available", "REFUSED", [
-          "A human can run npm install -g k8s-axi@latest",
-        ]);
-      },
-    },
-    home: async () => {
-      throw new AxiError("not built yet", "REFUSED");
-    },
+    commands: Object.assign(
+      Object.create(null),
+      Object.fromEntries(
+        NOUNS.map((noun) => [noun, (args: string[]) => dispatch(noun, args)]),
+      ),
+      Object.fromEntries(
+        REFUSALS.filter((x) => !x.includes(" ")).map((x) => [
+          x,
+          async () => refuse(x),
+        ]),
+      ),
+    ),
+    home: (args) => dispatch("home", args),
     formatError,
     renderUnknownCommand: (command) =>
       encodeObject({
