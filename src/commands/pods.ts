@@ -6,6 +6,7 @@ import { podRow, podDetail, podSpec } from "../model/pods.js";
 import { renderList, validateFields } from "../render.js";
 import { encodeObject } from "../toon.js";
 import { fail } from "../errors.js";
+import { recentEvents } from "./events.js";
 export async function podsCommand(p: Parsed): Promise<string> {
   validateFields(podSpec, p);
   if (p.action === "logs") fail("REFUSED", "logs not built yet");
@@ -25,6 +26,7 @@ export async function podsCommand(p: Parsed): Promise<string> {
     return encodeObject({
       context: t.context,
       ...podDetail(rows[0] ?? {}, p.full),
+      events: await recentEvents(t, s, d, "Pod", p.name, p.full),
     });
   }
   const rows = await scoped(s, t, d, () =>

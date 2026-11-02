@@ -9,9 +9,11 @@ import { ctxCommand } from "./commands/ctx.js";
 import { namespacesCommand } from "./commands/namespaces.js";
 import { nodesCommand } from "./commands/nodes.js";
 import { podsCommand } from "./commands/pods.js";
+import { eventsCommand } from "./commands/events.js";
 Object.assign(implementations, {
   nodes: nodesCommand,
   pods: podsCommand,
+  events: eventsCommand,
   ctx: ctxCommand,
   namespaces: namespacesCommand,
 });
