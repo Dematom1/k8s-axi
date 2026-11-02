@@ -227,11 +227,132 @@ export function argvFor(
   return [...args, ...pinned];
 }
 export function assertSafe(argv: readonly string[]): void {
-  if (
-    !["config", "version", "get", "logs"].includes(argv[0] ?? "") ||
-    (argv[0] === "config" &&
-      !["current-context", "get-contexts", "view"].includes(argv[1] ?? "")) ||
-    argv.some((x) => FORBIDDEN_ARGS.includes(x.split("=")[0] ?? ""))
-  )
+  const reject = () => {
     throw new Error("unsafe kubectl invocation");
+  };
+  if (argv.some((x) => FORBIDDEN_ARGS.includes(x.split("=")[0] ?? "")))
+    reject();
+  const same = (a: readonly string[], b: readonly string[]) =>
+    a.length === b.length && a.every((x, i) => x === b[i]);
+  if (argv[0] === "config") {
+    if (
+      same(argv, ["config", "current-context"]) ||
+      same(argv, ["config", "get-contexts", "-o", "name"])
+    )
+      return;
+    if (
+      argv.length === 6 &&
+      argv[1] === "view" &&
+      argv[2] === "--minify" &&
+      argv[3]?.startsWith("--context=") &&
+      argv[4] === "-o" &&
+      argv[5] ===
+        'jsonpath={.clusters[0].cluster.server}{"\\n"}{.contexts[0].context.namespace}'
+    )
+      return;
+    reject();
+  }
+  if (same(argv, ["version", "--client", "-o", "json"])) return;
+  if (
+    !argv.at(-2)?.startsWith("--context=") ||
+    !/^--request-timeout=\d+(?:\.\d+)?ms$/.test(argv.at(-1) ?? "")
+  )
+    reject();
+  const a = argv.slice(0, -2);
+  if (same(a, ["version", "-o", "json"])) return;
+  const dns = (s: string | undefined) =>
+    !!s &&
+    s.length <= 253 &&
+    s
+      .split(".")
+      .every(
+        (x) => x.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(x),
+      );
+  if (a[0] === "logs") {
+    if (
+      dns(a[1]) &&
+      a[2] === "-n" &&
+      dns(a[3]) &&
+      a[4] === "-c" &&
+      dns(a[5]) &&
+      /^--tail=\d+$/.test(a[6] ?? "") &&
+      Number(a[6]?.slice(7)) >= 1 &&
+      Number(a[6]?.slice(7)) <= 1000 &&
+      a[7] === "--limit-bytes=1048576" &&
+      a
+        .slice(8)
+        .every(
+          (x, i) =>
+            (x === "--previous" && i === a.length - 9) ||
+            (/^--since=\d+s$/.test(x) && i === 0),
+        ) &&
+      a.length <= 10
+    )
+      return;
+    reject();
+  }
+  if (a[0] !== "get") reject();
+  const resource = a[1],
+    rest = a.slice(2);
+  if (
+    ["node", "pod", "deployment.apps", "namespace"].includes(resource ?? "") &&
+    dns(rest[0])
+  ) {
+    const scope = rest.slice(1, -2);
+    if (
+      ((!scope.length &&
+        resource !== "pod" &&
+        resource !== "deployment.apps") ||
+        (scope.length === 2 && scope[0] === "-n" && dns(scope[1]))) &&
+      rest.at(-2) === "-o" &&
+      (rest.at(-1) === "json" ||
+        (resource === "namespace" && rest.at(-1) === "name"))
+    )
+      return;
+    reject();
+  }
+  if (
+    ![
+      "nodes",
+      "namespaces",
+      "pods",
+      "deployments.apps",
+      "jobs.batch",
+      "persistentvolumeclaims",
+      "services",
+      "endpointslices.discovery.k8s.io",
+      "events",
+      "secrets",
+    ].includes(resource ?? "")
+  )
+    reject();
+  if (!["nodes", "namespaces"].includes(resource ?? "")) {
+    if (rest[0] === "-A") rest.shift();
+    else if (rest[0] === "-n" && dns(rest[1])) rest.splice(0, 2);
+    else reject();
+  }
+  if (resource === "secrets") {
+    if (
+      rest[0]?.startsWith("--field-selector=metadata.name=") &&
+      dns(rest[0].slice("--field-selector=metadata.name=".length))
+    )
+      rest.shift();
+    if (same(rest, [`--output=go-template=${SECRET_TEMPLATE}`])) return;
+    reject();
+  }
+  if (
+    ["pods", "deployments.apps", "jobs.batch"].includes(resource ?? "") &&
+    rest[0]?.startsWith("--selector=")
+  )
+    rest.shift();
+  if (
+    resource === "events" &&
+    rest[0]?.startsWith("--field-selector=") &&
+    /^--field-selector=(?:type=Warning(?:,|$))?(?:involvedObject.kind=[A-Za-z][A-Za-z0-9]*(?:,|$))?(?:involvedObject.name=[a-z0-9.-]+)?$/.test(
+      rest[0],
+    )
+  )
+    rest.shift();
+  if (same(rest, ["-o", "json"])) return;
+  reject();
 }

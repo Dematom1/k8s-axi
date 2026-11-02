@@ -58,10 +58,17 @@ export function formatError(error: unknown): {
       };
 }
 export async function main(argv = process.argv.slice(2)): Promise<void> {
+  const homeArgs =
+    argv[0]?.startsWith("-") &&
+    !(
+      argv.length === 1 && ["--help", "--version", "-v", "-V"].includes(argv[0])
+    )
+      ? argv
+      : [];
   await runAxiCli({
     description: DESCRIPTION,
     version: VERSION,
-    argv,
+    argv: homeArgs.length ? [] : argv,
     topLevelHelp: encodeObject({ help: TOP_HELP }),
     commands: Object.assign(
       Object.create(null),
@@ -75,7 +82,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         ]),
       ),
     ),
-    home: (args) => dispatch("home", args),
+    home: () => dispatch("home", homeArgs),
     formatError,
     renderUnknownCommand: (command) =>
       encodeObject({
