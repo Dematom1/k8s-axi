@@ -4,7 +4,13 @@ import { VERSION } from "./version.js";
 import { DESCRIPTION, TOP_HELP } from "./help.js";
 import { NOUNS } from "./args.js";
 import { REFUSALS } from "./registry.js";
-import { dispatch, refuse } from "./commands/common.js";
+import { dispatch, refuse, implementations } from "./commands/common.js";
+import { ctxCommand } from "./commands/ctx.js";
+import { namespacesCommand } from "./commands/namespaces.js";
+Object.assign(implementations, {
+  ctx: ctxCommand,
+  namespaces: namespacesCommand,
+});
 
 export function formatError(error: unknown): {
   output: string;
