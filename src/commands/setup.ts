@@ -185,9 +185,14 @@ export async function setupCommand(p: Parsed): Promise<string> {
           (count, group) => count + objects(group.hooks).length,
           0,
         );
+        const hasExpectedCommand = groups
+          .flatMap((group) => objects(group.hooks))
+          .some((hook) => hook.command === command);
         let keptManaged = false;
         const deduped = groups.flatMap((group) => {
           const hooks = objects(group.hooks).filter((hook) => {
+            if (hook.command === "k8s-axi-ctx" && hasExpectedCommand)
+              return false;
             if (!isManagedStartCommand(hook.command, command)) return true;
             if (keptManaged) return false;
             keptManaged = true;
