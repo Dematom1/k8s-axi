@@ -26,6 +26,14 @@ function entrypoint(): string {
 function quote(s: string): string {
   return `'${s.replaceAll("'", "'\\''")}'`;
 }
+function isManagedStartCommand(command: unknown): command is string {
+  return (
+    command === "k8s-axi-ctx" ||
+    (typeof command === "string" &&
+      command.startsWith("'") &&
+      command.endsWith("/k8s-axi-ctx.js'"))
+  );
+}
 export function hookStatus() {
   const s = sessionStartHookStatus({ marker: "k8s-axi" });
   for (const [file, json] of [
@@ -136,7 +144,7 @@ export async function setupCommand(p: Parsed): Promise<string> {
           .SessionStart,
       )
         .flatMap((group) => objects(group.hooks))
-        .filter((hook) => hook.command === command).length === 1;
+        .filter((hook) => isManagedStartCommand(hook.command)).length === 1;
     if (
       Object.values(before).every((x) => x === "installed") &&
       [observed.claude.path, observed.codex.path].every(
@@ -185,7 +193,7 @@ export async function setupCommand(p: Parsed): Promise<string> {
         let keptManaged = false;
         const deduped = groups.flatMap((group) => {
           const hooks = objects(group.hooks).filter((hook) => {
-            if (hook.command !== command) return true;
+            if (!isManagedStartCommand(hook.command)) return true;
             if (keptManaged) return false;
             keptManaged = true;
             return true;
