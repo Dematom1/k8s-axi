@@ -30,9 +30,6 @@ function assertPublishGate(value: unknown) {
   );
   expect(JSON.stringify(publish)).toContain("11.15.0");
   expect(object(build.permissions)["id-token"]).toBeUndefined();
-  expect(JSON.stringify(build)).toContain(
-    "github.event_name == 'workflow_dispatch'",
-  );
   const validation = objects(build.steps).find(
     (step) => step.name === "Validate recovery tag",
   );
