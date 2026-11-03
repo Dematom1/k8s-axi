@@ -136,6 +136,16 @@ export async function setupCommand(p: Parsed): Promise<string> {
           "Install globally with npm install -g k8s-axi, then run `k8s-axi setup hooks`",
         ],
       );
+    const s = sessionStartHookStatus({ marker: "k8s-axi" });
+    const original = new Map(
+      [s.claude.path, s.codex.path].map((file) => {
+        try {
+          return [file, readFileSync(file, "utf8")] as const;
+        } catch {
+          return [file, undefined] as const;
+        }
+      }),
+    );
     installSessionStartHooks({
       marker: "k8s-axi",
       execPath: entry,
@@ -144,10 +154,12 @@ export async function setupCommand(p: Parsed): Promise<string> {
       onError: (e) => errors.push(e),
     });
     // Agent JSON commands run through a shell; pin Node too and quote both paths.
-    const s = sessionStartHookStatus({ marker: "k8s-axi" });
     for (const file of [s.claude.path, s.codex.path])
       try {
-        const current = object(JSON.parse(readFileSync(file, "utf8")));
+        const installed = readFileSync(file, "utf8");
+        const current = object(
+          JSON.parse(original.get(file) ?? installed),
+        );
         const [next, changed] = computeSessionStartHookUpdate(
           current as HookSettings,
           {
@@ -155,7 +167,8 @@ export async function setupCommand(p: Parsed): Promise<string> {
             command: `${quote(process.execPath)} ${quote(entry)}`,
           },
         );
-        if (changed) writeFileSync(file, JSON.stringify(next, null, 2) + "\n");
+        const serialized = JSON.stringify(next, null, 2) + "\n";
+        if (changed || installed !== serialized) writeFileSync(file, serialized);
       } catch {
         errors.push("could not pin hook command");
       }
