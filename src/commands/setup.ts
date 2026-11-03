@@ -168,7 +168,7 @@ export async function setupCommand(p: Parsed): Promise<string> {
           },
         );
         const serialized = JSON.stringify(next, null, 2) + "\n";
-        if (changed || installed !== serialized) writeFileSync(file, serialized);
+        if (changed) writeFileSync(file, serialized);
       } catch {
         errors.push("could not pin hook command");
       }
