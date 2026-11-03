@@ -55,7 +55,7 @@ jobs:
           node "$cli" --version
           node "$cli" --help
           set +e
-          HOME="$prefix" KUBECONFIG="$prefix/absent" node "$cli" > "$prefix/home.toon" 2>&1
+          HOME="$prefix" KUBECONFIG="$prefix/absent" node "$cli" triage > "$prefix/home.toon" 2>&1
           code=$?
           set -e
           test "$code" -eq 1
