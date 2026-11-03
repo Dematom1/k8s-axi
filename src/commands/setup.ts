@@ -158,9 +158,7 @@ export async function setupCommand(p: Parsed): Promise<string> {
     for (const file of [s.claude.path, s.codex.path])
       try {
         const installed = readFileSync(file, "utf8");
-        const current = object(
-          JSON.parse(original.get(file) ?? installed),
-        );
+        const current = object(JSON.parse(original.get(file) ?? installed));
         const [next, changed] = computeSessionStartHookUpdate(
           structuredClone(current) as HookSettings,
           {
@@ -174,7 +172,10 @@ export async function setupCommand(p: Parsed): Promise<string> {
           for (const group of groups) {
             const hooks = objects(object(group).hooks);
             const kept = hooks.filter((hook) => {
-              if (object(hook).command !== `${quote(process.execPath)} ${quote(entry)}`)
+              if (
+                object(hook).command !==
+                `${quote(process.execPath)} ${quote(entry)}`
+              )
                 return true;
               if (seen) return false;
               seen = true;
@@ -184,7 +185,10 @@ export async function setupCommand(p: Parsed): Promise<string> {
           }
         }
         const serialized = JSON.stringify(next, null, 2) + "\n";
-        const persisted = changed || serialized !== JSON.stringify(current, null, 2) + "\n" ? serialized : original.get(file);
+        const persisted =
+          changed || serialized !== JSON.stringify(current, null, 2) + "\n"
+            ? serialized
+            : original.get(file);
         if (persisted !== undefined && persisted !== installed)
           writeFileSync(file, persisted);
       } catch {
