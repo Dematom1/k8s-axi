@@ -89,17 +89,25 @@ test("weekly release uses the shared pinned workflow and release App", () => {
     "${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}",
   );
 });
-test("CI covers hosts runtimes pinned clients and archive", () => {
-  const raw = readFileSync(".github/workflows/ci.yml", "utf8");
-  for (const s of [
-    "ubuntu-latest",
-    "macos-latest",
-    "node: [22, 24]",
-    "v1.32.0",
-    "v1.36.2",
-    "K8S_AXI_REQUIRE_REAL_KUBECTL",
-    "--ignore-scripts",
-    "KUBECONFIG",
-  ])
-    expect(raw).toContain(s);
+test("CI exercises supported hosts, runtimes, kubectl versions, and packed CLI", () => {
+  const jobs = object(object(workflow("ci")).jobs);
+  const check = object(jobs.check),
+    realKubectl = object(jobs["real-kubectl"]);
+  expect(object(object(check.strategy).matrix)).toEqual({
+    os: ["ubuntu-latest", "macos-latest"],
+    node: [22, 24],
+  });
+  expect(object(object(realKubectl.strategy).matrix)).toEqual({
+    os: ["ubuntu-latest", "macos-latest"],
+    kubectl: ["v1.32.0", "v1.36.2"],
+  });
+  const steps = objects(realKubectl.steps);
+  expect(
+    steps.some((step) => text(step.run).includes("scripts/real-kubectl.sh")),
+  ).toBe(true);
+  const smoke = steps.find(
+    (step) => step.name === "Smoke the installed archive",
+  );
+  expect(text(smoke?.run)).toContain('node "$cli" --version');
+  expect(text(smoke?.run)).toContain('node "$cli" --help');
 });
