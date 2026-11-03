@@ -162,7 +162,7 @@ export async function setupCommand(p: Parsed): Promise<string> {
           JSON.parse(original.get(file) ?? installed),
         );
         const [next, changed] = computeSessionStartHookUpdate(
-          current as HookSettings,
+          structuredClone(current) as HookSettings,
           {
             marker: "k8s-axi",
             command: `${quote(process.execPath)} ${quote(entry)}`,
