@@ -27,14 +27,7 @@ function quote(s: string): string {
   return `'${s.replaceAll("'", "'\\''")}'`;
 }
 function isManagedStartCommand(command: unknown, expected: string): boolean {
-  return (
-    command === expected ||
-    command === "k8s-axi-ctx" ||
-    (typeof command === "string" &&
-      /^'(?:[^']|'\\'')*\/node' '(?:[^']|'\\'')*\/node_modules\/k8s-axi\/dist\/bin\/k8s-axi-ctx\.js'$/.test(
-        command,
-      ))
-  );
+  return command === expected || command === "k8s-axi-ctx";
 }
 export function hookStatus() {
   const s = sessionStartHookStatus({ marker: "k8s-axi" });

@@ -41,11 +41,10 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
     expect(cli(["setup", "hooks"], l.env).status).toBe(0);
     expect(statSync(settings).mtimeMs).toBe(mtime);
     const duplicateSettings = JSON.parse(installed);
-    const managedCommand = duplicateSettings.hooks.SessionStart.flatMap(
-      (group: { hooks: { command: string }[] }) => group.hooks,
-    ).find(
-      (hook: { command: string }) => hook.command !== "echo unrelated",
-    ).command;
+    const managedCommand = `'${process.execPath.replaceAll("'", "'\\''")}' '${resolve(
+      process.env.K8S_AXI_TEST_PACKAGE ?? ".",
+      "dist/bin/k8s-axi-ctx.js",
+    ).replaceAll("'", "'\\''")}'`;
     duplicateSettings.hooks.SessionStart[0].hooks.push({
       type: "command",
       command: "echo k8s-axi deployment",
@@ -54,7 +53,7 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
       structuredClone(
         duplicateSettings.hooks.SessionStart.find(
           (group: { hooks: { command: string }[] }) =>
-            group.hooks.some((hook) => hook.command.includes("k8s-axi")),
+            group.hooks.some((hook) => hook.command === managedCommand),
         ),
       ),
     );
@@ -72,7 +71,7 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
     const hooks = JSON.parse(installed).hooks;
     const start = hooks.SessionStart.flatMap(
       (g: { hooks: { command: string }[] }) => g.hooks,
-    ).find((h: { command: string }) => h.command.includes("k8s-axi")).command;
+    ).find((h: { command: string }) => h.command === managedCommand).command;
     const run = spawnSync("/bin/sh", ["-c", start], {
       cwd: l.dir,
       env: { ...process.env, ...l.env },
