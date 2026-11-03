@@ -94,7 +94,7 @@ Either integration path is sufficient. Neither is installed automatically.
 - **Hooks:** after a persistent install, run `k8s-axi setup hooks`. Claude Code and Codex get SessionStart context. OpenCode gets a managed ambient plugin. Claude Code SessionEnd records command names, counts, and the most-used context, not command arguments or output.
 
 The dedicated `k8s-axi-ctx` hook is local only and does not make a health claim. Setup refuses ephemeral npx installations.
-`setup status` reopens destinations. `setup uninstall` removes SessionStart and SessionEnd hooks and the managed plugin, preserving unrelated settings and the shared Codex feature flag.
+`setup status` reopens destinations. `setup uninstall` removes SessionStart and SessionEnd hooks and the managed plugin, preserving unrelated settings and the shared Codex feature flag. The current `axi-sdk-js` hook API does not honor `CLAUDE_CONFIG_DIR`; selected Claude config directories are not supported for SessionStart installation.
 Session memory is stored under `$XDG_CONFIG_HOME/k8s-axi`, or `~/.config/k8s-axi`. Version cache is stored under `$XDG_CACHE_HOME/k8s-axi`, or `~/.cache/k8s-axi`.
 
 ## Server-side read-only RBAC

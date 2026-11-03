@@ -168,7 +168,20 @@ export async function setupCommand(p: Parsed): Promise<string> {
             command: `${quote(process.execPath)} ${quote(entry)}`,
           },
         );
-        if (changed) writeFileSync(file, JSON.stringify(next, null, 2) + "\n");
+        const groups = objects(object(next.hooks).SessionStart);
+        let keptManaged = false;
+        const deduped = groups.flatMap((group) => {
+          const hooks = objects(group.hooks).filter((hook) => {
+            if (!text(hook.command).includes("k8s-axi")) return true;
+            if (keptManaged) return false;
+            keptManaged = true;
+            return true;
+          });
+          return hooks.length ? [{ ...group, hooks }] : [];
+        });
+        object(next.hooks).SessionStart = deduped;
+        if (changed || deduped.length !== groups.length)
+          writeFileSync(file, JSON.stringify(next, null, 2) + "\n");
       } catch {
         errors.push("could not pin hook command");
       }
