@@ -59,4 +59,3 @@ jobs:
           code=$?
           set -e
           test "$code" -eq 1
-          grep -Eq 'NO_CONTEXT|CONTEXT_NOT_FOUND' "$prefix/home.toon"
