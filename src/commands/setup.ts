@@ -68,8 +68,7 @@ export function hookStatus() {
       object(object(JSON.parse(readFileSync(file, "utf8"))).hooks).SessionStart,
     )
       .flatMap((g) => objects(g.hooks))
-      .filter((h) => text(h.command).includes("k8s-axi"))
-      .every((h) => h.command === expected);
+      .some((h) => h.command === expected);
   const claude = s.claude.installed
     ? starts(s.claude.path)
       ? "installed"
@@ -137,7 +136,7 @@ export async function setupCommand(p: Parsed): Promise<string> {
           .SessionStart,
       )
         .flatMap((group) => objects(group.hooks))
-        .filter((hook) => text(hook.command).includes("k8s-axi")).length === 1;
+        .filter((hook) => hook.command === command).length === 1;
     if (
       Object.values(before).every((x) => x === "installed") &&
       [observed.claude.path, observed.codex.path].every(
@@ -186,7 +185,7 @@ export async function setupCommand(p: Parsed): Promise<string> {
         let keptManaged = false;
         const deduped = groups.flatMap((group) => {
           const hooks = objects(group.hooks).filter((hook) => {
-            if (!text(hook.command).includes("k8s-axi")) return true;
+            if (hook.command !== command) return true;
             if (keptManaged) return false;
             keptManaged = true;
             return true;

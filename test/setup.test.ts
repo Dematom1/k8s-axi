@@ -41,6 +41,10 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
     expect(cli(["setup", "hooks"], l.env).status).toBe(0);
     expect(statSync(settings).mtimeMs).toBe(mtime);
     const duplicateSettings = JSON.parse(installed);
+    duplicateSettings.hooks.SessionStart[0].hooks.push({
+      type: "command",
+      command: "echo k8s-axi deployment",
+    });
     duplicateSettings.hooks.SessionStart.push(
       structuredClone(
         duplicateSettings.hooks.SessionStart.find(
@@ -52,11 +56,12 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
     writeFileSync(settings, JSON.stringify(duplicateSettings));
     expect(cli(["setup", "hooks"], l.env).status).toBe(0);
     const repaired = JSON.parse(readFileSync(settings, "utf8"));
-    expect(
-      repaired.hooks.SessionStart.flatMap(
-        (group: { hooks: { command: string }[] }) => group.hooks,
-      ).filter((hook: { command: string }) => hook.command.includes("k8s-axi")),
-    ).toHaveLength(1);
+    const repairedCommands = repaired.hooks.SessionStart.flatMap(
+      (group: { hooks: { command: string }[] }) => group.hooks,
+    ).map((hook: { command: string }) => hook.command);
+    expect(repairedCommands.filter((hook: string) => hook.includes("k8s-axi")))
+      .toHaveLength(2);
+    expect(repairedCommands).toContain("echo k8s-axi deployment");
     symlinkSync(process.execPath, join(l.env.PATH, "node"));
     const hooks = JSON.parse(installed).hooks;
     const start = hooks.SessionStart.flatMap(
