@@ -73,18 +73,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           TAG: ${{ inputs.tag }}
-        run: |
-          set -eu
-          if ! printf '%s\n' "$TAG" | grep -Eq '^(k8s-axi-)?v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "Invalid release tag: $TAG" >&2
-            exit 1
-          fi
-          # npm provenance records the run's GITHUB_REF and GITHUB_SHA, so the
-          # recovery run must be dispatched on the tag itself.
-          if [ "$GITHUB_REF" != "refs/tags/$TAG" ]; then
-            echo "Dispatch this workflow on the tag: gh workflow run release-please.yml --ref $TAG -f tag=$TAG" >&2
-            exit 1
-          fi
+        run: bash .github/scripts/validate-release-tag.sh
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:

@@ -1,5 +1,6 @@
 import { test, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { load } from "js-yaml";
 import { object, objects, text } from "../src/kubectl.js";
 function workflow(name: string) {
@@ -32,14 +33,16 @@ function assertPublishGate(value: unknown) {
   expect(JSON.stringify(build)).toContain(
     "github.event_name == 'workflow_dispatch'",
   );
-  expect(
-    objects(build.steps)
-      .map((s) => s.run)
-      .join("\n"),
-  ).toContain('"$GITHUB_REF" != "refs/tags/$TAG"');
-  expect(JSON.stringify(build)).toContain(
-    "refs/tags/${{ inputs.tag || needs.release-please.outputs.tag_name }}",
-  );
+  const validate = (tag: string, ref: string) =>
+    execFileSync("bash", [".github/scripts/validate-release-tag.sh"], {
+      env: { ...process.env, TAG: tag, GITHUB_REF: ref },
+      stdio: "pipe",
+    });
+  expect(() => validate("v1.2", "refs/tags/v1.2")).toThrow();
+  expect(() => validate("v1.2.3", "refs/heads/main")).toThrow();
+  expect(() =>
+    validate("k8s-axi-v1.2.3", "refs/tags/k8s-axi-v1.2.3"),
+  ).not.toThrow();
   const all = JSON.stringify(build);
   expect(all.indexOf("npm pkg set gitHead")).toBeLessThan(
     all.indexOf("npm pack"),
