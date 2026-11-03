@@ -1,5 +1,6 @@
 import { test, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { load } from "js-yaml";
 import { object, objects, text } from "../src/kubectl.js";
 function workflow(name: string) {
@@ -29,7 +30,19 @@ function assertPublishGate(value: unknown) {
   );
   expect(JSON.stringify(publish)).toContain("11.15.0");
   expect(object(build.permissions)["id-token"]).toBeUndefined();
-  expect(JSON.stringify(build)).toContain("publish_current");
+  const validation = objects(build.steps).find(
+    (step) => step.name === "Validate recovery tag",
+  );
+  expect(validation).toBeDefined();
+  const run = text(validation?.run);
+  const validate = (tag: string, ref: string) =>
+    spawnSync("bash", ["-c", run], {
+      env: { ...process.env, TAG: tag, GITHUB_REF: ref },
+      encoding: "utf8",
+    }).status;
+  expect(validate("v1.2", "refs/tags/v1.2")).not.toBe(0);
+  expect(validate("v1.2.3", "refs/heads/main")).not.toBe(0);
+  expect(validate("k8s-axi-v1.2.3", "refs/tags/k8s-axi-v1.2.3")).toBe(0);
   const all = JSON.stringify(build);
   expect(all.indexOf("npm pkg set gitHead")).toBeLessThan(
     all.indexOf("npm pack"),
@@ -55,24 +68,41 @@ test("all action refs pinned and triggers safe", () => {
   for (const f of readdirSync(".github/workflows")) {
     const raw = readFileSync(".github/workflows/" + f, "utf8");
     expect(raw).not.toContain("pull_request_target");
-    for (const m of raw.matchAll(/uses:\s*(\S+)/g))
+    for (const m of raw.matchAll(/^\s*(?:-\s*)?uses:\s*(\S+)/gm))
       expect(m[1]).toMatch(/@[a-f0-9]{40}$/);
   }
   expect(
     readFileSync(".github/workflows/no-mistakes-required.yml", "utf8"),
   ).toContain("@f6441c96c352a18b9cadcaef6b6c7017e9ac3970");
 });
-test("CI covers hosts runtimes pinned clients and archive", () => {
-  const raw = readFileSync(".github/workflows/ci.yml", "utf8");
-  for (const s of [
-    "ubuntu-latest",
-    "macos-latest",
-    "node: [22, 24]",
-    "v1.32.0",
-    "v1.36.2",
-    "K8S_AXI_REQUIRE_REAL_KUBECTL",
-    "--ignore-scripts",
-    "KUBECONFIG",
-  ])
-    expect(raw).toContain(s);
+test("weekly release uses the shared pinned workflow and release App", () => {
+  const w = workflow("weekly-release");
+  const release = object(object(w.jobs).release);
+  expect(release.uses).toBe(
+    "Dematom1/argocd-axi/.github/workflows/merge-release.yml@9240260f8fa15569356b98588ce771c2c6c9d7e6",
+  );
+  expect(object(release.secrets)).toEqual({
+    RELEASE_APP_ID: "${{ secrets.RELEASE_APP_ID }}",
+    RELEASE_APP_PRIVATE_KEY: "${{ secrets.RELEASE_APP_PRIVATE_KEY }}",
+  });
+  expect(object(release.with)["dry-run"]).toBe(
+    "${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}",
+  );
+});
+test("CI exercises supported hosts, runtimes, kubectl versions, and packed CLI", () => {
+  const jobs = object(object(workflow("ci")).jobs);
+  const check = object(jobs.check),
+    realKubectl = object(jobs["real-kubectl"]);
+  expect(object(object(check.strategy).matrix)).toEqual({
+    os: ["ubuntu-latest", "macos-latest"],
+    node: [22, 24],
+  });
+  expect(object(object(realKubectl.strategy).matrix)).toEqual({
+    os: ["ubuntu-latest", "macos-latest"],
+    kubectl: ["v1.32.0", "v1.36.2"],
+  });
+  const steps = objects(realKubectl.steps);
+  expect(
+    steps.some((step) => text(step.run).includes("scripts/real-kubectl.sh")),
+  ).toBe(true);
 });

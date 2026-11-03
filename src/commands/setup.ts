@@ -131,8 +131,18 @@ export async function setupCommand(p: Parsed): Promise<string> {
     const entry = entrypoint();
     const observed = sessionStartHookStatus({ marker: "k8s-axi" });
     const command = `${quote(process.execPath)} ${quote(entry)}`;
+    const hasOneManagedStartHook = (file: string) =>
+      objects(
+        object(object(JSON.parse(readFileSync(file, "utf8"))).hooks)
+          .SessionStart,
+      )
+        .flatMap((group) => objects(group.hooks))
+        .filter((hook) => text(hook.command).includes("k8s-axi")).length === 1;
     if (
       Object.values(before).every((x) => x === "installed") &&
+      [observed.claude.path, observed.codex.path].every(
+        hasOneManagedStartHook,
+      ) &&
       [observed.claude.path, observed.codex.path].every((file) =>
         readFileSync(file, "utf8").includes(JSON.stringify(command)),
       ) &&
@@ -169,6 +179,10 @@ export async function setupCommand(p: Parsed): Promise<string> {
           },
         );
         const groups = objects(object(next.hooks).SessionStart);
+        const hookCount = groups.reduce(
+          (count, group) => count + objects(group.hooks).length,
+          0,
+        );
         let keptManaged = false;
         const deduped = groups.flatMap((group) => {
           const hooks = objects(group.hooks).filter((hook) => {
@@ -180,7 +194,11 @@ export async function setupCommand(p: Parsed): Promise<string> {
           return hooks.length ? [{ ...group, hooks }] : [];
         });
         object(next.hooks).SessionStart = deduped;
-        if (changed || deduped.length !== groups.length)
+        const dedupedHookCount = deduped.reduce(
+          (count, group) => count + objects(group.hooks).length,
+          0,
+        );
+        if (changed || dedupedHookCount !== hookCount)
           writeFileSync(file, JSON.stringify(next, null, 2) + "\n");
       } catch {
         errors.push("could not pin hook command");

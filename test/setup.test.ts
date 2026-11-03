@@ -40,6 +40,23 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
       mtime = statSync(settings).mtimeMs;
     expect(cli(["setup", "hooks"], l.env).status).toBe(0);
     expect(statSync(settings).mtimeMs).toBe(mtime);
+    const duplicateSettings = JSON.parse(installed);
+    duplicateSettings.hooks.SessionStart.push(
+      structuredClone(
+        duplicateSettings.hooks.SessionStart.find(
+          (group: { hooks: { command: string }[] }) =>
+            group.hooks.some((hook) => hook.command.includes("k8s-axi")),
+        ),
+      ),
+    );
+    writeFileSync(settings, JSON.stringify(duplicateSettings));
+    expect(cli(["setup", "hooks"], l.env).status).toBe(0);
+    const repaired = JSON.parse(readFileSync(settings, "utf8"));
+    expect(
+      repaired.hooks.SessionStart.flatMap(
+        (group: { hooks: { command: string }[] }) => group.hooks,
+      ).filter((hook: { command: string }) => hook.command.includes("k8s-axi")),
+    ).toHaveLength(1);
     symlinkSync(process.execPath, join(l.env.PATH, "node"));
     const hooks = JSON.parse(installed).hooks;
     const start = hooks.SessionStart.flatMap(
