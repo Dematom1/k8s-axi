@@ -26,9 +26,6 @@ function entrypoint(): string {
 function quote(s: string): string {
   return `'${s.replaceAll("'", "'\\''")}'`;
 }
-function isManagedStartCommand(command: unknown, expected: string): boolean {
-  return command === expected || command === "k8s-axi-ctx";
-}
 export function hookStatus() {
   const s = sessionStartHookStatus({ marker: "k8s-axi" });
   for (const [file, json] of [
@@ -131,28 +128,6 @@ export async function setupCommand(p: Parsed): Promise<string> {
     }
   } else {
     const entry = entrypoint();
-    const observed = sessionStartHookStatus({ marker: "k8s-axi" });
-    const command = `${quote(process.execPath)} ${quote(entry)}`;
-    const hasOneManagedStartHook = (file: string) =>
-      objects(
-        object(object(JSON.parse(readFileSync(file, "utf8"))).hooks)
-          .SessionStart,
-      )
-        .flatMap((group) => objects(group.hooks))
-        .filter((hook) => isManagedStartCommand(hook.command, command)).length === 1;
-    if (
-      Object.values(before).every((x) => x === "installed") &&
-      [observed.claude.path, observed.codex.path].every(
-        hasOneManagedStartHook,
-      ) &&
-      [observed.claude.path, observed.codex.path].every((file) =>
-        readFileSync(file, "utf8").includes(JSON.stringify(command)),
-      ) &&
-      readFileSync(observed.opencode.path, "utf8").includes(
-        JSON.stringify(entry),
-      )
-    )
-      return encodeObject({ ...before, changed: false });
     if (detectInstallMethod({ entry }).kind === "npx")
       fail(
         "REFUSED",
@@ -180,31 +155,7 @@ export async function setupCommand(p: Parsed): Promise<string> {
             command: `${quote(process.execPath)} ${quote(entry)}`,
           },
         );
-        const groups = objects(object(next.hooks).SessionStart);
-        const hasExpectedCommand = groups
-          .flatMap((group) => objects(group.hooks))
-          .some((hook) => hook.command === command);
-        let keptManaged = false;
-        const deduped = groups.flatMap((group) => {
-          const hooks = objects(group.hooks).flatMap((hook) => {
-            if (
-              hook.command !== command &&
-              isManagedStartCommand(hook.command, command) &&
-              hasExpectedCommand
-            )
-              return [];
-            if (!isManagedStartCommand(hook.command, command)) return [hook];
-            if (keptManaged) return [];
-            keptManaged = true;
-            return [
-              hook.command === command ? hook : { ...hook, command },
-            ];
-          });
-          return hooks.length ? [{ ...group, hooks }] : [];
-        });
-        object(next.hooks).SessionStart = deduped;
-        if (changed || JSON.stringify(deduped) !== JSON.stringify(groups))
-          writeFileSync(file, JSON.stringify(next, null, 2) + "\n");
+        if (changed) writeFileSync(file, JSON.stringify(next, null, 2) + "\n");
       } catch {
         errors.push("could not pin hook command");
       }
