@@ -31,7 +31,9 @@ function isManagedStartCommand(command: unknown, expected: string): boolean {
     command === expected ||
     command === "k8s-axi-ctx" ||
     (typeof command === "string" &&
-      /^'[^']*\/node' '[^']*\/k8s-axi-ctx\.js'$/.test(command))
+      /^'[^']*\/node' '[^']*\/node_modules\/k8s-axi\/dist\/bin\/k8s-axi-ctx\.js'$/.test(
+        command,
+      ))
   );
 }
 export function hookStatus() {
