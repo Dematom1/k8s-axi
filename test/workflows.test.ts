@@ -29,7 +29,17 @@ function assertPublishGate(value: unknown) {
   );
   expect(JSON.stringify(publish)).toContain("11.15.0");
   expect(object(build.permissions)["id-token"]).toBeUndefined();
-  expect(JSON.stringify(build)).toContain("publish_current");
+  expect(JSON.stringify(build)).toContain(
+    "github.event_name == 'workflow_dispatch'",
+  );
+  expect(
+    objects(build.steps)
+      .map((s) => s.run)
+      .join("\n"),
+  ).toContain('"$GITHUB_REF" != "refs/tags/$TAG"');
+  expect(JSON.stringify(build)).toContain(
+    "refs/tags/${{ inputs.tag || needs.release-please.outputs.tag_name }}",
+  );
   const all = JSON.stringify(build);
   expect(all.indexOf("npm pkg set gitHead")).toBeLessThan(
     all.indexOf("npm pack"),
@@ -55,12 +65,26 @@ test("all action refs pinned and triggers safe", () => {
   for (const f of readdirSync(".github/workflows")) {
     const raw = readFileSync(".github/workflows/" + f, "utf8");
     expect(raw).not.toContain("pull_request_target");
-    for (const m of raw.matchAll(/uses:\s*(\S+)/g))
+    for (const m of raw.matchAll(/^\s*(?:-\s*)?uses:\s*(\S+)/gm))
       expect(m[1]).toMatch(/@[a-f0-9]{40}$/);
   }
   expect(
     readFileSync(".github/workflows/no-mistakes-required.yml", "utf8"),
   ).toContain("@f6441c96c352a18b9cadcaef6b6c7017e9ac3970");
+});
+test("weekly release uses the shared pinned workflow and release App", () => {
+  const w = workflow("weekly-release");
+  const release = object(object(w.jobs).release);
+  expect(release.uses).toBe(
+    "Dematom1/argocd-axi/.github/workflows/merge-release.yml@9240260f8fa15569356b98588ce771c2c6c9d7e6",
+  );
+  expect(object(release.secrets)).toEqual({
+    RELEASE_APP_ID: "${{ secrets.RELEASE_APP_ID }}",
+    RELEASE_APP_PRIVATE_KEY: "${{ secrets.RELEASE_APP_PRIVATE_KEY }}",
+  });
+  expect(object(release.with)["dry-run"]).toBe(
+    "${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}",
+  );
 });
 test("CI covers hosts runtimes pinned clients and archive", () => {
   const raw = readFileSync(".github/workflows/ci.yml", "utf8");
