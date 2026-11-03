@@ -146,13 +146,14 @@ export async function setupCommand(p: Parsed): Promise<string> {
         }
       }),
     );
-    installSessionStartHooks({
-      marker: "k8s-axi",
-      execPath: entry,
-      binaryNames: [],
-      distEntrypoints: ["dist/bin/k8s-axi-ctx.js"],
-      onError: (e) => errors.push(e),
-    });
+    if (before.claude !== "installed" && before.codex !== "installed")
+      installSessionStartHooks({
+        marker: "k8s-axi",
+        execPath: entry,
+        binaryNames: [],
+        distEntrypoints: ["dist/bin/k8s-axi-ctx.js"],
+        onError: (e) => errors.push(e),
+      });
     // Agent JSON commands run through a shell; pin Node too and quote both paths.
     for (const file of [s.claude.path, s.codex.path])
       try {
@@ -167,8 +168,25 @@ export async function setupCommand(p: Parsed): Promise<string> {
             command: `${quote(process.execPath)} ${quote(entry)}`,
           },
         );
+        const groups = object(next.hooks).SessionStart;
+        if (Array.isArray(groups)) {
+          let seen = false;
+          for (const group of groups) {
+            const hooks = objects(object(group).hooks);
+            const kept = hooks.filter((hook) => {
+              if (object(hook).command !== `${quote(process.execPath)} ${quote(entry)}`)
+                return true;
+              if (seen) return false;
+              seen = true;
+              return true;
+            });
+            if (kept.length !== hooks.length) object(group).hooks = kept;
+          }
+        }
         const serialized = JSON.stringify(next, null, 2) + "\n";
-        if (changed) writeFileSync(file, serialized);
+        const persisted = changed || serialized !== JSON.stringify(current, null, 2) + "\n" ? serialized : original.get(file);
+        if (persisted !== undefined && persisted !== installed)
+          writeFileSync(file, persisted);
       } catch {
         errors.push("could not pin hook command");
       }
