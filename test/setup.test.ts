@@ -47,7 +47,7 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
     ).replaceAll("'", "'\\''")}'`;
     duplicateSettings.hooks.SessionStart[0].hooks.push({
       type: "command",
-      command: "echo k8s-axi deployment",
+      command: "echo foreign deployment",
     });
     duplicateSettings.hooks.SessionStart.push(
       structuredClone(
@@ -66,7 +66,7 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
     expect(
       repairedCommands.filter((hook: string) => hook === managedCommand),
     ).toHaveLength(1);
-    expect(repairedCommands).toContain("echo k8s-axi deployment");
+    expect(repairedCommands).toContain("echo foreign deployment");
     symlinkSync(process.execPath, join(l.env.PATH, "node"));
     const hooks = JSON.parse(installed).hooks;
     const start = hooks.SessionStart.flatMap(
