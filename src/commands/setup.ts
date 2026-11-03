@@ -27,7 +27,12 @@ function quote(s: string): string {
   return `'${s.replaceAll("'", "'\\''")}'`;
 }
 function isManagedStartCommand(command: unknown, expected: string): boolean {
-  return command === expected || command === "k8s-axi-ctx";
+  return (
+    command === expected ||
+    command === "k8s-axi-ctx" ||
+    (typeof command === "string" &&
+      /^'[^']*\/node' '[^']*\/k8s-axi-ctx\.js'$/.test(command))
+  );
 }
 export function hookStatus() {
   const s = sessionStartHookStatus({ marker: "k8s-axi" });
@@ -188,15 +193,16 @@ export async function setupCommand(p: Parsed): Promise<string> {
         const deduped = groups.flatMap((group) => {
           const hooks = objects(group.hooks).flatMap((hook) => {
             if (
-              hook.command === "k8s-axi-ctx" &&
-              (hasExpectedCommand || keptManaged)
+              hook.command !== command &&
+              isManagedStartCommand(hook.command, command) &&
+              hasExpectedCommand
             )
               return [];
             if (!isManagedStartCommand(hook.command, command)) return [hook];
             if (keptManaged) return [];
             keptManaged = true;
             return [
-              hook.command === "k8s-axi-ctx" ? { ...hook, command } : hook,
+              hook.command === command ? hook : { ...hook, command },
             ];
           });
           return hooks.length ? [{ ...group, hooks }] : [];
