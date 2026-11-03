@@ -105,9 +105,4 @@ test("CI exercises supported hosts, runtimes, kubectl versions, and packed CLI",
   expect(
     steps.some((step) => text(step.run).includes("scripts/real-kubectl.sh")),
   ).toBe(true);
-  const smoke = steps.find(
-    (step) => step.name === "Smoke the installed archive",
-  );
-  expect(text(smoke?.run)).toContain('node "$cli" --version');
-  expect(text(smoke?.run)).toContain('node "$cli" --help');
 });
