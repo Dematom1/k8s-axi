@@ -181,31 +181,28 @@ export async function setupCommand(p: Parsed): Promise<string> {
           },
         );
         const groups = objects(object(next.hooks).SessionStart);
-        const hookCount = groups.reduce(
-          (count, group) => count + objects(group.hooks).length,
-          0,
-        );
         const hasExpectedCommand = groups
           .flatMap((group) => objects(group.hooks))
           .some((hook) => hook.command === command);
         let keptManaged = false;
         const deduped = groups.flatMap((group) => {
-          const hooks = objects(group.hooks).filter((hook) => {
-            if (hook.command === "k8s-axi-ctx" && hasExpectedCommand)
-              return false;
-            if (!isManagedStartCommand(hook.command, command)) return true;
-            if (keptManaged) return false;
+          const hooks = objects(group.hooks).flatMap((hook) => {
+            if (
+              hook.command === "k8s-axi-ctx" &&
+              (hasExpectedCommand || keptManaged)
+            )
+              return [];
+            if (!isManagedStartCommand(hook.command, command)) return [hook];
+            if (keptManaged) return [];
             keptManaged = true;
-            return true;
+            return [
+              hook.command === "k8s-axi-ctx" ? { ...hook, command } : hook,
+            ];
           });
           return hooks.length ? [{ ...group, hooks }] : [];
         });
         object(next.hooks).SessionStart = deduped;
-        const dedupedHookCount = deduped.reduce(
-          (count, group) => count + objects(group.hooks).length,
-          0,
-        );
-        if (changed || dedupedHookCount !== hookCount)
+        if (changed || JSON.stringify(deduped) !== JSON.stringify(groups))
           writeFileSync(file, JSON.stringify(next, null, 2) + "\n");
       } catch {
         errors.push("could not pin hook command");
