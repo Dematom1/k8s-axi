@@ -41,10 +41,11 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
     expect(cli(["setup", "hooks"], l.env).status).toBe(0);
     expect(statSync(settings).mtimeMs).toBe(mtime);
     const duplicateSettings = JSON.parse(installed);
-    const managedCommand = duplicateSettings.hooks.SessionStart
-      .flatMap((group: { hooks: { command: string }[] }) => group.hooks)
-      .find((hook: { command: string }) => hook.command !== "echo unrelated")
-      .command;
+    const managedCommand = duplicateSettings.hooks.SessionStart.flatMap(
+      (group: { hooks: { command: string }[] }) => group.hooks,
+    ).find(
+      (hook: { command: string }) => hook.command !== "echo unrelated",
+    ).command;
     duplicateSettings.hooks.SessionStart[0].hooks.push({
       type: "command",
       command: "echo k8s-axi deployment",

@@ -16,7 +16,7 @@ import {
 } from "../session-hook.js";
 import type { Parsed } from "../args.js";
 import { fail, usage } from "../errors.js";
-import { object, objects, text } from "../kubectl.js";
+import { object, objects } from "../kubectl.js";
 import { encodeObject } from "../toon.js";
 function entrypoint(): string {
   return realpathSync(
