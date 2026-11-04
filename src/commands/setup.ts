@@ -145,7 +145,7 @@ export async function setupCommand(p: Parsed): Promise<string> {
         ],
       );
     const s = sessionStartHookStatus({ marker: "k8s-axi" });
-    if (before.claude !== "installed" && before.codex !== "installed")
+    if (!s.claude.installed || !s.codex.installed)
       installSessionStartHooks({
         marker: "k8s-axi",
         execPath: entry,
