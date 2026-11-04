@@ -45,10 +45,15 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
       process.env.K8S_AXI_TEST_PACKAGE ?? ".",
       "dist/bin/k8s-axi-ctx.js",
     ).replaceAll("'", "'\\''")}'`;
-    duplicateSettings.hooks.SessionStart[0].hooks.push({
-      type: "command",
-      command: "echo foreign deployment",
-    });
+    duplicateSettings.hooks.SessionStart[0].hooks.push(
+      { type: "command", command: "echo foreign deployment" },
+      {
+        type: "command",
+        command:
+          "'/old/node' '/old/node_modules/k8s-axi/dist/bin/k8s-axi-ctx.js'",
+      },
+      { type: "command", command: "k8s-axi-ctx" },
+    );
     duplicateSettings.hooks.SessionStart.push(
       structuredClone(
         duplicateSettings.hooks.SessionStart.find(
@@ -67,6 +72,10 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
       repairedCommands.filter((hook: string) => hook === managedCommand),
     ).toHaveLength(1);
     expect(repairedCommands).toContain("echo foreign deployment");
+    expect(repairedCommands).not.toContain(
+      "'/old/node' '/old/node_modules/k8s-axi/dist/bin/k8s-axi-ctx.js'",
+    );
+    expect(repairedCommands).not.toContain("k8s-axi-ctx");
     symlinkSync(process.execPath, join(l.env.PATH, "node"));
     const hooks = JSON.parse(installed).hooks;
     const start = hooks.SessionStart.flatMap(

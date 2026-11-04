@@ -166,18 +166,24 @@ export async function setupCommand(p: Parsed): Promise<string> {
             command: `${quote(process.execPath)} ${quote(entry)}`,
           },
         );
+        // Work around axi-sdk-js#259: its update repairs only the first managed hook.
         const groups = object(next.hooks).SessionStart;
         if (Array.isArray(groups)) {
           let seen = false;
           for (const group of groups) {
             const hooks = objects(object(group).hooks);
             const kept = hooks.filter((hook) => {
+              const command = object(hook).command;
               if (
-                object(hook).command !==
-                `${quote(process.execPath)} ${quote(entry)}`
+                typeof command !== "string" ||
+                (!command.includes("k8s-axi") && command !== "k8s-axi-ctx")
               )
                 return true;
-              if (seen) return false;
+              if (
+                seen ||
+                command !== `${quote(process.execPath)} ${quote(entry)}`
+              )
+                return false;
               seen = true;
               return true;
             });
