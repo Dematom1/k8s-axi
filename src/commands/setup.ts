@@ -187,7 +187,7 @@ export async function setupCommand(p: Parsed): Promise<string> {
         const managedGroup = groups.findIndex((group) =>
           objects(group.hooks).some(isManaged),
         );
-        const destination = broadGroup === -1 ? managedGroup : broadGroup;
+        const destination = managedGroup === -1 ? broadGroup : managedGroup;
         const managedEntry = groups
           .flatMap((group) => objects(group.hooks))
           .find((hook) => object(hook).command === expected);
