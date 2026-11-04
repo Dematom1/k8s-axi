@@ -54,16 +54,23 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
       },
       { type: "command", command: "k8s-axi-ctx" },
     );
-    duplicateSettings.hooks.SessionStart.push(
-      structuredClone(
-        duplicateSettings.hooks.SessionStart.find(
-          (group: { hooks: { command: string }[] }) =>
-            group.hooks.some((hook) => hook.command === managedCommand),
-        ),
+    const duplicateGroup = structuredClone(
+      duplicateSettings.hooks.SessionStart.find(
+        (group: { hooks: { command: string }[] }) =>
+          group.hooks.some((hook) => hook.command === managedCommand),
       ),
     );
+    duplicateSettings.hooks.SessionStart.push(duplicateGroup, {
+      ...duplicateGroup,
+      matcher: "startup",
+    });
     writeFileSync(settings, JSON.stringify(duplicateSettings));
-    expect(cli(["setup", "hooks"], l.env).status).toBe(0);
+    const repair = cli(["setup", "hooks"], l.env);
+    expect(
+      repair.status,
+      `${repair.stdout}\n${readFileSync(settings, "utf8")}`,
+    ).toBe(0);
+    expect(repair.stdout).not.toContain("changed: false");
     const repaired = JSON.parse(readFileSync(settings, "utf8"));
     const repairedCommands = repaired.hooks.SessionStart.flatMap(
       (group: { hooks: { command: string }[] }) => group.hooks,
@@ -72,6 +79,13 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
       repairedCommands.filter((hook: string) => hook === managedCommand),
     ).toHaveLength(1);
     expect(repairedCommands).toContain("echo foreign deployment");
+    expect(
+      repaired.hooks.SessionStart.some(
+        (group: { matcher?: string; hooks: { command: string }[] }) =>
+          group.matcher === undefined &&
+          group.hooks.some((hook) => hook.command === managedCommand),
+      ),
+    ).toBe(true);
     expect(repairedCommands).not.toContain(
       "'/old/node' '/old/node_modules/k8s-axi/dist/bin/k8s-axi-ctx.js'",
     );

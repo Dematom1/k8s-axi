@@ -63,12 +63,19 @@ export function hookStatus() {
     }
   }
   const expected = `${quote(process.execPath)} ${quote(entrypoint())}`;
-  const starts = (file: string) =>
-    objects(
+  const starts = (file: string) => {
+    const commands = objects(
       object(object(JSON.parse(readFileSync(file, "utf8"))).hooks).SessionStart,
     )
       .flatMap((g) => objects(g.hooks))
-      .some((h) => h.command === expected);
+      .map((hook) => object(hook).command)
+      .filter(
+        (command): command is string =>
+          typeof command === "string" &&
+          (command.includes("k8s-axi") || command === "k8s-axi-ctx"),
+      );
+    return commands.length === 1 && commands[0] === expected;
+  };
   const claude = s.claude.installed
     ? starts(s.claude.path)
       ? "installed"
@@ -116,6 +123,7 @@ export async function setupCommand(p: Parsed): Promise<string> {
     return encodeObject(before);
   }
   const errors: string[] = [];
+  let wroteSettings = false;
   if (p.action === "uninstall") {
     uninstallSessionStartHooks({
       marker: "k8s-axi",
@@ -137,15 +145,6 @@ export async function setupCommand(p: Parsed): Promise<string> {
         ],
       );
     const s = sessionStartHookStatus({ marker: "k8s-axi" });
-    const original = new Map(
-      [s.claude.path, s.codex.path].map((file) => {
-        try {
-          return [file, readFileSync(file, "utf8")] as const;
-        } catch {
-          return [file, undefined] as const;
-        }
-      }),
-    );
     if (before.claude !== "installed" && before.codex !== "installed")
       installSessionStartHooks({
         marker: "k8s-axi",
@@ -158,47 +157,61 @@ export async function setupCommand(p: Parsed): Promise<string> {
     for (const file of [s.claude.path, s.codex.path])
       try {
         const installed = readFileSync(file, "utf8");
-        const current = object(JSON.parse(original.get(file) ?? installed));
+        const current = object(JSON.parse(installed));
+        const initial = JSON.stringify(current, null, 2) + "\n";
         const [next, changed] = computeSessionStartHookUpdate(
-          structuredClone(current) as HookSettings,
+          current as HookSettings,
           {
             marker: "k8s-axi",
             command: `${quote(process.execPath)} ${quote(entry)}`,
           },
         );
         // Work around axi-sdk-js#259: its update repairs only the first managed hook.
-        const groups = object(next.hooks).SessionStart;
-        if (Array.isArray(groups)) {
-          let seen = false;
-          for (const group of groups) {
-            const hooks = objects(object(group).hooks);
-            const kept = hooks.filter((hook) => {
-              const command = object(hook).command;
-              if (
-                typeof command !== "string" ||
-                (!command.includes("k8s-axi") && command !== "k8s-axi-ctx")
-              )
-                return true;
-              if (
-                seen ||
-                command !== `${quote(process.execPath)} ${quote(entry)}`
-              )
-                return false;
-              seen = true;
-              return true;
-            });
-            if (kept.length !== hooks.length) object(group).hooks = kept;
-          }
-        }
+        const expected = `${quote(process.execPath)} ${quote(entry)}`;
+        const groups = objects(object(next.hooks).SessionStart);
+        const isManaged = (hook: unknown) => {
+          const command = object(hook).command;
+          return (
+            typeof command === "string" &&
+            (command.includes("k8s-axi") || command === "k8s-axi-ctx")
+          );
+        };
+        const broadGroup = groups.findIndex((group) => {
+          const matcher = object(group).matcher;
+          return matcher === undefined || matcher === null || matcher === "";
+        });
+        const managedGroup = groups.findIndex((group) =>
+          objects(group.hooks).some(isManaged),
+        );
+        const destination = broadGroup === -1 ? managedGroup : broadGroup;
+        const managedEntry = groups
+          .flatMap((group) => objects(group.hooks))
+          .find((hook) => object(hook).command === expected);
+        const canonical = {
+          ...(managedEntry ? object(managedEntry) : {}),
+          type: "command",
+          command: expected,
+          timeout: 10,
+        };
+        const normalized: Record<string, unknown>[] = groups.flatMap(
+          (group, index) => {
+            const kept = objects(group.hooks).filter(
+              (hook) => !isManaged(hook),
+            );
+            if (index === destination) kept.push(canonical);
+            return kept.length ? [{ ...group, hooks: kept }] : [];
+          },
+        );
+        if (destination < 0)
+          normalized.push({ matcher: "", hooks: [canonical] });
+        object(next.hooks).SessionStart = normalized;
         const serialized = JSON.stringify(next, null, 2) + "\n";
-        const persisted =
-          changed || serialized !== JSON.stringify(current, null, 2) + "\n"
-            ? serialized
-            : original.get(file);
-        if (persisted !== undefined && persisted !== installed)
-          writeFileSync(file, persisted);
-      } catch {
-        errors.push("could not pin hook command");
+        if ((changed || serialized !== initial) && serialized !== installed) {
+          writeFileSync(file, serialized);
+          wroteSettings = true;
+        }
+      } catch (error) {
+        errors.push(`could not pin hook command: ${String(error)}`);
       }
     try {
       installSessionEndHook(realpathSync(join(dirname(entry), "k8s-axi.js")));
@@ -211,12 +224,16 @@ export async function setupCommand(p: Parsed): Promise<string> {
   if (errors.length || Object.values(after).some((x) => x !== desired))
     fail(
       "CONFIG_INVALID",
-      `hook ${p.action} incomplete; observed ${JSON.stringify(after)}`,
+      `hook ${p.action} incomplete; observed ${JSON.stringify(after)}; ${errors.join("; ")}`,
       [
         "Fix destination permissions, then run `k8s-axi setup status` and retry",
       ],
     );
-  if (JSON.stringify(before) === JSON.stringify(after) && p.action === "hooks")
+  if (
+    !wroteSettings &&
+    JSON.stringify(before) === JSON.stringify(after) &&
+    p.action === "hooks"
+  )
     return encodeObject({ ...after, changed: false });
   return encodeObject(after);
 }
