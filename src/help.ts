@@ -1,5 +1,5 @@
 export const DESCRIPTION =
-  "Strictly read-only Kubernetes diagnostics for agents";
+  "k8s-axi: strictly read-only Kubernetes diagnostics for agents";
 export const COMMAND_LINES = [
   "triage: cluster checks and problems, all namespaces by default",
   "ctx: context, server, namespace and client version, local only",

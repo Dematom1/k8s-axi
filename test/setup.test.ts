@@ -40,11 +40,61 @@ test("opt-in hooks are absolute, executable, idempotent and uninstall preserves 
       mtime = statSync(settings).mtimeMs;
     expect(cli(["setup", "hooks"], l.env).status).toBe(0);
     expect(statSync(settings).mtimeMs).toBe(mtime);
+    const duplicateSettings = JSON.parse(installed);
+    const managedCommand = `'${process.execPath.replaceAll("'", "'\\''")}' '${resolve(
+      process.env.K8S_AXI_TEST_PACKAGE ?? ".",
+      "dist/bin/k8s-axi-ctx.js",
+    ).replaceAll("'", "'\\''")}'`;
+    duplicateSettings.hooks.SessionStart[0].hooks.push(
+      { type: "command", command: "echo foreign deployment" },
+      {
+        type: "command",
+        command:
+          "'/old/node' '/old/node_modules/k8s-axi/dist/bin/k8s-axi-ctx.js'",
+      },
+      { type: "command", command: "k8s-axi-ctx" },
+    );
+    const duplicateGroup = structuredClone(
+      duplicateSettings.hooks.SessionStart.find(
+        (group: { hooks: { command: string }[] }) =>
+          group.hooks.some((hook) => hook.command === managedCommand),
+      ),
+    );
+    duplicateSettings.hooks.SessionStart.push(duplicateGroup, {
+      ...duplicateGroup,
+      matcher: "startup",
+    });
+    writeFileSync(settings, JSON.stringify(duplicateSettings));
+    const repair = cli(["setup", "hooks"], l.env);
+    expect(
+      repair.status,
+      `${repair.stdout}\n${readFileSync(settings, "utf8")}`,
+    ).toBe(0);
+    expect(repair.stdout).not.toContain("changed: false");
+    const repaired = JSON.parse(readFileSync(settings, "utf8"));
+    const repairedCommands = repaired.hooks.SessionStart.flatMap(
+      (group: { hooks: { command: string }[] }) => group.hooks,
+    ).map((hook: { command: string }) => hook.command);
+    expect(
+      repairedCommands.filter((hook: string) => hook === managedCommand),
+    ).toHaveLength(1);
+    expect(repairedCommands).toContain("echo foreign deployment");
+    expect(
+      repaired.hooks.SessionStart.some(
+        (group: { matcher?: string; hooks: { command: string }[] }) =>
+          group.matcher === undefined &&
+          group.hooks.some((hook) => hook.command === managedCommand),
+      ),
+    ).toBe(true);
+    expect(repairedCommands).not.toContain(
+      "'/old/node' '/old/node_modules/k8s-axi/dist/bin/k8s-axi-ctx.js'",
+    );
+    expect(repairedCommands).not.toContain("k8s-axi-ctx");
     symlinkSync(process.execPath, join(l.env.PATH, "node"));
     const hooks = JSON.parse(installed).hooks;
     const start = hooks.SessionStart.flatMap(
       (g: { hooks: { command: string }[] }) => g.hooks,
-    ).find((h: { command: string }) => h.command.includes("k8s-axi")).command;
+    ).find((h: { command: string }) => h.command === managedCommand).command;
     const run = spawnSync("/bin/sh", ["-c", start], {
       cwd: l.dir,
       env: { ...process.env, ...l.env },
