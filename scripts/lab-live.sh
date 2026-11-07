@@ -50,7 +50,7 @@ cluster_exists() {
 
 cluster_is_stale() {
   created_at=$(docker inspect -f '{{.Created}}' "$name-control-plane" 2>/dev/null) || return 1
-  created_epoch=$(TZ=UTC date -j -f '%Y-%m-%dT%H:%M:%S' "${created_at%%.*}" +%s 2>/dev/null) || return 1
+  created_epoch=$(python3 -c 'from datetime import datetime; import sys; print(int(datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00")).timestamp()))' "$created_at" 2>/dev/null) || return 1
   now=$(date +%s)
   [ "$((now - created_epoch))" -gt 2700 ]
 }
