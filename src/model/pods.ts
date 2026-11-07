@@ -48,17 +48,28 @@ export function classifyPod(pod: Obj, now = Date.now()): PodHealth {
   );
   if (failure) return { state: "problem", reason: failure };
   const terminated = statuses
-    .flatMap((c) => [
-      object(object(c.state).terminated),
-      object(object(c.lastState).terminated),
-    ])
+    .flatMap((c) => {
+      const current = object(object(c.state).terminated);
+      const last = object(object(c.lastState).terminated);
+      const runningReady =
+        c.ready === true &&
+        Object.keys(object(object(c.state).running)).length > 0;
+      const recentLast = elapsed(text(last.finishedAt), now) <= 10 * 60;
+      return [
+        { state: current, recovered: false },
+        { state: runningReady && !recentLast ? {} : last, recovered: runningReady },
+      ];
+    })
     .find(
-      (state) => Object.keys(state).length > 0 && number(state.exitCode) !== 0,
+      ({ state }) =>
+        Object.keys(state).length > 0 && number(state.exitCode) !== 0,
     );
   if (terminated)
     return {
       state: "problem",
-      reason: `${text(terminated.reason, "Error")} (${number(terminated.exitCode)})`,
+      reason: terminated.recovered
+        ? `recovered after ${text(terminated.state.reason, "Error")} (exit ${number(terminated.state.exitCode)})`
+        : `${text(terminated.state.reason, "Error")} (${number(terminated.state.exitCode)})`,
     };
   if (["Failed", "Unknown"].includes(phase))
     return { state: "problem", reason: text(s.reason, phase) };
