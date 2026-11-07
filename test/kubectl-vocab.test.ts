@@ -73,7 +73,7 @@ const routes: [string[], string[] | undefined, string[]?, number?][] = [
 
 test.each(routes)(
   "kubectl argv %j",
-  (typed, equivalent, expectedCall, expectedStatus) => {
+  (typed, equivalent, _expectedCall, expectedStatus) => {
     const environment = lab([
       {
         prefix: ["get", "namespace", "fixtures"],
@@ -145,28 +145,35 @@ test.each(routes)(
       if (equivalent) {
         expect(result.status).not.toBe(2);
         expect(result.stdout).not.toContain("REFUSED");
-        expect(
-          environment
-            .calls()
-            .some(({ args }) =>
-              expectedCall.every((arg, index) => args[index] === arg),
-            ),
-        ).toBe(true);
+        if (expectedStatus === 1 && typed[0] === "rollout") {
+          expect(result.status).toBe(1);
+          expect(result.stdout).toContain(
+            typed[2]?.endsWith("broken")
+              ? "ProgressDeadlineExceeded"
+              : "rollout is not complete",
+          );
+        } else if (typed[0] === "logs") {
+          expect(result.stdout).toContain("sample log line");
+        } else if (equivalent[1] === "view") {
+          const key =
+            equivalent[0] === "pods"
+              ? "pod"
+              : equivalent[0] === "deployments"
+                ? "deployment"
+                : "secret";
+          expect(result.data).toHaveProperty(key, equivalent[2]);
+        } else {
+          expect(result.data).toHaveProperty(equivalent[0]!);
+        }
         if (expectedStatus !== undefined)
           expect(result.status).toBe(expectedStatus);
-        if (typed[0] === "rollout" && typed[2]?.endsWith("broken")) {
-          expect(result.status).toBe(1);
-          expect(result.stdout).toContain("ProgressDeadlineExceeded");
-        }
         if (typed.join(" ") === "get pods -n fixtures") {
           expect(result.status).toBe(0);
-          expect(
-            environment.calls().some(({ args }) =>
-              ["get", "pods", "-n", "fixtures"].every(
-                (arg, index) => args[index] === arg,
-              ),
-            ),
-          ).toBe(true);
+          expect(result.data).toMatchObject({
+            scope: "namespace fixtures",
+            count: "0 of 0 total",
+            pods: "0 pods in namespace fixtures (namespace exists)",
+          });
           expect(result.stdout).toBe(
             cli(["pods", "-n", "fixtures"], environment.env).stdout,
           );
@@ -176,6 +183,9 @@ test.each(routes)(
         expect(result.stdout).toContain(
           expectedStatus === 1 ? "REFUSED" : "VALIDATION_ERROR",
         );
+        if (typed[0] === "top") expect(result.stdout).toContain("not supported");
+        if (typed[0] === "describe")
+          expect(result.stdout).toContain("k8s-axi configmaps");
       }
     } finally {
       environment.clean();

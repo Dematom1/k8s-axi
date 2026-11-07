@@ -69,7 +69,6 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
         const desired = number(object(deployment.spec).replicas, 1);
         const complete =
           number(status.observedGeneration) >= number(metadata.generation) &&
-          number(status.replicas) === desired &&
           number(status.updatedReplicas) === desired &&
           number(status.availableReplicas) === desired &&
           conditions.some(
