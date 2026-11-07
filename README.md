@@ -29,6 +29,7 @@ Run `k8s-axi` for an all-namespace overview or `k8s-axi <command> --help` for fl
 - `namespaces`: discover namespaces.
 - `pods`, `pods view <pod>`: readiness, waiting states, last termination, owner, and events.
 - `pods logs <pod> [-c <container>] [--tail <n>] [--since <duration>] [--previous]`: recent logs, never follows.
+- Common kubectl reads are accepted: `get <resource> [name]`, `describe <resource> <name>`, and `logs <pod>` map to these read commands. `rollout status deployment/<name>` checks bounded rollout status without watching; `top` is unsupported. Writes remain refused.
 - `deployments`, `deployments view <name>`: rollout state and conditions.
 - `jobs`, `pvcs`, `services`: completion, storage phase, and ready EndpointSlice counts.
 - `events [--warnings] [--since 15m] [--for Pod/name]`: newest first, timestamp, occurrence count, and message.
