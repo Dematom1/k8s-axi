@@ -95,29 +95,34 @@ export function appendAudit(
         tool: "k8s-axi",
         version: VERSION,
       }) + "\n";
-    let fd = openSync(path, "a", 0o600);
+    const fd = openSync(path, "a", 0o600);
+    let opened: ReturnType<typeof fstatSync>;
     try {
       fchmodSync(fd, 0o600);
-      const opened = fstatSync(fd);
-      if (opened.size + Buffer.byteLength(line) > MAX_BYTES) {
-        const current = statSync(path);
-        if (current.dev !== opened.dev || current.ino !== opened.ino)
-          throw new Error("audit file changed during append");
-        renameSync(
-          path,
-          join(
-            dir,
-            `audit.${Date.now()}.${process.pid}.${randomUUID()}.jsonl`,
-          ),
-        );
-        closeSync(fd);
-        fd = -1;
-        fd = openSync(path, "a", 0o600);
-        fchmodSync(fd, 0o600);
-      }
+      opened = fstatSync(fd);
       writeSync(fd, line);
     } finally {
-      if (fd >= 0) closeSync(fd);
+      closeSync(fd);
+    }
+    try {
+      const current = statSync(path);
+      if (
+        current.dev === opened.dev &&
+        current.ino === opened.ino &&
+        current.size > MAX_BYTES
+      )
+        renameSync(
+          path,
+          join(dir, `audit.${Date.now()}.${process.pid}.${randomUUID()}.jsonl`),
+        );
+    } catch (error) {
+      if (
+        error === null ||
+        typeof error !== "object" ||
+        !("code" in error) ||
+        error.code !== "ENOENT"
+      )
+        throw error;
     }
   } catch {
     throw new AxiError("audit log unavailable", "AUDIT_UNAVAILABLE", []);
