@@ -46,6 +46,7 @@ const routes: [string[], string[] | undefined, string[]?, number?][] = [
   ],
   [["get", "nodes"], ["nodes"], ["get", "nodes"]],
   [["get", "namespace", "fixtures"], undefined, undefined, 2],
+  [["rollout", "status", "statefulset/web"], undefined, undefined, 2],
   [
     ["get", "events", "-n", "fixtures"],
     ["events", "-n", "fixtures"],
@@ -79,19 +80,23 @@ test.each(routes)(
       if (equivalent) {
         expect(result.status).not.toBe(2);
         expect(result.stdout).not.toContain("REFUSED");
-        expect(
-          environment
-            .calls()
-            .some(({ args }) =>
-              expectedCall?.every((part, i) => args[i] === part),
-            ),
-        ).toBe(true);
+        expect(environment.calls().map(({ args }) => args)).toContainEqual(
+          expectedCall,
+        );
         if (expectedStatus !== undefined)
           expect(result.status).toBe(expectedStatus);
-        if (typed.join(" ") === "get pods -n fixtures")
+        if (typed.join(" ") === "get pods -n fixtures") {
+          expect(result.status).toBe(0);
+          expect(environment.calls().map(({ args }) => args)).toContainEqual([
+            "get",
+            "pods",
+            "-n",
+            "fixtures",
+          ]);
           expect(result.stdout).toBe(
             cli(["pods", "-n", "fixtures"], environment.env).stdout,
           );
+        }
       } else {
         expect(result.status).toBe(expectedStatus);
         expect(result.stdout).toContain(
