@@ -68,6 +68,23 @@ test.each(routes)(
         stdout: "namespace/fixtures",
       },
       {
+        prefix: ["get", "deployment.apps", "broken"],
+        stdout: JSON.stringify({
+          metadata: { name: "broken", generation: 1 },
+          spec: { replicas: 1 },
+          status: {
+            observedGeneration: 1,
+            conditions: [
+              {
+                type: "Progressing",
+                status: "False",
+                reason: "ProgressDeadlineExceeded",
+              },
+            ],
+          },
+        }),
+      },
+      {
         prefix: ["get", "pod", "sample"],
         stdout: JSON.stringify({
           metadata: { name: "sample" },
@@ -87,6 +104,10 @@ test.each(routes)(
         );
         if (expectedStatus !== undefined)
           expect(result.status).toBe(expectedStatus);
+        if (typed[0] === "rollout") {
+          expect(result.status).toBe(1);
+          expect(result.stdout).toContain("ProgressDeadlineExceeded");
+        }
         if (typed.join(" ") === "get pods -n fixtures") {
           expect(result.status).toBe(0);
           expect(environment.calls().map(({ args }) => args)).toContainEqual([

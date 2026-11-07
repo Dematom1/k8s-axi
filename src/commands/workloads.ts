@@ -8,6 +8,7 @@ import {
   parseObject,
   readList,
   text,
+  number,
 } from "../kubectl.js";
 import { fail } from "../errors.js";
 import {
@@ -49,12 +50,34 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
         condition.status === "False" &&
         condition.reason === "ProgressDeadlineExceeded",
     );
-    if (p.rolloutStatus && deadlineExceeded)
-      fail(
-        "UPSTREAM_ERROR",
-        `deployment ${name} rollout failed: ${text(deadlineExceeded.reason)}`,
-        [`Inspect pods for deployment ${name}`],
-      );
+    if (p.rolloutStatus) {
+      const metadata = object(deployment.metadata);
+      const status = object(deployment.status);
+      const desired = number(object(deployment.spec).replicas, 1);
+      const conditions = objects(status.conditions);
+      const complete =
+        number(status.observedGeneration) >= number(metadata.generation) &&
+        number(status.updatedReplicas) >= desired &&
+        number(status.availableReplicas) >= desired &&
+        conditions.some(
+          (condition) =>
+            condition.type === "Progressing" &&
+            condition.status === "True" &&
+            condition.reason === "NewReplicaSetAvailable",
+        ) &&
+        conditions.some(
+          (condition) =>
+            condition.type === "Available" && condition.status === "True",
+        );
+      if (deadlineExceeded || !complete)
+        fail(
+          "UPSTREAM_ERROR",
+          deadlineExceeded
+            ? `deployment ${name} rollout failed: ${text(deadlineExceeded.reason)}`
+            : `deployment ${name} rollout is not complete`,
+          [`Inspect pods for deployment ${name}`],
+        );
+    }
     return encodeObject({
       context: t.context,
       ...deploymentDetail(rows[0] ?? {}, p.full),
