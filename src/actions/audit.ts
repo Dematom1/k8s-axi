@@ -6,8 +6,8 @@ import {
   fstatSync,
   mkdirSync,
   openSync,
+  opendirSync,
   readSync,
-  readdirSync,
   renameSync,
   statSync,
   writeSync,
@@ -129,20 +129,31 @@ export function appendAudit(
   }
 }
 
-export function auditStorage(): { generations: number; bytes: number } {
-  const path = auditPath();
-  const dir = dirname(path);
-  if (!existsSync(dir)) return { generations: 0, bytes: 0 };
-  const files = readdirSync(dir).filter(
-    (name) =>
-      name === "audit.jsonl" ||
-      name === "audit.1.jsonl" ||
-      /^audit\.\d+\.\d+\.[0-9a-f-]+\.jsonl$/.test(name),
+function isAuditFile(name: string): boolean {
+  return (
+    name === "audit.jsonl" ||
+    name === "audit.1.jsonl" ||
+    /^audit\.\d+\.\d+\.[0-9a-f-]+\.jsonl$/.test(name)
   );
-  return {
-    generations: files.length,
-    bytes: files.reduce((total, name) => total + statSync(join(dir, name)).size, 0),
-  };
+}
+
+export function auditStorage(): { generations: number; bytes: number } {
+  const dir = dirname(auditPath());
+  if (!existsSync(dir)) return { generations: 0, bytes: 0 };
+  const entries = opendirSync(dir);
+  let generations = 0;
+  let bytes = 0;
+  try {
+    let entry;
+    while ((entry = entries.readSync()) !== null)
+      if (entry.isFile() && isAuditFile(entry.name)) {
+        generations++;
+        bytes += statSync(join(dir, entry.name)).size;
+      }
+  } finally {
+    entries.closeSync();
+  }
+  return { generations, bytes };
 }
 
 export function newAuditId(): string {
@@ -179,47 +190,51 @@ export function readAudit(options: {
 }): AuditRecord[] {
   if (options.limit <= 0) return [];
   const rows: AuditRecord[] = [];
+  const consume = (file: string) => {
+    let fd: number;
+    try {
+      fd = openSync(file, "r");
+    } catch (error) {
+      if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")
+        return;
+      throw error;
+    }
+    try {
+      const chunk = Buffer.alloc(64 * 1024);
+      let remainder = Buffer.alloc(0);
+      let count: number;
+      while ((count = readSync(fd, chunk, 0, chunk.length, null)) > 0) {
+        const data = Buffer.concat([remainder, chunk.subarray(0, count)]);
+        let start = 0;
+        for (let end = data.indexOf(10); end !== -1; end = data.indexOf(10, start)) {
+          const line = data.subarray(start, end).toString("utf8");
+          start = end + 1;
+          if (!line) continue;
+          const row = parseRecord(JSON.parse(line) as unknown);
+          if (options.action && row.action !== options.action) continue;
+          rows.push(row);
+          rows.sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts) || a.id.localeCompare(b.id));
+          if (rows.length > options.limit) rows.shift();
+        }
+        remainder = data.subarray(start);
+      }
+    } finally {
+      closeSync(fd);
+    }
+  };
   try {
     const path = auditPath();
     const dir = dirname(path);
-    const files = [
-      ...readdirSync(dir)
-        .filter((name) => /^audit\.(?:1|\d+\.\d+\.[0-9a-f-]+)\.jsonl$/.test(name))
-        .map((name) => join(dir, name)),
-      path,
-    ];
-    for (const file of files) {
-      let fd: number;
-      try {
-        fd = openSync(file, "r");
-      } catch (error) {
-        if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")
-          continue;
-        throw error;
-      }
-      try {
-        const chunk = Buffer.alloc(64 * 1024);
-        let remainder = Buffer.alloc(0);
-        let count: number;
-        while ((count = readSync(fd, chunk, 0, chunk.length, null)) > 0) {
-          const data = Buffer.concat([remainder, chunk.subarray(0, count)]);
-          let start = 0;
-          for (let end = data.indexOf(10); end !== -1; end = data.indexOf(10, start)) {
-            const line = data.subarray(start, end).toString("utf8");
-            start = end + 1;
-            if (!line) continue;
-            const row = parseRecord(JSON.parse(line) as unknown);
-            if (options.action && row.action !== options.action) continue;
-            rows.push(row);
-            rows.sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts) || a.id.localeCompare(b.id));
-            if (rows.length > options.limit) rows.shift();
-          }
-          remainder = data.subarray(start);
-        }
-      } finally {
-        closeSync(fd);
-      }
+    const entries = opendirSync(dir);
+    try {
+      let entry;
+      while ((entry = entries.readSync()) !== null)
+        if (entry.isFile() && isAuditFile(entry.name) && entry.name !== "audit.jsonl")
+          consume(join(dir, entry.name));
+    } finally {
+      entries.closeSync();
     }
+    consume(path);
   } catch {
     throw new AxiError("audit log is unavailable or invalid", "AUDIT_UNAVAILABLE", []);
   }
