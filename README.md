@@ -84,6 +84,7 @@ A missing context or namespace is an error. An empty namespace that cannot be ve
 | PORT_IN_USE           | The requested local port is already in use.                                 |
 | SECRET_MANIFEST       | A Secret manifest contains values instead of redacted placeholders.         |
 | INVALID_MANIFEST      | The manifest is invalid or unsupported.                                     |
+| LOGS_UNAVAILABLE      | The requested container logs are unavailable.                               |
 
 ## Safety model
 
