@@ -11,13 +11,13 @@ live("disposable kind lab is up and audit reads an empty local state", () => {
   if (!kind) throw new Error("K8S_AXI_KIND is required for live tests");
   expect(
     execFileSync(kind, ["get", "clusters"], { encoding: "utf8" }),
-  ).toContain("k8s-axi-live");
+  ).toContain("k8s-axi-lab");
   expect(
     execFileSync(
       "kubectl",
       [
         "--context",
-        "kind-k8s-axi-live",
+        "kind-k8s-axi-lab",
         "-n",
         "fixtures",
         "get",
