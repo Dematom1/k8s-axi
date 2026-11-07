@@ -2,6 +2,7 @@ import { afterAll, beforeEach, expect, test } from "vitest";
 import {
   mkdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -56,7 +57,11 @@ test("audit rotation keeps one generation", () => {
   mkdirSync(dirname(auditPath()), { recursive: true });
   writeFileSync(auditPath(), "x".repeat(10 * 1024 * 1024), { mode: 0o600 });
   appendAudit({ id: newAuditId(), phase: "start", action: "apply" });
-  expect(statSync(join(root, "k8s-axi", "audit.1.jsonl")).size).toBe(
+  const rotated = readdirSync(join(root, "k8s-axi")).find((name) =>
+    /^audit\.\d+\.\d+\.[0-9a-f-]+\.jsonl$/.test(name),
+  );
+  expect(rotated).toBeDefined();
+  expect(statSync(join(root, "k8s-axi", rotated ?? "")).size).toBe(
     10 * 1024 * 1024,
   );
 });
