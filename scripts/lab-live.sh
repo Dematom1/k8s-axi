@@ -5,8 +5,17 @@ root=$(realpath "$(dirname -- "$0")/..")
 lab="$root/.lab-live"
 name=k8s-axi-lab
 created=0
-attempting=0
+locked=0
+lock="$lab/.lock"
 kind_bin="$lab/kind"
+deadline=$(($(date +%s) + 1200))
+mkdir -p "$lab"
+while ! mkdir "$lock" 2>/dev/null; do
+  [ "$(date +%s)" -lt "$deadline" ] || { echo "timed out waiting for lab lock" >&2; exit 1; }
+  sleep 5
+done
+locked=1
+printf '%s\n' "$$" > "$lock/pid"
 mkdir -p "$lab/home" "$lab/tmp" "$lab/state"
 export HOME="$lab/home"
 export TMPDIR="$lab/tmp"
@@ -16,10 +25,14 @@ export K8S_AXI_LIVE=1
 export XDG_STATE_HOME="$lab/state"
 
 cleanup() {
-  if [ "$created" -eq 1 ] || { [ "$attempting" -eq 1 ] && "$kind_bin" get clusters 2>/dev/null | grep -Fx "$name" >/dev/null; }; then
-    "$kind_bin" delete cluster --name "$name" --kubeconfig "$KUBECONFIG" >/dev/null 2>&1 || true
+  if [ "$locked" -eq 1 ] && [ -f "$lock/pid" ] && [ "$(cat "$lock/pid")" = "$$" ]; then
+    if [ "$created" -eq 1 ]; then
+      "$kind_bin" delete cluster --name "$name" --kubeconfig "$KUBECONFIG" >/dev/null 2>&1 || true
+    fi
+    rm -rf "$lab/home" "$lab/tmp" "$lab/state" "$lab/kubeconfig" "$lab/kind" "$lab/create.log"
+    rm -f "$lock/pid"
+    rmdir "$lock"
   fi
-  rm -rf "$lab"
 }
 trap cleanup EXIT INT TERM
 
@@ -42,7 +55,6 @@ cluster_is_stale() {
   [ "$((now - created_epoch))" -gt 2700 ]
 }
 
-deadline=$(($(date +%s) + 1200))
 while :; do
   if cluster_exists; then
     if cluster_is_stale; then
@@ -54,7 +66,6 @@ while :; do
     fi
   fi
 
-  attempting=1
   "$kind_bin" create cluster --name "$name" --kubeconfig "$KUBECONFIG" --image kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0 --wait 120s >"$lab/create.log" 2>&1 &
   create_pid=$!
   while kill -0 "$create_pid" 2>/dev/null; do
@@ -66,16 +77,13 @@ while :; do
   done
   if wait "$create_pid"; then
     created=1
-    attempting=0
     break
   fi
   if cluster_exists && cluster_is_stale; then
     "$kind_bin" delete cluster --name "$name" --kubeconfig "$KUBECONFIG" >/dev/null
-    attempting=0
     continue
   fi
   [ "$(date +%s)" -lt "$deadline" ] || { echo "timed out acquiring kind cluster: $name" >&2; exit 1; }
-  attempting=0
   sleep 5
 done
 
