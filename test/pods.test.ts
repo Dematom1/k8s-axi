@@ -52,12 +52,49 @@ for (const reason of [
   );
 test("phase, readiness, startup, init and termination", () => {
   expect(classifyPod(pod).state).toBe("problem");
+  const recent = {
+    ...pod,
+    metadata: { ...pod.metadata, creationTimestamp: new Date().toISOString() },
+  };
+  expect(classifyPod(recent).state).toBe("problem");
   expect(
     classifyPod({
-      ...pod,
-      metadata: {
-        ...pod.metadata,
-        creationTimestamp: new Date().toISOString(),
+      ...recent,
+      status: {
+        ...recent.status,
+        containerStatuses: [
+          { ready: false, restartCount: 0, state: { running: {} } },
+        ],
+      },
+    }),
+  ).toMatchObject({ state: "problem", reason: "NotReady" });
+  expect(
+    classifyPod({
+      ...recent,
+      status: {
+        ...recent.status,
+        containerStatuses: [
+          {
+            ready: false,
+            restartCount: 0,
+            state: { terminated: { reason: "OOMKilled", exitCode: 137 } },
+          },
+        ],
+      },
+    }),
+  ).toMatchObject({ state: "problem", reason: "OOMKilled (137)" });
+  expect(
+    classifyPod({
+      ...recent,
+      status: {
+        ...recent.status,
+        containerStatuses: [
+          {
+            ready: false,
+            restartCount: 0,
+            state: { waiting: { reason: "ContainerCreating" } },
+          },
+        ],
       },
     }).state,
   ).toBe("starting");
