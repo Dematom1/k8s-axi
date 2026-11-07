@@ -41,11 +41,11 @@ docker update --cpus=2 "$node"
 kubectl create namespace fixtures
 kubectl -n fixtures run crashy2 --image=busybox:1.36 --restart=Always -- /bin/sh -c 'exit 7'
 until [[ $(kubectl -n fixtures get pod crashy2 -o jsonpath='{.status.containerStatuses[0].restartCount}' 2>/dev/null || echo 0) -gt 0 ]]; do sleep 1; done
-npm run build --silent
 first_restart=$SECONDS
+npm run build --silent
 for at in 15 30 45 60 90 120; do
   remaining=$((at - (SECONDS - first_restart)))
-  (( remaining > 0 )) && sleep "$remaining"
+  if (( remaining > 0 )); then sleep "$remaining"; fi
   triage=$(node dist/bin/k8s-axi.js triage -n fixtures)
   grep -Eq 'pods/crashy2.*(CrashLoopBackOff|Error \(7\))' <<<"$triage" || { echo "triage missed crashy2 at ${at}s" >&2; exit 1; }
   pods=$(node dist/bin/k8s-axi.js pods -n fixtures)
