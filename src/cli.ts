@@ -2,7 +2,8 @@ import { runAxiCli, AxiError, exitCodeForError } from "axi-sdk-js";
 import { encodeObject } from "./toon.js";
 import { VERSION } from "./version.js";
 import { DESCRIPTION, TOP_HELP } from "./help.js";
-import { NOUNS, type Parsed } from "./args.js";
+import { NOUNS, type Noun, type Parsed } from "./args.js";
+import { usage } from "./errors.js";
 import { REFUSALS } from "./registry.js";
 import { dispatch, refuse } from "./commands/common.js";
 import { ctxCommand } from "./commands/ctx.js";
@@ -16,6 +17,17 @@ import { secretsCommand } from "./commands/secrets.js";
 import { triageCommand } from "./commands/triage.js";
 import { setupCommand } from "./commands/setup.js";
 import { contextCommand } from "./commands/context.js";
+const kubectlNouns = new Set<Noun>([
+  "nodes",
+  "namespaces",
+  "pods",
+  "deployments",
+  "jobs",
+  "pvcs",
+  "services",
+  "events",
+  "secrets",
+]);
 const implementations = {
   nodes: nodesCommand,
   pods: podsCommand,
@@ -57,7 +69,58 @@ export function formatError(error: unknown): {
         exitCode: 1,
       };
 }
+function routeKubectlArgs(argv: string[]): string[] {
+  const [verb, ...args] = argv;
+  if (verb === "top") usage("top is not supported");
+  if (verb === "logs") return ["pods", "logs", ...args];
+  if (verb === "get" || verb === "describe") {
+    const [rawNoun, ...rest] = args;
+    const singular: Record<string, Noun> = {
+      node: "nodes",
+      namespace: "namespaces",
+      pod: "pods",
+      deployment: "deployments",
+      job: "jobs",
+      pvc: "pvcs",
+      service: "services",
+      event: "events",
+      secret: "secrets",
+    };
+    const noun =
+      singular[rawNoun ?? ""] ??
+      NOUNS.find((candidate) => candidate === rawNoun);
+    if (!noun || !kubectlNouns.has(noun))
+      usage(
+        `unsupported resource ${JSON.stringify(rawNoun)}; use an equivalent k8s-axi noun command`,
+      );
+    const name = rest[0]?.startsWith("-") ? undefined : rest[0];
+    const flags = name ? rest.slice(1) : rest;
+    if (name && !["nodes", "pods", "deployments", "secrets"].includes(noun))
+      usage(`use the equivalent command: k8s-axi ${noun}`);
+    if (verb === "describe") {
+      if (!name) usage("describe requires a resource name");
+      return [noun, "view", name, ...flags];
+    }
+    return [noun, ...(name ? ["view", name] : []), ...flags];
+  }
+  if (verb === "rollout") {
+    if (args[0] !== "status") return argv;
+    const name = args[1]?.replace(/^deployment(?:\.apps)?\//, "");
+    if (!name) usage("rollout status requires a deployment name");
+    return ["deployments", "view", name, ...args.slice(2)];
+  }
+  return argv;
+}
+
 export async function main(argv = process.argv.slice(2)): Promise<void> {
+  try {
+    argv = routeKubectlArgs(argv);
+  } catch (error) {
+    const result = formatError(error);
+    process.stdout.write(result.output);
+    process.exitCode = result.exitCode;
+    return;
+  }
   const homeArgs =
     argv[0]?.startsWith("-") &&
     !(
