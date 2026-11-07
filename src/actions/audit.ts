@@ -177,56 +177,41 @@ export function readAudit(options: {
   limit: number;
   action?: AuditedAction;
 }): AuditRecord[] {
-  let text: string;
+  if (options.limit <= 0) return [];
+  const rows: AuditRecord[] = [];
   try {
     const path = auditPath();
     const dir = dirname(path);
-    const rotated = readdirSync(dir)
-      .filter((name) => /^audit\.(?:1|\d+\.\d+\.[0-9a-f-]+)\.jsonl$/.test(name))
-      .sort((a, b) => {
-        const timestamp = (name: string) => Number(/^audit\.(\d+)/.exec(name)?.[1] ?? 0);
-        const timeDifference = timestamp(a) - timestamp(b);
-        return timeDifference || a.localeCompare(b);
-      })
-      .map((name) => join(dir, name));
-    text = [...rotated, path]
-      .map((file) => {
-        try {
-          return readFileSync(file, "utf8");
-        } catch (error) {
-          if (
-            error !== null &&
-            typeof error === "object" &&
-            "code" in error &&
-            error.code === "ENOENT"
-          )
-            return "";
-          throw error;
-        }
-      })
-      .join("\n");
+    const files = [
+      ...readdirSync(dir)
+        .filter((name) => /^audit\.(?:1|\d+\.\d+\.[0-9a-f-]+)\.jsonl$/.test(name))
+        .map((name) => join(dir, name)),
+      path,
+    ];
+    for (const file of files) {
+      let text: string;
+      try {
+        text = readFileSync(file, "utf8");
+      } catch (error) {
+        if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")
+          continue;
+        throw error;
+      }
+      const lines = text.split("\n");
+      if (!text.endsWith("\n")) lines.pop();
+      for (const line of lines) {
+        if (!line) continue;
+        const row = parseRecord(JSON.parse(line) as unknown);
+        if (options.action && row.action !== options.action) continue;
+        rows.push(row);
+        rows.sort((a, b) => a.ts.localeCompare(b.ts) || a.id.localeCompare(b.id));
+        if (rows.length > options.limit) rows.shift();
+      }
+    }
   } catch (error) {
-    if (
-      error !== null &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "ENOENT"
-    )
+    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")
       return [];
-    throw new AxiError("audit log unavailable", "AUDIT_UNAVAILABLE", []);
+    throw new AxiError("audit log is unavailable or invalid", "AUDIT_UNAVAILABLE", []);
   }
-  let rows: AuditRecord[];
-  try {
-    const lines = text.split("\n");
-    if (!text.endsWith("\n")) lines.pop();
-    rows = lines
-      .filter(Boolean)
-      .map((line) => parseRecord(JSON.parse(line) as unknown));
-  } catch {
-    throw new AxiError("audit log is invalid", "AUDIT_UNAVAILABLE", []);
-  }
-  return rows
-    .filter((row) => !options.action || row.action === options.action)
-    .slice(-options.limit)
-    .reverse();
+  return rows.reverse();
 }
