@@ -1,7 +1,7 @@
 import {
   chmodSync,
   closeSync,
-  existsSync,
+  constants,
   fchmodSync,
   fstatSync,
   mkdirSync,
@@ -138,25 +138,6 @@ function isAuditFile(name: string): boolean {
   );
 }
 
-export function auditStorage(): { generations: number; bytes: number } {
-  const dir = dirname(auditPath());
-  if (!existsSync(dir)) return { generations: 0, bytes: 0 };
-  const entries = opendirSync(dir);
-  let generations = 0;
-  let bytes = 0;
-  try {
-    let entry;
-    while ((entry = entries.readSync()) !== null)
-      if (entry.isFile() && isAuditFile(entry.name)) {
-        generations++;
-        bytes += statSync(join(dir, entry.name)).size;
-      }
-  } finally {
-    entries.closeSync();
-  }
-  return { generations, bytes };
-}
-
 export function newAuditId(): string {
   return randomUUID();
 }
@@ -202,13 +183,14 @@ export function readAudit(options: {
   const consume = (file: string) => {
     let fd: number;
     try {
-      fd = openSync(file, "r");
+      fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
     } catch (error) {
       if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")
         return;
       throw error;
     }
     try {
+      if (!fstatSync(fd).isFile()) throw new Error("invalid audit file");
       const chunk = Buffer.alloc(64 * 1024);
       let remainder = Buffer.alloc(0);
       let count: number;
@@ -244,8 +226,10 @@ export function readAudit(options: {
     try {
       let entry;
       while ((entry = entries.readSync()) !== null)
-        if (entry.isFile() && isAuditFile(entry.name) && entry.name !== "audit.jsonl")
+        if (isAuditFile(entry.name) && entry.name !== "audit.jsonl") {
+          if (!entry.isFile()) throw new Error("invalid audit file");
           consume(join(dir, entry.name));
+        }
     } finally {
       entries.closeSync();
     }

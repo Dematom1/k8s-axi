@@ -1,6 +1,6 @@
 import { encodeObject } from "../toon.js";
 import { usage } from "../errors.js";
-import { auditStorage, readAudit } from "../actions/audit.js";
+import { readAudit } from "../actions/audit.js";
 import type { Parsed } from "../args.js";
 
 export async function auditCommand(parsed: Parsed): Promise<string> {
@@ -10,5 +10,5 @@ export async function auditCommand(parsed: Parsed): Promise<string> {
     limit: parsed.limit,
     action: parsed.auditAction,
   });
-  return encodeObject({ ...auditStorage(), count: records.length, records }) + "\n";
+  return encodeObject({ count: records.length, records }) + "\n";
 }
