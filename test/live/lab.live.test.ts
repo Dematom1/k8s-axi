@@ -232,9 +232,13 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     for (const value of [...secrets, ...credentials]) {
       if (!value) continue;
       const candidates = [value, Buffer.from(value).toString("base64")];
-      if (credentials.includes(value) && value.length >= 12)
-        for (let i = 0; i <= value.length - 12; i++)
-          candidates.push(value.slice(i, i + 12));
+      if (credentials.includes(value)) {
+        const encoded = Buffer.from(value).toString("base64");
+        candidates.push(encoded);
+        for (const representation of [value, encoded])
+          for (let i = 0; i <= representation.length - 12; i++)
+            candidates.push(representation.slice(i, i + 12));
+      }
       for (const candidate of candidates)
         if (candidate && output.includes(candidate))
           throw new Error("Sensitive material appeared in CLI output");

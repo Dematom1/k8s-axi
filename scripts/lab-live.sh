@@ -55,12 +55,13 @@ export PATH
 kind create cluster --name "$name" --kubeconfig "$config" --wait 120s &
 create_pid=$!
 node="${name}-control-plane"
-cap_deadline=$(( $(date +%s) + 120 ))
+cap_deadline=$(( $(date +%s) + 15 ))
 while ! docker inspect "$node" >/dev/null 2>&1; do
-  [ "$(date +%s)" -lt "$cap_deadline" ] || { echo 'FAIL: kind node did not appear within 120 seconds' >&2; exit 1; }
+  [ "$(date +%s)" -lt "$cap_deadline" ] || { echo 'FAIL: kind node did not appear within 15 seconds' >&2; exit 1; }
   sleep 0.5
 done
 docker update --cpus=2 "$node" >/dev/null
+[ "$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$node")" = 2000000000 ] || { echo 'FAIL: could not apply 2 CPU cap to kind node' >&2; exit 1; }
 wait "$create_pid"
 KUBECONFIG="$config" kubectl config set-context kind-k8sx-alt --cluster="kind-$name" --user="kind-$name" --namespace=fixtures >/dev/null
 KUBECONFIG="$config" kubectl config set-cluster ghost --server=https://127.0.0.1:1 >/dev/null
