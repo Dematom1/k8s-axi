@@ -2,10 +2,9 @@ import { validateResourceName, type Parsed } from "../args.js";
 import { deadline } from "../registry.js";
 import { resolveTarget, resolveScope, scoped, scopeLabel } from "../target.js";
 import { kubectl, parseObject, object, objects, text } from "../kubectl.js";
-import { usage } from "../errors.js";
+import { fail, usage } from "../errors.js";
 import { redactText } from "../redact.js";
 import { encodeObject } from "../toon.js";
-import { preview } from "./common.js";
 export async function logsCommand(p: Parsed): Promise<string> {
   const name = p.name;
   if (!name) usage("pods logs requires a pod", "pods");
@@ -57,9 +56,25 @@ export async function logsCommand(p: Parsed): Promise<string> {
     t,
     d,
   );
+  if (/unable to retrieve container logs for/i.test(raw))
+    fail("LOGS_UNAVAILABLE", "container logs are unavailable", [
+      `Run k8s-axi pods view ${name} -n ${s.name} or check events for the pod`,
+    ]);
   const redacted = redactText(raw),
     cut = Buffer.byteLength(raw) >= 1048576;
-  const shown = preview(redacted.text, p.full, 8000);
+  const lines = redacted.text.split(/\r?\n/);
+  if (lines.at(-1) === "") lines.pop();
+  const shownLines: string[] = [];
+  let shownChars = 0;
+  if (p.full) shownLines.push(...lines);
+  else {
+    for (const line of lines.slice(-1000).reverse()) {
+      if (shownChars + line.length > 8000) break;
+      shownLines.unshift(line);
+      shownChars += line.length;
+    }
+  }
+  const omitted = lines.length - shownLines.length;
   return encodeObject({
     context: t.context,
     scope: scopeLabel(s),
@@ -68,13 +83,16 @@ export async function logsCommand(p: Parsed): Promise<string> {
     redaction: "best effort",
     redacted: redacted.count,
     "byte-limited": cut,
-    truncated: cut || shown.length < redacted.text.length,
-    logs: shown.split(/\r?\n/),
-    help:
-      shown !== redacted.text
-        ? [
-            `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --full\` for the untruncated allowlisted text`,
-          ]
-        : [],
+    truncated: cut || omitted > 0,
+    "omitted-lines": omitted,
+    shown: shownLines.length ? `${shownLines[0]}..${shownLines.at(-1)}` : "",
+    logs: shownLines,
+    ...(omitted > 0 || cut
+      ? {
+          help: [
+            `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --tail ${p.tail} --since ${p.since} --previous${p.full ? "" : " --full"}\` for the newest logs`,
+          ],
+        }
+      : {}),
   });
 }

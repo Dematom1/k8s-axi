@@ -72,6 +72,7 @@ A missing context or namespace is an error. An empty namespace that cannot be ve
 | NAMESPACE_UNVERIFIED  | Namespace lookup forbidden and result empty.                                |
 | PARTIAL               | One or more triage checks failed.                                           |
 | CONFIG_INVALID        | Local configuration or integration could not be read, written, or verified. |
+| LOGS_UNAVAILABLE      | The requested container logs are unavailable.                               |
 
 ## Safety model
 
