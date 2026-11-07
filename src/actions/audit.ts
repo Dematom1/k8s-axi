@@ -1,6 +1,7 @@
 import {
   chmodSync,
   closeSync,
+  existsSync,
   fchmodSync,
   fstatSync,
   mkdirSync,
@@ -9,7 +10,6 @@ import {
   readdirSync,
   renameSync,
   statSync,
-  unlinkSync,
   writeSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -125,13 +125,25 @@ export function appendAudit(
     } finally {
       if (fd >= 0) closeSync(fd);
     }
-    const rotated = readdirSync(dir)
-      .filter((name) => /^audit\.\d+\.\d+\.[0-9a-f-]+\.jsonl$/.test(name))
-      .sort();
-    for (const name of rotated.slice(0, -2)) unlinkSync(join(dir, name));
   } catch {
     throw new AxiError("audit log unavailable", "AUDIT_UNAVAILABLE", []);
   }
+}
+
+export function auditStorage(): { generations: number; bytes: number } {
+  const path = auditPath();
+  const dir = dirname(path);
+  if (!existsSync(dir)) return { generations: 0, bytes: 0 };
+  const files = readdirSync(dir).filter(
+    (name) =>
+      name === "audit.jsonl" ||
+      name === "audit.1.jsonl" ||
+      /^audit\.\d+\.\d+\.[0-9a-f-]+\.jsonl$/.test(name),
+  );
+  return {
+    generations: files.length,
+    bytes: files.reduce((total, name) => total + statSync(join(dir, name)).size, 0),
+  };
 }
 
 export function newAuditId(): string {
@@ -170,7 +182,6 @@ export function readAudit(options: {
     const rotated = readdirSync(dir)
       .filter((name) => /^audit\.(?:1|\d+\.\d+\.[0-9a-f-]+)\.jsonl$/.test(name))
       .sort()
-      .slice(-2)
       .map((name) => join(dir, name));
     text = [...rotated, path]
       .map((file) => {
