@@ -1,5 +1,4 @@
 import {
-  chmodSync,
   closeSync,
   constants,
   fchmodSync,
@@ -84,7 +83,16 @@ export function appendAudit(
   const dir = dirname(path);
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
-    chmodSync(dir, 0o700);
+    const dirFd = openSync(
+      dir,
+      constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+    );
+    try {
+      if (!fstatSync(dirFd).isDirectory()) throw new Error("invalid audit directory");
+      fchmodSync(dirFd, 0o700);
+    } finally {
+      closeSync(dirFd);
+    }
     const safe = Object.fromEntries(
       Object.entries(record).map(([key, value]) => [key, safeValue(value)]),
     );
@@ -106,7 +114,13 @@ export function appendAudit(
       opened = fstatSync(fd);
       if (!opened.isFile()) throw new Error("invalid audit file");
       fchmodSync(fd, 0o600);
-      writeSync(fd, line);
+      const bytes = Buffer.from(line);
+      let offset = 0;
+      while (offset < bytes.length) {
+        const written = writeSync(fd, bytes, offset, bytes.length - offset);
+        if (written === 0) throw new Error("audit write made no progress");
+        offset += written;
+      }
     } finally {
       closeSync(fd);
     }
