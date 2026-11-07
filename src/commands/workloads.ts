@@ -19,6 +19,7 @@ import {
 import { renderList, validateFields } from "../render.js";
 import { encodeObject } from "../toon.js";
 import { recentEvents } from "./events.js";
+import { usage } from "../errors.js";
 export async function workloadsCommand(p: Parsed): Promise<string> {
   if (
     p.command !== "deployments" &&
@@ -29,6 +30,8 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
   const noun = p.command,
     spec = workloadSpecs[noun];
   validateFields(spec, p);
+  if (p.action === "view" && noun !== "deployments")
+    usage(`${noun} does not support object views`, noun);
   const d = deadline(p.timeout);
   if (p.rolloutStatus) d.end = Date.now() + p.timeout * 1000;
   const t = await resolveTarget(p.context, d),
