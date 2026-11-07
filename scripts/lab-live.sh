@@ -60,6 +60,7 @@ while ! docker inspect "$node" >/dev/null 2>&1; do
   [ "$(date +%s)" -lt "$cap_deadline" ] || { echo 'FAIL: kind node did not appear within 15 seconds' >&2; exit 1; }
   sleep 0.5
 done
+# kind has no create-time CPU limit, so cap the node as soon as Docker exposes it.
 docker update --cpus=2 "$node" >/dev/null
 [ "$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$node")" = 2000000000 ] || { echo 'FAIL: could not apply 2 CPU cap to kind node' >&2; exit 1; }
 wait "$create_pid"
