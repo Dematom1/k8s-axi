@@ -53,4 +53,6 @@ kubectl --kubeconfig "$KUBECONFIG" -n fixtures wait --for=jsonpath='{.status.pha
 out=$(node "$root/dist/bin/k8s-axi.js" pods logs chatty -n fixtures --tail 1000)
 printf '%s\n' "$out" | grep -F 'line 2999' >/dev/null || { echo 'FAIL: newest log line missing' >&2; exit 1; }
 printf '%s\n' "$out" | grep -F 'tail 1000' >/dev/null || { echo 'FAIL: continuation hint omitted --tail 1000' >&2; exit 1; }
-echo 'PASS: logs tail includes newest lines 2000..2999'
+out=$(node "$root/dist/bin/k8s-axi.js" pods logs chatty -n fixtures --tail 100)
+printf '%s\n' "$out" | grep -F 'line 2999' >/dev/null || { echo 'FAIL: --tail 100 omitted newest log line' >&2; exit 1; }
+echo 'PASS: logs tail retains the newest line for --tail 100 and --tail 1000'
