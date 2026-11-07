@@ -57,7 +57,10 @@ export function classifyPod(pod: Obj, now = Date.now()): PodHealth {
       const recentLast = elapsed(text(last.finishedAt), now) <= 10 * 60;
       return [
         { state: current, recovered: false },
-        { state: runningReady && !recentLast ? {} : last, recovered: runningReady },
+        {
+          state: runningReady && !recentLast ? {} : last,
+          recovered: runningReady,
+        },
       ];
     })
     .find(

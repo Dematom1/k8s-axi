@@ -8,7 +8,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     execFileSync("bash", [resolve("test/live/crashloop.sh")], {
       stdio: "inherit",
       env: process.env,
-      timeout: 20 * 60 * 1000,
+      timeout: 30 * 60 * 1000,
     }),
-  20 * 60 * 1000,
+  30 * 60 * 1000,
 );

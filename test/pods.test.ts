@@ -90,7 +90,9 @@ test("phase, readiness, startup, init and termination", () => {
         {
           ready: true,
           restartCount: 1,
-          lastState: { terminated: { reason: "Error", exitCode: 7, finishedAt } },
+          lastState: {
+            terminated: { reason: "Error", exitCode: 7, finishedAt },
+          },
           state: { running: { startedAt: old } },
         },
       ],
