@@ -29,8 +29,9 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
   const noun = p.command,
     spec = workloadSpecs[noun];
   validateFields(spec, p);
-  const d = deadline(p.timeout),
-    t = await resolveTarget(p.context, d),
+  const d = deadline(p.timeout);
+  if (p.rolloutStatus) d.end = Date.now() + p.timeout * 1000;
+  const t = await resolveTarget(p.context, d),
     s = resolveScope(p, t),
     name = p.name;
   if (
