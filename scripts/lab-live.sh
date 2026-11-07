@@ -55,9 +55,9 @@ export PATH
 kind create cluster --name "$name" --kubeconfig "$config" --wait 120s &
 create_pid=$!
 node="${name}-control-plane"
-cap_deadline=$(( $(date +%s) + 15 ))
+cap_deadline=$(( $(date +%s) + 120 ))
 while ! docker inspect "$node" >/dev/null 2>&1; do
-  [ "$(date +%s)" -lt "$cap_deadline" ] || { echo 'FAIL: kind node did not appear within 15 seconds' >&2; exit 1; }
+  [ "$(date +%s)" -lt "$cap_deadline" ] || { echo 'FAIL: kind node did not appear within 120 seconds' >&2; exit 1; }
   sleep 0.5
 done
 docker update --cpus=2 "$node" >/dev/null

@@ -136,7 +136,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       ["pods", "no-such-pod"],
       ["deployments", "no-such-deployment"],
       ["secrets", "no-such-secret"],
-    ])
+    ] as const)
       expect(run([noun, "view", name, "-n", "fixtures"], 1).code).toBe(
         "NOT_FOUND",
       );
@@ -220,7 +220,9 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     const credentials = [
       process.env.K8S_AXI_LIMITED_TOKEN,
       process.env.K8S_AXI_NSONLY_TOKEN,
-    ].filter((value): value is string => Boolean(value));
+    ];
+    if (credentials.some((value) => !value))
+      throw new Error("lab service-account tokens are required");
     const kubeconfig = readFileSync(kubeconfigPath, "utf8");
     for (const match of kubeconfig.matchAll(
       /^\s*(?:client-key-data|client-certificate-data|token|password|username):\s*(\S+)/gm,
@@ -228,6 +230,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       if (match[1]) credentials.push(match[1]);
     }
     for (const value of [...secrets, ...credentials]) {
+      if (!value) continue;
       const candidates = [value, Buffer.from(value).toString("base64")];
       if (credentials.includes(value) && value.length >= 12)
         for (let i = 0; i <= value.length - 12; i++)
