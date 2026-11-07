@@ -33,16 +33,26 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
     t = await resolveTarget(p.context, d),
     s = resolveScope(p, t),
     name = p.name;
-  if (p.action === "view" && name && s.kind === "namespace") {
-    const rows = await scoped(s, t, d, async () => [
+  if (
+    p.action === "view" &&
+    name &&
+    (s.kind === "namespace" || p.rolloutStatus)
+  ) {
+    const read = async () => [
       parseObject(
         await kubectl(
-          { op: "get", resource: "deployment.apps", name, namespace: s.name },
+          {
+            op: "get",
+            resource: "deployment.apps",
+            name,
+            ...(s.kind === "namespace" ? { namespace: s.name } : {}),
+          },
           t,
           d,
         ),
       ),
-    ]);
+    ];
+    const rows = s.kind === "namespace" ? await scoped(s, t, d, read) : await read();
     const deployment = rows[0] ?? {};
     const deadlineExceeded = objects(object(deployment.status).conditions).find(
       (condition) =>
@@ -58,8 +68,8 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
       const complete =
         number(status.observedGeneration) >= number(metadata.generation) &&
         number(status.replicas) === desired &&
-        number(status.updatedReplicas) >= desired &&
-        number(status.availableReplicas) >= desired &&
+        number(status.updatedReplicas) === desired &&
+        number(status.availableReplicas) === desired &&
         conditions.some(
           (condition) =>
             condition.type === "Progressing" && condition.status === "True",
