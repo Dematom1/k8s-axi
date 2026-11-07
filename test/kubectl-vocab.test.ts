@@ -36,6 +36,12 @@ const routes: [string[], string[] | undefined, string[]?, number?][] = [
     0,
   ],
   [
+    ["rollout", "status", "deployment/old", "-n", "fixtures"],
+    ["deployments", "view", "old", "-n", "fixtures"],
+    ["get", "deployment.apps", "old"],
+    1,
+  ],
+  [
     ["get", "deployments", "-n", "fixtures"],
     ["deployments", "-n", "fixtures"],
     ["get", "deployments.apps"],
@@ -80,11 +86,29 @@ test.each(routes)(
           spec: { replicas: 2 },
           status: {
             observedGeneration: 2,
+            replicas: 2,
             updatedReplicas: 2,
             availableReplicas: 2,
             conditions: [
               { type: "Progressing", status: "True", reason: "ReplicaSetUpdated" },
               { type: "Available", status: "True", reason: "MinimumReplicasAvailable" },
+            ],
+          },
+        }),
+      },
+      {
+        prefix: ["get", "deployment.apps", "old"],
+        stdout: JSON.stringify({
+          metadata: { name: "old", generation: 2 },
+          spec: { replicas: 2 },
+          status: {
+            observedGeneration: 2,
+            replicas: 3,
+            updatedReplicas: 2,
+            availableReplicas: 2,
+            conditions: [
+              { type: "Progressing", status: "True" },
+              { type: "Available", status: "True" },
             ],
           },
         }),
