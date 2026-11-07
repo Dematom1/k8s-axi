@@ -115,6 +115,26 @@ test("audit reader rejects oversized records without exposing their contents", (
   }
 });
 
+test("audit writer rejects an active-file symlink", () => {
+  const state = join(root, "writer-symlink");
+  const previous = process.env.XDG_STATE_HOME;
+  process.env.XDG_STATE_HOME = state;
+  try {
+    mkdirSync(dirname(auditPath()), { recursive: true });
+    const target = join(state, "target");
+    writeFileSync(target, "unchanged");
+    symlinkSync(target, auditPath());
+    expect(() =>
+      appendAudit({ id: newAuditId(), phase: "start", action: "exec" }),
+    ).toThrow(expect.objectContaining({ code: "AUDIT_UNAVAILABLE" }));
+    expect(readFileSync(target, "utf8")).toBe("unchanged");
+  } finally {
+    if (previous === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previous;
+    rmSync(state, { recursive: true, force: true });
+  }
+});
+
 test("audit reader rejects symlink generations", () => {
   const state = join(root, "symlink");
   const previous = process.env.XDG_STATE_HOME;
