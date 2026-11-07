@@ -109,35 +109,6 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       0,
     );
 
-    const output = outputs.join("\n");
-    const secrets = [
-      "CANARY_DB_PASSWORD_8KSA",
-      "CANARY_API_TOKEN_8KSA",
-      "CANARY_NEUTRAL_DSN_8KSA",
-      "CANARY_NEUTRAL_CONN_8KSA",
-      "CANARY_ENV_8KSA",
-      "CANARY_LOG_8KSA",
-      "admin",
-    ];
-    const credentials = [
-      process.env.K8S_AXI_LIMITED_TOKEN,
-      process.env.K8S_AXI_NSONLY_TOKEN,
-    ].filter((value): value is string => Boolean(value));
-    const kubeconfig = readFileSync(kubeconfigPath, "utf8");
-    for (const match of kubeconfig.matchAll(
-      /^\s*(?:client-key-data|client-certificate-data|token|password|username):\s*(\S+)/gm,
-    )) {
-      if (match[1]) credentials.push(match[1]);
-    }
-    for (const value of [...secrets, ...credentials]) {
-      const candidates = [value, Buffer.from(value).toString("base64")];
-      if (credentials.includes(value) && value.length >= 12)
-        candidates.push(value.slice(0, 12), value.slice(-12));
-      for (const candidate of candidates)
-        if (candidate && output.includes(candidate))
-          throw new Error("Sensitive material appeared in CLI output");
-    }
-
     const missing = `axi-missing-${Date.now()}`;
     for (const noun of ["pods", "events", "deployments", "secrets", "triage"])
       expect(run([noun, "-n", missing], 1).code).toBe("NAMESPACE_NOT_FOUND");
@@ -181,6 +152,35 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     } finally {
       chmodSync(unreadable, 0o600);
       unlinkSync(unreadable);
+    }
+
+    const output = outputs.join("\n");
+    const secrets = [
+      "CANARY_DB_PASSWORD_8KSA",
+      "CANARY_API_TOKEN_8KSA",
+      "CANARY_NEUTRAL_DSN_8KSA",
+      "CANARY_NEUTRAL_CONN_8KSA",
+      "CANARY_ENV_8KSA",
+      "CANARY_LOG_8KSA",
+      "admin",
+    ];
+    const credentials = [
+      process.env.K8S_AXI_LIMITED_TOKEN,
+      process.env.K8S_AXI_NSONLY_TOKEN,
+    ].filter((value): value is string => Boolean(value));
+    const kubeconfig = readFileSync(kubeconfigPath, "utf8");
+    for (const match of kubeconfig.matchAll(
+      /^\s*(?:client-key-data|client-certificate-data|token|password|username):\s*(\S+)/gm,
+    )) {
+      if (match[1]) credentials.push(match[1]);
+    }
+    for (const value of [...secrets, ...credentials]) {
+      const candidates = [value, Buffer.from(value).toString("base64")];
+      if (credentials.includes(value) && value.length >= 12)
+        candidates.push(value.slice(0, 12), value.slice(-12));
+      for (const candidate of candidates)
+        if (candidate && output.includes(candidate))
+          throw new Error("Sensitive material appeared in CLI output");
     }
   },
   180_000,
