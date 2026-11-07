@@ -3,6 +3,7 @@ import {
   constants,
   fchmodSync,
   fstatSync,
+  lstatSync,
   mkdirSync,
   openSync,
   opendirSync,
@@ -11,7 +12,7 @@ import {
   statSync,
   writeSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, parse, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { AxiError } from "axi-sdk-js";
@@ -66,6 +67,26 @@ export function auditPath(env: NodeJS.ProcessEnv = process.env): string {
   return join(state, "k8s-axi", "audit.jsonl");
 }
 
+function safeDirectoryExists(path: string): boolean {
+  const absolute = resolve(path);
+  const root = parse(absolute).root;
+  let current = root;
+  for (const part of absolute.slice(root.length).split(sep).filter(Boolean)) {
+    current = join(current, part);
+    let info;
+    try {
+      info = lstatSync(current);
+    } catch (error) {
+      if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")
+        return false;
+      throw error;
+    }
+    if (info.isSymbolicLink() || !info.isDirectory())
+      throw new Error("invalid audit directory");
+  }
+  return true;
+}
+
 function safeValue(value: unknown): unknown {
   if (typeof value === "string") return redactText(value).text;
   if (Array.isArray(value)) return value.map(safeValue);
@@ -82,7 +103,9 @@ export function appendAudit(
   const path = auditPath();
   const dir = dirname(path);
   try {
+    safeDirectoryExists(dir);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
+    if (!safeDirectoryExists(dir)) throw new Error("invalid audit directory");
     const dirFd = openSync(
       dir,
       constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
@@ -234,6 +257,7 @@ export function readAudit(options: {
   try {
     const path = auditPath();
     const dir = dirname(path);
+    if (!safeDirectoryExists(dir)) return [];
     let entries: ReturnType<typeof opendirSync>;
     try {
       entries = opendirSync(dir);
