@@ -95,7 +95,7 @@ function routeKubectlArgs(argv: string[]): string[] {
       );
     const name = rest[0]?.startsWith("-") ? undefined : rest[0];
     const flags = name ? rest.slice(1) : rest;
-    if (name && !["pods", "deployments", "secrets"].includes(noun))
+    if (name && !["pods", "deployments", "secrets", "namespaces"].includes(noun))
       usage(`use the equivalent command: k8s-axi ${noun}`);
     if (verb === "describe") {
       if (!name) usage("describe requires a resource name");
@@ -108,7 +108,7 @@ function routeKubectlArgs(argv: string[]): string[] {
     const target = args[1];
     const match = /^(?:deployment(?:\.apps)?\/)?([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)$/.exec(target ?? "");
     if (!match) usage("rollout status supports deployments only; use k8s-axi deployments view NAME");
-    return ["deployments", "view", match[1], ...args.slice(2)];
+    return ["deployments", "view", match[1], ...args.slice(2), "--rollout-status"];
   }
   return argv;
 }
