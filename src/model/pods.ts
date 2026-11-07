@@ -55,7 +55,8 @@ export function classifyPod(pod: Obj, now = Date.now()): PodHealth {
         c.ready === true &&
         Object.keys(object(object(c.state).running)).length > 0;
       const finishedAt = text(last.finishedAt);
-      const recentLast = finishedAt !== "" && elapsed(finishedAt, now) <= 10 * 60;
+      const recentLast =
+        finishedAt !== "" && elapsed(finishedAt, now) <= 10 * 60;
       return [
         { state: current, recovered: false },
         {
