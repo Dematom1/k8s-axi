@@ -80,23 +80,29 @@ test("phase, readiness, startup, init and termination", () => {
       },
     }),
   ).toMatchObject({ state: "problem", reason: "NotReady" });
-  expect(
-    classifyPod({
-      ...recent,
-      status: {
-        ...recent.status,
-        conditions: [{ type: "Ready", status: "True" }],
-        containerStatuses: [
-          {
-            ready: true,
-            restartCount: 1,
-            lastState: { terminated: { reason: "Error", exitCode: 7 } },
-            state: { running: { startedAt: old } },
-          },
-        ],
-      },
-    }),
-  ).toMatchObject({ state: "problem", reason: "recovered after Error (exit 7)" });
+  const now = Date.parse("2025-01-01T00:00:00Z");
+  const recoveredPod = (finishedAt: string) => ({
+    ...recent,
+    status: {
+      ...recent.status,
+      conditions: [{ type: "Ready", status: "True" }],
+      containerStatuses: [
+        {
+          ready: true,
+          restartCount: 1,
+          lastState: { terminated: { reason: "Error", exitCode: 7, finishedAt } },
+          state: { running: { startedAt: old } },
+        },
+      ],
+    },
+  });
+  expect(classifyPod(recoveredPod("2024-12-31T23:55:00Z"), now)).toMatchObject({
+    state: "problem",
+    reason: "recovered after Error (exit 7)",
+  });
+  expect(classifyPod(recoveredPod("2024-12-31T23:49:59Z"), now)).toEqual({
+    state: "running",
+  });
   expect(
     classifyPod({
       ...recent,

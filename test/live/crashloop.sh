@@ -6,10 +6,11 @@ mkdir -p "$lab/bin"
 name="k8s-axi-$$-$RANDOM"
 lock=${K8S_AXI_LAB_LOCK:-/tmp/k8s-axi-kind-lab.lock}
 owned_lock=0
+lock_token="$name"
 cleanup() {
-  if (( owned_lock )) && [[ $(cat "$lock/pid" 2>/dev/null || true) == $$ ]]; then
+  if (( owned_lock )) && [[ $(cat "$lock/owner" 2>/dev/null || true) == "$lock_token" ]]; then
     kind delete cluster --name "$name" >/dev/null 2>&1 || true
-    rm -f "$lock/pid"
+    rm -f "$lock/pid" "$lock/owner"
     rmdir "$lock" 2>/dev/null || true
   fi
   rm -rf "$lab"
@@ -45,9 +46,17 @@ while ! mkdir "$lock" 2>/dev/null; do
     esac
     if (( $(date +%s) - lock_mtime > 1800 )); then
       pid=$(cat "$lock/pid" 2>/dev/null || true)
-      if [[ $pid =~ ^[0-9]+$ ]] && ! kill -0 "$pid" 2>/dev/null; then
-        rm -f "$lock/pid"
-        rmdir "$lock" 2>/dev/null || true
+      if [[ $pid =~ ^[0-9]+$ ]] && ! kill -0 "$pid" 2>/dev/null &&
+        ln "$lock/pid" "$lock/reclaim" 2>/dev/null; then
+        if [[ $(cat "$lock/pid" 2>/dev/null || true) == "$pid" &&
+          $(cat "$lock/reclaim" 2>/dev/null || true) == "$pid" ]] &&
+          (( $(date +%s) - lock_mtime > 1800 )) && ! kill -0 "$pid" 2>/dev/null; then
+          rm -f "$lock/pid"
+          rm -f "$lock/reclaim"
+          rmdir "$lock" 2>/dev/null || true
+        else
+          rm -f "$lock/reclaim"
+        fi
         continue
       fi
     fi
@@ -57,6 +66,7 @@ while ! mkdir "$lock" 2>/dev/null; do
 done
 owned_lock=1
 echo $$ > "$lock/pid"
+printf '%s\n' "$lock_token" > "$lock/owner"
 kind create cluster --name "$name" --kubeconfig "$KUBECONFIG"
 npm run build --silent
 node=$(kind get nodes --name "$name" | head -n1)
