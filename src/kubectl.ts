@@ -14,6 +14,11 @@ export const OUTPUT_CAP = 128 * 1024 * 1024;
 export function mapKubectlFailure(stderr: string): AxiError {
   const cases: [RegExp, ErrorCode, string][] = [
     [
+      /unable to retrieve container logs for/i,
+      "LOGS_UNAVAILABLE",
+      "container logs are unavailable",
+    ],
+    [
       /previous terminated container.*not found|previous.*not available/i,
       "NOT_FOUND",
       "no previous terminated container logs are available",
@@ -66,7 +71,9 @@ export function mapKubectlFailure(stderr: string): AxiError {
     [
       found?.[1] === "CONTEXT_NOT_FOUND"
         ? "Run `k8s-axi ctx`"
-        : "Run `k8s-axi --help` or retry with a narrower namespace",
+        : found?.[1] === "LOGS_UNAVAILABLE"
+          ? "Run `k8s-axi pods view <pod>` or check events for the pod"
+          : "Run `k8s-axi --help` or retry with a narrower namespace",
     ],
   );
 }
