@@ -5,6 +5,7 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -107,6 +108,25 @@ test("audit reader rejects oversized records without exposing their contents", (
     }
     expect(error).toMatchObject({ code: "AUDIT_UNAVAILABLE" });
     expect(String(error)).not.toContain(secret);
+  } finally {
+    if (previous === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previous;
+    rmSync(state, { recursive: true, force: true });
+  }
+});
+
+test("audit reader rejects symlink generations", () => {
+  const state = join(root, "symlink");
+  const previous = process.env.XDG_STATE_HOME;
+  process.env.XDG_STATE_HOME = state;
+  try {
+    mkdirSync(dirname(auditPath()), { recursive: true });
+    const target = join(state, "target");
+    writeFileSync(target, "not an audit log");
+    symlinkSync(target, join(dirname(auditPath()), "audit.1.jsonl"));
+    expect(() => readAudit({ limit: 1 })).toThrow(
+      expect.objectContaining({ code: "AUDIT_UNAVAILABLE" }),
+    );
   } finally {
     if (previous === undefined) delete process.env.XDG_STATE_HOME;
     else process.env.XDG_STATE_HOME = previous;
