@@ -60,7 +60,7 @@ while ! docker inspect "$node" >/dev/null 2>&1; do
   [ "$(date +%s)" -lt "$cap_deadline" ] || { echo 'FAIL: kind node did not appear within 15 seconds' >&2; exit 1; }
   sleep 0.5
 done
-docker update --cpus=2 --memory=4g "$node" >/dev/null
+docker update --cpus=2 "$node" >/dev/null
 wait "$create_pid"
 KUBECONFIG="$config" kubectl config set-context kind-k8sx-alt --cluster="kind-$name" --user="kind-$name" --namespace=fixtures >/dev/null
 KUBECONFIG="$config" kubectl config set-cluster ghost --server=https://127.0.0.1:1 >/dev/null
