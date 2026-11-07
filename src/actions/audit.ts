@@ -1,7 +1,6 @@
 import {
   chmodSync,
   closeSync,
-  existsSync,
   fchmodSync,
   fstatSync,
   mkdirSync,
@@ -10,6 +9,7 @@ import {
   readdirSync,
   renameSync,
   statSync,
+  unlinkSync,
   writeSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -125,6 +125,10 @@ export function appendAudit(
     } finally {
       if (fd >= 0) closeSync(fd);
     }
+    const rotated = readdirSync(dir)
+      .filter((name) => /^audit\.\d+\.\d+\.[0-9a-f-]+\.jsonl$/.test(name))
+      .sort();
+    for (const name of rotated.slice(0, -2)) unlinkSync(join(dir, name));
   } catch {
     throw new AxiError("audit log unavailable", "AUDIT_UNAVAILABLE", []);
   }
@@ -166,12 +170,24 @@ export function readAudit(options: {
     const rotated = readdirSync(dir)
       .filter((name) => /^audit\.(?:1|\d+\.\d+\.[0-9a-f-]+)\.jsonl$/.test(name))
       .sort()
+      .slice(-3)
       .map((name) => join(dir, name));
-    const files = [...rotated, path].filter(existsSync);
-    const totalBytes = files.reduce((total, file) => total + statSync(file).size, 0);
-    if (totalBytes > 2 * MAX_BYTES)
-      throw new Error("audit history exceeds retained size");
-    text = files.map((file) => readFileSync(file, "utf8")).join("\n");
+    text = [...rotated, path]
+      .map((file) => {
+        try {
+          return readFileSync(file, "utf8");
+        } catch (error) {
+          if (
+            error !== null &&
+            typeof error === "object" &&
+            "code" in error &&
+            error.code === "ENOENT"
+          )
+            return "";
+          throw error;
+        }
+      })
+      .join("\n");
   } catch (error) {
     if (
       error !== null &&
@@ -184,8 +200,9 @@ export function readAudit(options: {
   }
   let rows: AuditRecord[];
   try {
-    rows = text
-      .split("\n")
+    const lines = text.split("\n");
+    if (!text.endsWith("\n")) lines.pop();
+    rows = lines
       .filter(Boolean)
       .map((line) => parseRecord(JSON.parse(line) as unknown));
   } catch {
