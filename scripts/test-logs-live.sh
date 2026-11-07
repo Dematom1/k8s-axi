@@ -88,11 +88,17 @@ check_tail() {
   tail=$1
   first=$2
   out=$(node "$root/dist/bin/k8s-axi.js" pods logs chatty -n fixtures --tail "$tail")
-  last_line=$(printf '%s\n' "$out" | grep -oE 'line [0-9]+' | tail -1)
-  [ "$last_line" = 'line 2999' ] || { echo "FAIL: --tail $tail ended at $last_line" >&2; exit 1; }
-  printf '%s\n' "$out" | grep -F "line $first" >/dev/null || { echo "FAIL: --tail $tail omitted its first expected line" >&2; exit 1; }
-  count=$(printf '%s\n' "$out" | sed -n 's/^logs\[\([0-9]*\)\].*/\1/p')
-  [ "$count" = "$tail" ] || { echo "FAIL: --tail $tail returned $count lines" >&2; exit 1; }
+  printf '%s\n' "$out" | node -e '
+    let input = "";
+    process.stdin.on("data", chunk => input += chunk).on("end", () => {
+      const result = JSON.parse(input), expected = Number(process.argv[1]), first = Number(process.argv[2]);
+      const lines = result.logs;
+      if (lines.length !== expected || lines[0] !== `line ${first}` || lines.at(-1) !== "line 2999" || lines.some((line, i) => line !== `line ${first + i}`)) {
+        console.error(`FAIL: --tail ${expected} did not return the exact ordered tail`);
+        process.exitCode = 1;
+      }
+    });
+  ' "$tail" "$first" || exit 1
   if [ "$tail" = 1000 ]; then
     printf '%s\n' "$out" | grep -F 'tail 1000' >/dev/null || { echo 'FAIL: continuation hint omitted --tail 1000' >&2; exit 1; }
   fi
@@ -102,7 +108,10 @@ check_tail 1000 2000
 if node "$root/dist/bin/k8s-axi.js" pods logs chatty -n fixtures --previous >"$lab/previous.out" 2>&1; then
   echo 'FAIL: missing previous-container logs unexpectedly succeeded' >&2
   exit 1
+else
+  status=$?
 fi
+[ "$status" = 1 ] || { echo "FAIL: missing previous logs exited $status, expected 1" >&2; exit 1; }
 grep -F 'LOGS_UNAVAILABLE' "$lab/previous.out" >/dev/null || { echo 'FAIL: missing previous logs were not LOGS_UNAVAILABLE' >&2; exit 1; }
 web_out=$(node "$root/dist/bin/k8s-axi.js" pods logs web -n fixtures)
 printf '%s\n' "$web_out" | grep -F 'redacted: 2' >/dev/null || { echo 'FAIL: web log redaction count changed from the baseline of 2' >&2; exit 1; }
