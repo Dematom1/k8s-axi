@@ -1,7 +1,15 @@
 import type { Parsed } from "../args.js";
 import { deadline, type ListResource } from "../registry.js";
 import { resolveTarget, resolveScope, scopeLabel, scoped } from "../target.js";
-import { kubectl, parseObject, readList } from "../kubectl.js";
+import {
+  kubectl,
+  object,
+  objects,
+  parseObject,
+  readList,
+  text,
+} from "../kubectl.js";
+import { fail } from "../errors.js";
 import {
   workloadRow,
   workloadSpecs,
@@ -34,6 +42,19 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
         ),
       ),
     ]);
+    const deployment = rows[0] ?? {};
+    const deadlineExceeded = objects(object(deployment.status).conditions).find(
+      (condition) =>
+        condition.type === "Progressing" &&
+        condition.status === "False" &&
+        condition.reason === "ProgressDeadlineExceeded",
+    );
+    if (deadlineExceeded)
+      fail(
+        "UPSTREAM_ERROR",
+        `deployment ${name} rollout failed: ${text(deadlineExceeded.reason)}`,
+        [`Inspect pods for deployment ${name}`],
+      );
     return encodeObject({
       context: t.context,
       ...deploymentDetail(rows[0] ?? {}, p.full),
