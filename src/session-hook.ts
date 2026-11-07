@@ -53,7 +53,7 @@ function settings(): Record<string, unknown> {
   return value;
 }
 
-function writeSettings(value: Record<string, unknown>): void {
+export function writeClaudeSettings(value: Record<string, unknown>): void {
   const file = path();
   const temporary = `${file}.${randomUUID()}.tmp`;
   try {
@@ -106,7 +106,7 @@ export function installSessionEndHook(entrypoint: string): void {
     ],
   });
   hooks.SessionEnd = next;
-  writeSettings(value);
+  writeClaudeSettings(value);
 }
 
 export function sessionEndHookStatus(): boolean {
@@ -141,7 +141,7 @@ export function uninstallSessionEndHook(): boolean {
   if (next.length) hooks.SessionEnd = next;
   else delete hooks.SessionEnd;
   if (Object.keys(hooks).length === 0) delete value.hooks;
-  writeSettings(value);
+  writeClaudeSettings(value);
   if (sessionEndHookStatus())
     throw new AxiError(
       `SessionEnd hook remains in ${path()}`,

@@ -9,7 +9,6 @@ import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import {
-  computeSessionStartHookRemoval,
   computeSessionStartHookUpdate,
   detectInstallMethod,
   installSessionStartHooks,
@@ -21,6 +20,7 @@ import {
   installSessionEndHook,
   uninstallSessionEndHook,
   sessionEndHookStatus,
+  writeClaudeSettings,
 } from "../session-hook.js";
 import type { Parsed } from "../args.js";
 import { fail, usage } from "../errors.js";
@@ -33,6 +33,66 @@ function entrypoint(): string {
 }
 function quote(s: string): string {
   return `'${s.replaceAll("'", "'\\''")}'`;
+}
+function isManagedClaudeStartHook(hook: unknown): boolean {
+  const command = object(hook).command;
+  return (
+    command === "k8s-axi-ctx" ||
+    (typeof command === "string" &&
+      (command.endsWith("/k8s-axi-ctx.js'") ||
+        command.endsWith("/k8s-axi-ctx.js")))
+  );
+}
+function updateClaudeStartHook(
+  settings: Record<string, unknown>,
+  command?: string,
+): boolean {
+  const hooks = object(settings.hooks);
+  const groups = objects(hooks.SessionStart);
+  const managed = groups
+    .flatMap((group) => objects(group.hooks))
+    .filter(isManagedClaudeStartHook);
+  if (
+    (command &&
+      managed.length === 1 &&
+      object(managed[0]).command === command) ||
+    (!command && managed.length === 0)
+  )
+    return false;
+  const destination = groups.findIndex((group) =>
+    objects(group.hooks).some(isManagedClaudeStartHook),
+  );
+  const broad = groups.findIndex((group) => {
+    const matcher = object(group).matcher;
+    return matcher === undefined || matcher === null || matcher === "";
+  });
+  const target = destination === -1 ? broad : destination;
+  let changed = false;
+  const next: Record<string, unknown>[] = groups.flatMap((group, index) => {
+    const entries = objects(group.hooks).filter((entry) => {
+      const managed = isManagedClaudeStartHook(entry);
+      if (managed) changed = true;
+      return !managed;
+    });
+    if (command && index === target) {
+      entries.push({ type: "command", command, timeout: 10 });
+      changed = true;
+    }
+    return entries.length ? [{ ...group, hooks: entries }] : [];
+  });
+  if (command && target === -1) {
+    next.push({
+      matcher: "",
+      hooks: [{ type: "command", command, timeout: 10 }],
+    });
+    changed = true;
+  }
+  if (!changed) return false;
+  if (next.length) hooks.SessionStart = next;
+  else delete hooks.SessionStart;
+  if (Object.keys(hooks).length) settings.hooks = hooks;
+  else delete settings.hooks;
+  return true;
 }
 export function hookStatus() {
   const s = sessionStartHookStatus({ marker: "k8s-axi" });
@@ -80,12 +140,7 @@ export function hookStatus() {
     objects(
       object(object(JSON.parse(readFileSync(claudePath, "utf8"))).hooks)
         .SessionStart,
-    ).some((group) =>
-      objects(group.hooks).some((hook) => {
-        const command = object(hook).command;
-        return typeof command === "string" && command.includes("k8s-axi");
-      }),
-    );
+    ).some((group) => objects(group.hooks).some(isManagedClaudeStartHook));
   const expected = `${quote(process.execPath)} ${quote(entrypoint())}`;
   const starts = (file: string) => {
     const commands = objects(
@@ -93,10 +148,11 @@ export function hookStatus() {
     )
       .flatMap((g) => objects(g.hooks))
       .map((hook) => object(hook).command)
-      .filter(
-        (command): command is string =>
-          typeof command === "string" &&
-          (command.includes("k8s-axi") || command === "k8s-axi-ctx"),
+      .filter((command): command is string =>
+        file === s.claude.path
+          ? isManagedClaudeStartHook({ command })
+          : typeof command === "string" &&
+            (command.includes("k8s-axi") || command === "k8s-axi-ctx"),
       );
     return commands.length === 1 && commands[0] === expected;
   };
@@ -163,11 +219,10 @@ export async function setupCommand(p: Parsed): Promise<string> {
           Array.isArray(current)
         )
           throw new Error("settings must be a JSON object");
-        const [next, changed] = computeSessionStartHookRemoval(
-          current as HookSettings,
-          "k8s-axi",
+        const changed = updateClaudeStartHook(
+          current as Record<string, unknown>,
         );
-        if (changed) writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`);
+        if (changed) writeClaudeSettings(current as Record<string, unknown>);
       } catch (error) {
         if (!(
           error &&
@@ -213,6 +268,21 @@ export async function setupCommand(p: Parsed): Promise<string> {
     // Agent JSON commands run through a shell; pin Node too and quote both paths.
     for (const file of [s.claude.path, s.codex.path])
       try {
+        if (file === s.claude.path) {
+          const current = object(
+            existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {},
+          );
+          if (
+            updateClaudeStartHook(
+              current,
+              `${quote(process.execPath)} ${quote(entry)}`,
+            )
+          ) {
+            writeClaudeSettings(current);
+            wroteSettings = true;
+          }
+          continue;
+        }
         const installed = existsSync(file)
           ? readFileSync(file, "utf8")
           : "{}\n";
