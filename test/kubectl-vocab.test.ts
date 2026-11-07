@@ -30,6 +30,12 @@ const routes: [string[], string[] | undefined, string[]?, number?][] = [
     ["get", "deployment.apps", "broken"],
   ],
   [
+    ["rollout", "status", "deployment/healthy", "-n", "fixtures"],
+    ["deployments", "view", "healthy", "-n", "fixtures"],
+    ["get", "deployment.apps", "healthy"],
+    0,
+  ],
+  [
     ["get", "deployments", "-n", "fixtures"],
     ["deployments", "-n", "fixtures"],
     ["get", "deployments.apps"],
@@ -68,6 +74,22 @@ test.each(routes)(
         stdout: "namespace/fixtures",
       },
       {
+        prefix: ["get", "deployment.apps", "healthy"],
+        stdout: JSON.stringify({
+          metadata: { name: "healthy", generation: 2 },
+          spec: { replicas: 2 },
+          status: {
+            observedGeneration: 2,
+            updatedReplicas: 2,
+            availableReplicas: 2,
+            conditions: [
+              { type: "Progressing", status: "True", reason: "ReplicaSetUpdated" },
+              { type: "Available", status: "True", reason: "MinimumReplicasAvailable" },
+            ],
+          },
+        }),
+      },
+      {
         prefix: ["get", "deployment.apps", "broken"],
         stdout: JSON.stringify({
           metadata: { name: "broken", generation: 1 },
@@ -104,7 +126,7 @@ test.each(routes)(
         );
         if (expectedStatus !== undefined)
           expect(result.status).toBe(expectedStatus);
-        if (typed[0] === "rollout") {
+        if (typed[0] === "rollout" && typed[2]?.endsWith("broken")) {
           expect(result.status).toBe(1);
           expect(result.stdout).toContain("ProgressDeadlineExceeded");
         }

@@ -61,9 +61,7 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
         number(status.availableReplicas) >= desired &&
         conditions.some(
           (condition) =>
-            condition.type === "Progressing" &&
-            condition.status === "True" &&
-            condition.reason === "NewReplicaSetAvailable",
+            condition.type === "Progressing" && condition.status === "True",
         ) &&
         conditions.some(
           (condition) =>
