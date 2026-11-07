@@ -51,17 +51,18 @@ export function classifyPod(pod: Obj, now = Date.now()): PodHealth {
     .flatMap((c) => {
       const current = object(object(c.state).terminated);
       const last = object(object(c.lastState).terminated);
-      const runningReady =
+      const recoveredReady =
         c.ready === true &&
-        Object.keys(object(object(c.state).running)).length > 0;
+        (Object.keys(object(object(c.state).running)).length > 0 ||
+          (Object.keys(current).length > 0 && number(current.exitCode) === 0));
       const finishedAt = text(last.finishedAt);
       const recentLast =
         finishedAt !== "" && elapsed(finishedAt, now) <= 10 * 60;
       return [
         { state: current, recovered: false },
         {
-          state: runningReady && !recentLast ? {} : last,
-          recovered: runningReady,
+          state: recoveredReady && !recentLast ? {} : last,
+          recovered: recoveredReady,
         },
       ];
     })

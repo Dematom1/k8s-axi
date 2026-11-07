@@ -107,6 +107,33 @@ test("phase, readiness, startup, init and termination", () => {
   });
   expect(classifyPod(recoveredPod(""), now)).toEqual({ state: "running" });
   expect(
+    classifyPod(
+      {
+        ...recent,
+        status: {
+          ...recent.status,
+          conditions: [{ type: "Ready", status: "True" }],
+          containerStatuses: [],
+          initContainerStatuses: [
+            {
+              ready: true,
+              restartCount: 1,
+              state: { terminated: { reason: "Completed", exitCode: 0 } },
+              lastState: {
+                terminated: {
+                  reason: "Error",
+                  exitCode: 1,
+                  finishedAt: "2024-12-31T23:55:00Z",
+                },
+              },
+            },
+          ],
+        },
+      },
+      now,
+    ),
+  ).toEqual({ state: "problem", reason: "recovered after Error (exit 1)" });
+  expect(
     classifyPod({
       ...recent,
       status: {
