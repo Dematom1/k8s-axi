@@ -115,6 +115,29 @@ test("audit reader rejects oversized records without exposing their contents", (
   }
 });
 
+test("audit rejects symlinked state-root components", () => {
+  const state = join(root, "parent-symlink");
+  const target = join(root, "outside-state");
+  const previous = process.env.XDG_STATE_HOME;
+  mkdirSync(target, { recursive: true });
+  symlinkSync(target, state);
+  process.env.XDG_STATE_HOME = state;
+  try {
+    expect(() => readAudit({ limit: 1 })).toThrow(
+      expect.objectContaining({ code: "AUDIT_UNAVAILABLE" }),
+    );
+    expect(() =>
+      appendAudit({ id: newAuditId(), phase: "start", action: "exec" }),
+    ).toThrow(expect.objectContaining({ code: "AUDIT_UNAVAILABLE" }));
+    expect(readdirSync(target)).toEqual([]);
+  } finally {
+    if (previous === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previous;
+    rmSync(state, { recursive: true, force: true });
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
 test("audit writer rejects a symlinked state directory", () => {
   const state = join(root, "directory-symlink");
   const previous = process.env.XDG_STATE_HOME;
