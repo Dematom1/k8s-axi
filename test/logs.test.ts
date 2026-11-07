@@ -49,7 +49,7 @@ for (const annotation of [undefined, "a"])
       expect(calls.at(-1).args).toContain("--previous");
       const logs = cli(["pods", "logs", "p", "-c", "a"], l.env);
       expect(logs.stdout).toContain("normal log");
-      expect(logs.stdout).not.toContain("help: []");
+      expect(logs.stdout).not.toContain("help:");
       expect(cli(["pods", "logs", "p", "--follow"], l.env).status).toBe(2);
       expect(cli(["pods", "logs", "p", "--tail", "5000"], l.env).status).toBe(
         2,
