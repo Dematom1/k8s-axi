@@ -91,16 +91,28 @@ check_tail() {
   printf '%s\n' "$out" | node -e '
     let input = "";
     process.stdin.on("data", chunk => input += chunk).on("end", () => {
-      const result = JSON.parse(input), expected = Number(process.argv[1]), first = Number(process.argv[2]);
+      import("@toon-format/toon").then(({ decode }) => {
+      const result = decode(input), expected = Number(process.argv[1]), first = Number(process.argv[2]);
       const lines = result.logs;
       if (lines.length !== expected || lines[0] !== `line ${first}` || lines.at(-1) !== "line 2999" || lines.some((line, i) => line !== `line ${first + i}`)) {
         console.error(`FAIL: --tail ${expected} did not return the exact ordered tail`);
         process.exitCode = 1;
       }
+      });
     });
   ' "$tail" "$first" || exit 1
   if [ "$tail" = 1000 ]; then
-    printf '%s\n' "$out" | grep -F 'tail 1000' >/dev/null || { echo 'FAIL: continuation hint omitted --tail 1000' >&2; exit 1; }
+    printf '%s\n' "$out" | node --input-type=module -e '
+      import { decode } from "@toon-format/toon";
+      let input = "";
+      process.stdin.on("data", chunk => input += chunk).on("end", () => {
+        const help = decode(input).help ?? [];
+        if (!help.some(line => line.includes("--tail 1000"))) {
+          console.error("FAIL: continuation hint omitted --tail 1000");
+          process.exitCode = 1;
+        }
+      });
+    ' || exit 1
   fi
 }
 check_tail 100 2900
