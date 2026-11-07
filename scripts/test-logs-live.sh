@@ -50,9 +50,22 @@ spec:
       command: ["sh", "-c", "i=0; while [ $i -lt 3000 ]; do printf 'line %s\\n' $i; i=$((i+1)); done; sleep 3600"]
 EOF
 kubectl --kubeconfig "$KUBECONFIG" -n fixtures wait --for=jsonpath='{.status.phase}'=Running pod/chatty --timeout=120s
-out=$(node "$root/dist/bin/k8s-axi.js" pods logs chatty -n fixtures --tail 1000)
-printf '%s\n' "$out" | grep -F 'line 2999' >/dev/null || { echo 'FAIL: newest log line missing' >&2; exit 1; }
-printf '%s\n' "$out" | grep -F 'tail 1000' >/dev/null || { echo 'FAIL: continuation hint omitted --tail 1000' >&2; exit 1; }
-out=$(node "$root/dist/bin/k8s-axi.js" pods logs chatty -n fixtures --tail 100)
-printf '%s\n' "$out" | grep -F 'line 2999' >/dev/null || { echo 'FAIL: --tail 100 omitted newest log line' >&2; exit 1; }
-echo 'PASS: logs tail retains the newest line for --tail 100 and --tail 1000'
+check_tail() {
+  tail=$1
+  first=$2
+  out=$(node "$root/dist/bin/k8s-axi.js" pods logs chatty -n fixtures --tail "$tail")
+  last_line=$(printf '%s\n' "$out" | grep -oE 'line [0-9]+' | tail -1)
+  [ "$last_line" = 'line 2999' ] || { echo "FAIL: --tail $tail ended at $last_line" >&2; exit 1; }
+  printf '%s\n' "$out" | grep -F "line $first" >/dev/null || { echo "FAIL: --tail $tail omitted its first expected line" >&2; exit 1; }
+  if [ "$tail" = 1000 ]; then
+    printf '%s\n' "$out" | grep -F 'tail 1000' >/dev/null || { echo 'FAIL: continuation hint omitted --tail 1000' >&2; exit 1; }
+  fi
+}
+check_tail 100 2900
+check_tail 1000 2000
+if node "$root/dist/bin/k8s-axi.js" pods logs chatty -n fixtures --previous >"$lab/previous.out" 2>&1; then
+  echo 'FAIL: missing previous-container logs unexpectedly succeeded' >&2
+  exit 1
+fi
+grep -F 'LOGS_UNAVAILABLE' "$lab/previous.out" >/dev/null || { echo 'FAIL: missing previous logs were not LOGS_UNAVAILABLE' >&2; exit 1; }
+echo 'PASS: logs tail and missing-previous verification'
