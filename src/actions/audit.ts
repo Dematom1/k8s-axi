@@ -233,7 +233,14 @@ export function readAudit(options: {
   try {
     const path = auditPath();
     const dir = dirname(path);
-    const entries = opendirSync(dir);
+    let entries: ReturnType<typeof opendirSync>;
+    try {
+      entries = opendirSync(dir);
+    } catch (error) {
+      if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")
+        return [];
+      throw error;
+    }
     try {
       let entry;
       while ((entry = entries.readSync()) !== null)

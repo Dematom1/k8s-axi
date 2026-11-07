@@ -53,6 +53,20 @@ test("audit log is private, redacts credentials, and reads newest records", () =
   expect(readAudit({ limit: 5, action: "exec" })).toHaveLength(2);
 });
 
+test("audit command returns empty history before first write", async () => {
+  const state = join(root, "fresh");
+  const previous = process.env.XDG_STATE_HOME;
+  process.env.XDG_STATE_HOME = state;
+  try {
+    expect(readAudit({ limit: 100 })).toEqual([]);
+    expect(await auditCommand(parseArgs("audit", []))).toContain("count: 0");
+  } finally {
+    if (previous === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previous;
+    rmSync(state, { recursive: true, force: true });
+  }
+});
+
 test("audit reader includes a complete final record without newline", () => {
   const state = join(root, "unterminated");
   const previous = process.env.XDG_STATE_HOME;
