@@ -145,24 +145,27 @@ export function newAuditId(): string {
 }
 
 function parseRecord(value: unknown): AuditRecord {
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    throw new Error("invalid audit record");
+  const record = Object.fromEntries(Object.entries(value));
+  const strings = ["id", "ts", "tool", "version"];
+  const numbers = ["uid", "pid", "exit", "duration_ms", "stdout_bytes", "stderr_bytes", "redactions", "scrubbed"];
+  const stringFields = ["context", "server", "namespace", "target", "argv_sha256", "cwd", "code"];
+  const outcomes = ["ok", "remote_nonzero", "timeout", "forbidden", "refused", "error", "expired", "stopped", "reaped", "exited"];
   if (
-    value === null ||
-    typeof value !== "object" ||
-    Array.isArray(value) ||
-    !("v" in value) ||
-    value.v !== 1 ||
-    !("id" in value) ||
-    typeof value.id !== "string" ||
-    !("phase" in value) ||
-    !["start", "end", "refused"].includes(String(value.phase)) ||
-    !("ts" in value) ||
-    typeof value.ts !== "string" ||
-    !("action" in value) ||
-    typeof value.action !== "string" ||
-    !ACTIONS.some((action) => action === value.action)
+    record.v !== 1 ||
+    strings.some((key) => typeof record[key] !== "string") ||
+    record.tool !== "k8s-axi" ||
+    !Number.isFinite(Date.parse(String(record.ts))) ||
+    !(record.phase === "start" || record.phase === "end" || record.phase === "refused") ||
+    !ACTIONS.some((action) => action === record.action) ||
+    stringFields.some((key) => key in record && typeof record[key] !== "string") ||
+    numbers.some((key) => key in record && (typeof record[key] !== "number" || !Number.isFinite(record[key]))) ||
+    ("argv" in record && (!Array.isArray(record.argv) || record.argv.some((arg) => typeof arg !== "string))) ||
+    ("outcome" in record && !outcomes.some((outcome) => outcome === record.outcome))
   )
     throw new Error("invalid audit record");
-  return value as AuditRecord;
+  return record as AuditRecord;
 }
 
 export function readAudit(options: {
@@ -175,7 +178,11 @@ export function readAudit(options: {
     const dir = dirname(path);
     const rotated = readdirSync(dir)
       .filter((name) => /^audit\.(?:1|\d+\.\d+\.[0-9a-f-]+)\.jsonl$/.test(name))
-      .sort()
+      .sort((a, b) => {
+        const timestamp = (name: string) => Number(/^audit\.(\d+)/.exec(name)?.[1] ?? 0);
+        const timeDifference = timestamp(a) - timestamp(b);
+        return timeDifference || a.localeCompare(b);
+      })
       .map((name) => join(dir, name));
     text = [...rotated, path]
       .map((file) => {
