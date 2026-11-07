@@ -25,9 +25,10 @@ export async function dispatch(
   command: Parsed["command"],
   args: string[],
   run: (p: Parsed) => Promise<string>,
+  rolloutStatus = false,
 ): Promise<string> {
   if (command === "ctx" && args[0] === "use") refuse("ctx use");
-  const p = parseArgs(command, args);
+  const p = { ...parseArgs(command, args), rolloutStatus };
   if (p.help)
     return encodeObject({
       command: `k8s-axi ${command}${p.action === "list" ? "" : " " + p.action}`,
