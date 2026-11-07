@@ -270,8 +270,18 @@ test("action inputs reject invalid DNS labels and ports", () => {
     source: "flag",
   } satisfies Target;
   for (const action of [
-    { kind: "exec", target: `${"a".repeat(64)}`, container: "app", command: ["true"] },
-    { kind: "exec", target: "pod", container: `${"a".repeat(64)}`, command: ["true"] },
+    {
+      kind: "exec",
+      target: `${"a".repeat(64)}`,
+      container: "app",
+      command: ["true"],
+    },
+    {
+      kind: "exec",
+      target: "pod",
+      container: `${"a".repeat(64)}`,
+      command: ["true"],
+    },
     { kind: "port-forward", target: "pod", ports: ["0:80"] },
     { kind: "port-forward", target: "pod", ports: ["80:70000"] },
   ] as const)
