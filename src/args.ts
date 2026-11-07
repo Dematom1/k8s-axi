@@ -123,6 +123,7 @@ export interface Parsed {
   container?: ResourceName;
   tail: number;
   previous: boolean;
+  rolloutStatus: boolean;
 }
 export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
   const pos: string[] = [];
@@ -243,5 +244,6 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
       : undefined,
     tail: integer(str("tail") ?? "100", "--tail", 1, 1000),
     previous: flags.has("previous"),
+    rolloutStatus: false,
   };
 }

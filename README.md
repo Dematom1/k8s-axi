@@ -29,6 +29,7 @@ Run `k8s-axi` for an all-namespace overview or `k8s-axi <command> --help` for fl
 - `namespaces`: discover namespaces.
 - `pods`, `pods view <pod>`: readiness, waiting states, last termination, owner, and events.
 - `pods logs <pod> [-c <container>] [--tail <n>] [--since <duration>] [--previous]`: recent logs, never follows.
+- Common kubectl reads are accepted: `get <resource> [name]`, `describe <resource> <name>`, and `logs <pod>` map to these read commands. `rollout status deployment/<name>` checks bounded rollout status without watching; `top` is unsupported. Writes remain refused.
 - `deployments`, `deployments view <name>`: rollout state and conditions.
 - `jobs`, `pvcs`, `services`: completion, storage phase, and ready EndpointSlice counts.
 - `events [--warnings] [--since 15m] [--for Pod/name]`: newest first, timestamp, occurrence count, and message.
@@ -95,7 +96,7 @@ Either integration path is sufficient. Neither is installed automatically.
 - **Hooks:** after a persistent install, run `k8s-axi setup hooks`. Claude Code and Codex get SessionStart context. OpenCode gets a managed ambient plugin. Claude Code SessionEnd records command names, counts, and the most-used context, not command arguments or output.
 
 The dedicated `k8s-axi-ctx` hook is local only and does not make a health claim. Setup refuses ephemeral npx installations.
-`setup status` reopens destinations. `setup uninstall` removes SessionStart and SessionEnd hooks and the managed plugin, preserving unrelated settings and the shared Codex feature flag. When `CLAUDE_CONFIG_DIR` is set, k8s-axi's SessionEnd hook and its setup status/install/uninstall use that directory; setup creates a missing directory with mode `0700` and `settings.json` with mode `0600`. The SDK-managed SessionStart hook also updates `~/.claude/settings.json`.
+`setup status` reopens destinations. `setup uninstall` removes SessionStart and SessionEnd hooks and the managed plugin, preserving unrelated settings and the shared Codex feature flag. When `CLAUDE_CONFIG_DIR` is set, k8s-axi's SessionEnd hook and its setup status/install/uninstall use that directory; setup creates a missing directory with mode `0700` and `settings.json` with mode `0600`. The SDK-managed SessionStart hook also updates `~/.claude/settings.json`. In `~/.claude/settings.json` and `~/.codex/hooks.json`, axi-sdk-js treats any `SessionStart` hook command (including legacy `session_start` entries) containing `k8s-axi` as managed, so `setup uninstall` may also remove an unrelated hook whose command contains that text. This substring rule does not apply to k8s-axi's own SessionEnd handling or its custom `CLAUDE_CONFIG_DIR` SessionStart handling, which use narrower command matching.
 Session memory is stored under `$XDG_CONFIG_HOME/k8s-axi`, or `~/.config/k8s-axi`. Version cache is stored under `$XDG_CACHE_HOME/k8s-axi`, or `~/.cache/k8s-axi`.
 
 ## Server-side read-only RBAC

@@ -29,8 +29,6 @@ export const REFUSALS = [
   "token",
   "login",
   "update",
-  "get",
-  "describe",
   "ctx use",
 ] as const;
 export type ContextName = string & { readonly __brand: "ContextName" };
