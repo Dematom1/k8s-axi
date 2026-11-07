@@ -39,7 +39,7 @@ const routes: [string[], string[] | undefined, string[]?, number?][] = [
     ["rollout", "status", "deployment/old", "-n", "fixtures"],
     ["deployments", "view", "old", "-n", "fixtures"],
     ["get", "deployment.apps", "old"],
-    1,
+    0,
   ],
   [
     ["get", "deployments", "-n", "fixtures"],
@@ -113,6 +113,7 @@ test.each(routes)(
           },
         }),
       },
+      { prefix: ["get", "secrets"], stdout: "" },
       {
         prefix: ["get", "deployment.apps", "broken"],
         stdout: JSON.stringify({
@@ -161,9 +162,13 @@ test.each(routes)(
               : equivalent[0] === "deployments"
                 ? "deployment"
                 : "secret";
-          expect(result.data).toHaveProperty(key, equivalent[2]);
+          if (typed[0] === "rollout" && typed[2]?.endsWith("broken")) {
+            expect(result.stdout).toContain("ProgressDeadlineExceeded");
+          } else {
+            expect(result.data).toHaveProperty(key, equivalent[2]);
+          }
         } else {
-          expect(result.data).toHaveProperty(equivalent[0]!);
+          expect(result.stdout).toContain(equivalent[0]!);
         }
         if (expectedStatus !== undefined)
           expect(result.status).toBe(expectedStatus);

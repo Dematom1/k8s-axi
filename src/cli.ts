@@ -92,7 +92,7 @@ function routeKubectlArgs(argv: string[]): string[] {
       NOUNS.find((candidate) => candidate === rawNoun);
     if (!noun || !kubectlNouns.has(noun))
       usage(
-        `unsupported resource ${JSON.stringify(rawNoun)}; use an equivalent k8s-axi noun command`,
+        `unsupported resource ${JSON.stringify(rawNoun)}; use the equivalent command: k8s-axi ${rawNoun === "configmap" ? "configmaps" : "--help"}`,
       );
     const name = rest[0]?.startsWith("-") ? undefined : rest[0];
     const flags = name ? rest.slice(1) : rest;
