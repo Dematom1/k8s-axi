@@ -3,7 +3,20 @@ set -euo pipefail
 root=$PWD
 lab=$root/.lab-live
 lock=/tmp/k8s-axi-kind-lab.lock
-mkdir -p "$lab"
+mkdir -p "$lab/bin"
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64) platform=darwin-arm64 ;;
+  Linux-x86_64) platform=linux-amd64 ;;
+  *) echo "FAIL: unsupported kind platform $(uname -s)-$(uname -m)" >&2; exit 1 ;;
+esac
+kind_bin="$lab/bin/kind"
+curl -fsSL "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-$platform" -o "$kind_bin"
+curl -fsSL "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-$platform.sha256sum" -o "$lab/bin/kind.sha256sum"
+expected=$(awk '{print $1}' "$lab/bin/kind.sha256sum")
+actual=$(shasum -a 256 "$kind_bin" | awk '{print $1}')
+[ "$actual" = "$expected" ] || { echo 'FAIL: kind checksum mismatch' >&2; exit 1; }
+chmod +x "$kind_bin"
+export PATH="$lab/bin:/usr/local/bin:$PATH"
 start=$SECONDS
 while ! mkdir "$lock" 2>/dev/null; do
   if [ -f "$lock/pid" ] && [ $(( $(date +%s) - $(stat -f %m "$lock") )) -gt 1800 ] && ! kill -0 "$(<"$lock/pid")" 2>/dev/null; then
