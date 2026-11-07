@@ -69,7 +69,7 @@ export async function logsCommand(p: Parsed): Promise<string> {
   if (p.full) shownLines.push(...lines);
   else {
     for (const line of lines.slice(-1000).reverse()) {
-      if (shownChars + line.length > 8000) break;
+      if (shownChars + line.length > 10000) break;
       shownLines.unshift(line);
       shownChars += line.length;
     }
@@ -87,12 +87,8 @@ export async function logsCommand(p: Parsed): Promise<string> {
     "omitted-lines": omitted,
     shown: shownLines.length ? `${shownLines[0]}..${shownLines.at(-1)}` : "",
     logs: shownLines,
-    ...(omitted > 0 || cut
-      ? {
-          help: [
-            `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --tail ${p.tail} --since ${p.since} --previous${p.full ? "" : " --full"}\` for the newest logs`,
-          ],
-        }
-      : {}),
+    help: [
+      `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --tail ${p.tail}${p.since ? ` --since ${p.since}` : ""}${p.previous ? " --previous" : ""} --full\` for the newest logs`,
+    ],
   });
 }
