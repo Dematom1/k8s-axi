@@ -30,6 +30,14 @@ export async function runProcess(
     let timedOut = false;
     let capped = false;
     let terminating = false;
+    let childClosed = false;
+    let escalationComplete = false;
+    let result: ProcessResult | undefined;
+    let escalationTimer: NodeJS.Timeout | undefined;
+    const finish = () => {
+      if (childClosed && (!terminating || escalationComplete) && result)
+        resolve(result);
+    };
     const kill = (signal: NodeJS.Signals) => {
       if (child.pid)
         try {
@@ -42,13 +50,15 @@ export async function runProcess(
       timedOut = true;
       terminate();
     }, timeout);
-    const killTimer = setTimeout(() => kill("SIGKILL"), timeout + 2000);
-    killTimer.unref();
     const terminate = () => {
       if (terminating) return;
       terminating = true;
       kill("SIGTERM");
-      setTimeout(() => kill("SIGKILL"), 2000).unref();
+      escalationTimer = setTimeout(() => {
+        kill("SIGKILL");
+        escalationComplete = true;
+        finish();
+      }, 2000);
     };
     child.stdin?.on("error", (error: NodeJS.ErrnoException) => {
       if (error.code !== "EPIPE") terminate();
@@ -68,20 +78,21 @@ export async function runProcess(
       });
     child.once("error", (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
-      clearTimeout(killTimer);
+      if (escalationTimer) clearTimeout(escalationTimer);
       reject(error);
     });
     child.once("close", (exit, signal) => {
       clearTimeout(timer);
-      clearTimeout(killTimer);
-      resolve({
+      childClosed = true;
+      result = {
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
         exit,
         signal,
         timedOut,
         capped,
-      });
+      };
+      finish();
     });
   });
 }
