@@ -13,7 +13,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { AxiError } from "axi-sdk-js";
 
-const path = () => join(homedir(), ".claude", "settings.json");
+const path = () =>
+  join(
+    process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"),
+    "settings.json",
+  );
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);

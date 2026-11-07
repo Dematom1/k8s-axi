@@ -1,12 +1,20 @@
-import { readFileSync, realpathSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import {
+  computeSessionStartHookRemoval,
+  computeSessionStartHookUpdate,
   detectInstallMethod,
   installSessionStartHooks,
   uninstallSessionStartHooks,
   sessionStartHookStatus,
-  computeSessionStartHookUpdate,
   type HookSettings,
 } from "axi-sdk-js";
 import {
@@ -28,6 +36,22 @@ function quote(s: string): string {
 }
 export function hookStatus() {
   const s = sessionStartHookStatus({ marker: "k8s-axi" });
+  const claudePath = join(
+    process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"),
+    "settings.json",
+  );
+  s.claude.path = claudePath;
+  s.claude.installed =
+    existsSync(claudePath) &&
+    objects(
+      object(object(JSON.parse(readFileSync(claudePath, "utf8"))).hooks)
+        .SessionStart,
+    ).some((group) =>
+      objects(group.hooks).some((hook) => {
+        const command = object(hook).command;
+        return typeof command === "string" && command.includes("k8s-axi");
+      }),
+    );
   for (const [file, json] of [
     [s.claude.path, true],
     [s.codex.path, true],
@@ -129,6 +153,31 @@ export async function setupCommand(p: Parsed): Promise<string> {
       marker: "k8s-axi",
       onError: (e) => errors.push(e),
     });
+    if (process.env.CLAUDE_CONFIG_DIR) {
+      const file = join(process.env.CLAUDE_CONFIG_DIR, "settings.json");
+      try {
+        const current: unknown = JSON.parse(readFileSync(file, "utf8"));
+        if (
+          typeof current !== "object" ||
+          current === null ||
+          Array.isArray(current)
+        )
+          throw new Error("settings must be a JSON object");
+        const [next, changed] = computeSessionStartHookRemoval(
+          current as HookSettings,
+          "k8s-axi",
+        );
+        if (changed) writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`);
+      } catch (error) {
+        if (!(
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          error.code === "ENOENT"
+        ))
+          errors.push(`could not remove custom Claude hook: ${String(error)}`);
+      }
+    }
     try {
       uninstallSessionEndHook();
     } catch {
@@ -145,6 +194,10 @@ export async function setupCommand(p: Parsed): Promise<string> {
         ],
       );
     const s = sessionStartHookStatus({ marker: "k8s-axi" });
+    s.claude.path = join(
+      process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"),
+      "settings.json",
+    );
     if (
       before.claude !== "installed" ||
       before.codex !== "installed" ||
@@ -160,7 +213,9 @@ export async function setupCommand(p: Parsed): Promise<string> {
     // Agent JSON commands run through a shell; pin Node too and quote both paths.
     for (const file of [s.claude.path, s.codex.path])
       try {
-        const installed = readFileSync(file, "utf8");
+        const installed = existsSync(file)
+          ? readFileSync(file, "utf8")
+          : "{}\n";
         const current = object(JSON.parse(installed));
         const initial = JSON.stringify(current, null, 2) + "\n";
         const [next, changed] = computeSessionStartHookUpdate(
@@ -211,6 +266,7 @@ export async function setupCommand(p: Parsed): Promise<string> {
         object(next.hooks).SessionStart = normalized;
         const serialized = JSON.stringify(next, null, 2) + "\n";
         if ((changed || serialized !== initial) && serialized !== installed) {
+          mkdirSync(dirname(file), { recursive: true });
           writeFileSync(file, serialized);
           wroteSettings = true;
         }

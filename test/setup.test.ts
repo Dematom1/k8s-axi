@@ -173,6 +173,36 @@ for (const dir of [".claude", ".codex", ".config", "all"])
         l.clean();
       }
     });
+test("Claude hooks use CLAUDE_CONFIG_DIR settings", () => {
+  const l = lab();
+  const configDir = join(l.dir, "custom-claude");
+  const settings = join(configDir, "settings.json");
+  mkdirSync(configDir);
+  const env = { ...l.env, CLAUDE_CONFIG_DIR: configDir };
+  try {
+    const installed = cli(["setup", "hooks"], env);
+    expect(installed.status, installed.stdout).toBe(0);
+    const count = (file: string) =>
+      (JSON.parse(readFileSync(file, "utf8")).hooks?.SessionStart ?? [])
+        .flatMap((group: { hooks: { command: string }[] }) => group.hooks)
+        .filter((hook: { command: string }) => hook.command.includes("k8s-axi"))
+        .length;
+    const defaultSettings = join(l.env.HOME, ".claude/settings.json");
+    expect(count(settings)).toBe(1);
+    expect(count(defaultSettings)).toBe(1);
+    expect(cli(["setup", "status"], env).stdout).toContain(
+      "sessionEnd: installed",
+    );
+    expect(cli(["setup", "uninstall"], env).status).toBe(0);
+    expect(count(settings)).toBe(0);
+    expect(count(defaultSettings)).toBe(0);
+    expect(cli(["setup", "status"], env).stdout).toContain(
+      "sessionEnd: absent",
+    );
+  } finally {
+    l.clean();
+  }
+});
 test("invalid nested settings fail, ctx missing kubectl remains harmless", () => {
   const l = lab();
   try {
