@@ -170,7 +170,7 @@ export function readAudit(options: {
     const rotated = readdirSync(dir)
       .filter((name) => /^audit\.(?:1|\d+\.\d+\.[0-9a-f-]+)\.jsonl$/.test(name))
       .sort()
-      .slice(-3)
+      .slice(-2)
       .map((name) => join(dir, name));
     text = [...rotated, path]
       .map((file) => {
