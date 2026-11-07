@@ -2,7 +2,7 @@ import { validateResourceName, type Parsed } from "../args.js";
 import { deadline } from "../registry.js";
 import { resolveTarget, resolveScope, scoped, scopeLabel } from "../target.js";
 import { kubectl, parseObject, object, objects, text } from "../kubectl.js";
-import { fail, usage } from "../errors.js";
+import { usage } from "../errors.js";
 import { redactText } from "../redact.js";
 import { encodeObject } from "../toon.js";
 export async function logsCommand(p: Parsed): Promise<string> {
@@ -56,10 +56,6 @@ export async function logsCommand(p: Parsed): Promise<string> {
     t,
     d,
   );
-  if (/unable to retrieve container logs for/i.test(raw))
-    fail("LOGS_UNAVAILABLE", "container logs are unavailable", [
-      `Run k8s-axi pods view ${name} -n ${s.name} or check events for the pod`,
-    ]);
   const redacted = redactText(raw),
     cut = Buffer.byteLength(raw) >= 1048576;
   const lines = redacted.text.split(/\r?\n/);
@@ -87,10 +83,10 @@ export async function logsCommand(p: Parsed): Promise<string> {
     "omitted-lines": omitted,
     shown: shownLines.length ? `${shownLines[0]}..${shownLines.at(-1)}` : "",
     logs: shownLines,
-    ...(cut || omitted > 0
+    ...(cut || omitted > 0 || lines.length >= p.tail
       ? {
           help: [
-            `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --tail ${p.tail}${p.since ? ` --since ${p.since}` : ""}${p.previous ? " --previous" : ""} --full\` for the newest logs`,
+            `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --tail ${p.tail}${p.since ? ` --since ${p.since}s` : ""}${p.previous ? " --previous" : ""} --full\` for the newest logs`,
           ],
         }
       : {}),

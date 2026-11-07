@@ -93,6 +93,11 @@ for (const [stderr, code] of [
 ])
   test(`map ${code}`, () =>
     expect(mapKubectlFailure(stderr ?? "").code).toBe(code));
+test("only failed log retrieval classifies kubelet log errors", () => {
+  const stderr = "unable to retrieve container logs for pod/app";
+  expect(mapKubectlFailure(stderr, "logs").code).toBe("LOGS_UNAVAILABLE");
+  expect(mapKubectlFailure(stderr, "get").code).toBe("UPSTREAM_ERROR");
+});
 for (const value of [
   "password=CANARY",
   '{"password":"CANARY"}',
