@@ -101,25 +101,19 @@ export function appendAudit(
       const opened = fstatSync(fd);
       if (opened.size + Buffer.byteLength(line) > MAX_BYTES) {
         const current = statSync(path);
-        if (current.dev === opened.dev && current.ino === opened.ino) {
-          try {
-            renameSync(
-              path,
-              join(
-                dir,
-                `audit.${Date.now()}.${process.pid}.${randomUUID()}.jsonl`,
-              ),
-            );
-          } catch (error) {
-            if (
-              error === null ||
-              typeof error !== "object" ||
-              !("code" in error) ||
-              error.code !== "ENOENT"
-            )
-              throw error;
-          }
-        }
+        if (current.dev !== opened.dev || current.ino !== opened.ino)
+          throw new Error("audit file changed during append");
+        renameSync(
+          path,
+          join(
+            dir,
+            `audit.${Date.now()}.${process.pid}.${randomUUID()}.jsonl`,
+          ),
+        );
+        closeSync(fd);
+        fd = -1;
+        fd = openSync(path, "a", 0o600);
+        fchmodSync(fd, 0o600);
       }
       writeSync(fd, line);
     } finally {
