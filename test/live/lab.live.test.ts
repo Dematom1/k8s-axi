@@ -150,9 +150,9 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     expect(
       run(["secrets", "-n", "fixtures", "--context", "limited"], 1).code,
     ).toBe("FORBIDDEN");
-    expect(
-      run(["pods", "-n", "default", "--context", "limited"], 1).code,
-    ).toBe("FORBIDDEN");
+    expect(run(["pods", "-n", "default", "--context", "limited"], 1).code).toBe(
+      "FORBIDDEN",
+    );
     expect(run(["pods", "-n", "fixtures", "--context", "ghost"], 1).code).toBe(
       "SERVER_UNREACHABLE",
     );
