@@ -190,6 +190,14 @@ export function readAudit(options: {
 }): AuditRecord[] {
   if (options.limit <= 0) return [];
   const rows: AuditRecord[] = [];
+  const consumeLine = (line: string) => {
+    if (!line) return;
+    const row = parseRecord(JSON.parse(line) as unknown);
+    if (options.action && row.action !== options.action) return;
+    rows.push(row);
+    rows.sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts) || a.id.localeCompare(b.id));
+    if (rows.length > options.limit) rows.shift();
+  };
   const consume = (file: string) => {
     let fd: number;
     try {
@@ -209,15 +217,11 @@ export function readAudit(options: {
         for (let end = data.indexOf(10); end !== -1; end = data.indexOf(10, start)) {
           const line = data.subarray(start, end).toString("utf8");
           start = end + 1;
-          if (!line) continue;
-          const row = parseRecord(JSON.parse(line) as unknown);
-          if (options.action && row.action !== options.action) continue;
-          rows.push(row);
-          rows.sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts) || a.id.localeCompare(b.id));
-          if (rows.length > options.limit) rows.shift();
+          consumeLine(line);
         }
         remainder = data.subarray(start);
       }
+      if (remainder.length) consumeLine(remainder.toString("utf8"));
     } finally {
       closeSync(fd);
     }

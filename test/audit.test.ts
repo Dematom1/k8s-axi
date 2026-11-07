@@ -53,6 +53,24 @@ test("audit log is private, redacts credentials, and reads newest records", () =
   expect(readAudit({ limit: 5, action: "exec" })).toHaveLength(2);
 });
 
+test("audit reader includes a complete final record without newline", () => {
+  const state = join(root, "unterminated");
+  const previous = process.env.XDG_STATE_HOME;
+  process.env.XDG_STATE_HOME = state;
+  const id = newAuditId();
+  try {
+    appendAudit({ id, phase: "start", action: "exec" });
+    const path = auditPath();
+    const data = readFileSync(path, "utf8");
+    writeFileSync(path, data.slice(0, -1));
+    expect(readAudit({ limit: 1 })[0]?.id).toBe(id);
+  } finally {
+    if (previous === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previous;
+    rmSync(state, { recursive: true, force: true });
+  }
+});
+
 test("audit rotation keeps one generation", () => {
   mkdirSync(dirname(auditPath()), { recursive: true });
   writeFileSync(auditPath(), "x".repeat(10 * 1024 * 1024), { mode: 0o600 });
