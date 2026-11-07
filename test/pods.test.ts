@@ -96,7 +96,7 @@ test("phase, readiness, startup, init and termination", () => {
         ],
       },
     }),
-  ).toMatchObject({ state: "problem", reason: "Error (7)" });
+  ).toMatchObject({ state: "problem", reason: "recovered after Error (exit 7)" });
   expect(
     classifyPod({
       ...recent,
