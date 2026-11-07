@@ -20,8 +20,8 @@ export function mapKubectlFailure(stderr: string): AxiError {
     ],
     [
       /previous terminated container.*not found|previous.*not available/i,
-      "NOT_FOUND",
-      "no previous terminated container logs are available",
+      "LOGS_UNAVAILABLE",
+      "container logs are unavailable",
     ],
     [
       /context.*(?:was not found|not found)/i,
