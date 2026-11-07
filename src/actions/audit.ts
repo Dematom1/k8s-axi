@@ -96,11 +96,16 @@ export function appendAudit(
         tool: "k8s-axi",
         version: VERSION,
       }) + "\n";
-    const fd = openSync(path, "a", 0o600);
+    const fd = openSync(
+      path,
+      constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW,
+      0o600,
+    );
     let opened: ReturnType<typeof fstatSync>;
     try {
-      fchmodSync(fd, 0o600);
       opened = fstatSync(fd);
+      if (!opened.isFile()) throw new Error("invalid audit file");
+      fchmodSync(fd, 0o600);
       writeSync(fd, line);
     } finally {
       closeSync(fd);
