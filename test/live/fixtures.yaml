@@ -1,0 +1,241 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fixtures
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-creds
+  namespace: fixtures
+stringData:
+  password: k8s-axi-test-db-password
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-dsn
+  namespace: fixtures
+stringData:
+  dsn: mysql://fixture-user:k8s-axi-test-dsn@db/fixture
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-conn
+  namespace: fixtures
+stringData:
+  conn: k8s-axi-test-volume-secret
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: leak-scripts
+  namespace: fixtures
+data:
+  leak-env: |
+    #!/bin/sh
+    printf '%s\n' "$DB_PASSWORD"
+  leak-b64: |
+    #!/bin/sh
+    printf '%s' "$DB_PASSWORD" | base64
+  leak-neutral: |
+    #!/bin/sh
+    printf '%s\n' "$dsn"
+  leak-file: |
+    #!/bin/sh
+    cat /etc/app-conn/conn
+  leak-token: |
+    #!/bin/sh
+    cat /var/run/secrets/kubernetes.io/serviceaccount/token
+  exit7: |
+    #!/bin/sh
+    exit 7
+  spawn-sleeper: |
+    #!/bin/sh
+    sleep 600 &
+    wait
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: fixtures
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36.1
+          command: ["sh", "-c", "sleep 3600"]
+          env:
+            - name: API_KEY
+              value: k8s-axi-test-literal-api-key
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-creds
+                  key: password
+          envFrom:
+            - secretRef:
+                name: app-dsn
+          volumeMounts:
+            - name: app-conn
+              mountPath: /etc/app-conn
+              readOnly: true
+            - name: leak-scripts
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: app-conn
+          secret:
+            secretName: app-conn
+        - name: leak-scripts
+          configMap:
+            name: leak-scripts
+            defaultMode: 0755
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo
+  namespace: fixtures
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: echo
+  template:
+    metadata:
+      labels:
+        app: echo
+    spec:
+      containers:
+        - name: echo
+          image: busybox:1.36.1
+          command:
+            - sh
+            - -c
+            - mkdir -p /www && printf 'k8s-axi fixture\\n' >/www/index.html && httpd -f -p 8080 -h /www
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: limited
+  namespace: fixtures
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: previewer
+  namespace: fixtures
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: previewer-patch
+  namespace: fixtures
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: operator
+  namespace: fixtures
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: limited-view
+  namespace: fixtures
+subjects:
+  - kind: ServiceAccount
+    name: limited
+    namespace: fixtures
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: previewer
+  namespace: fixtures
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: previewer
+  namespace: fixtures
+subjects:
+  - kind: ServiceAccount
+    name: previewer
+    namespace: fixtures
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: previewer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: previewer-patch
+  namespace: fixtures
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: previewer-patch
+  namespace: fixtures
+subjects:
+  - kind: ServiceAccount
+    name: previewer-patch
+    namespace: fixtures
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: previewer-patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: operator
+  namespace: fixtures
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/exec", "pods/portforward"]
+    verbs: ["get", "list", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: operator
+  namespace: fixtures
+subjects:
+  - kind: ServiceAccount
+    name: operator
+    namespace: fixtures
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: operator
