@@ -72,7 +72,7 @@ node=$(KUBECONFIG="$config" kubectl get nodes -o jsonpath='{.items[0].metadata.n
 export KUBECONFIG="$config" HOME="$lab/home" TMPDIR="$lab/tmp" KUBERC=off K8S_AXI_LAB_LIVE=1
 kubectl apply -f "$root/test/live/fixtures.yaml"
 kubectl create serviceaccount limited -n fixtures
-kubectl create clusterrolebinding "limited-$name" --clusterrole=view --serviceaccount=fixtures:limited
+kubectl create rolebinding "limited-$name" --clusterrole=view --serviceaccount=fixtures:limited -n fixtures
 limited_token=$(kubectl create token limited -n fixtures --duration=1h)
 kubectl config set-credentials limited --token="$limited_token" >/dev/null
 kubectl config set-context limited --cluster="kind-$name" --user=limited --namespace=fixtures >/dev/null

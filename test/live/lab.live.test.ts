@@ -150,6 +150,9 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     expect(
       run(["secrets", "-n", "fixtures", "--context", "limited"], 1).code,
     ).toBe("FORBIDDEN");
+    expect(
+      run(["pods", "-n", "default", "--context", "limited"], 1).code,
+    ).toBe("FORBIDDEN");
     expect(run(["pods", "-n", "fixtures", "--context", "ghost"], 1).code).toBe(
       "SERVER_UNREACHABLE",
     );
@@ -236,8 +239,8 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
         const encoded = Buffer.from(value).toString("base64");
         candidates.push(encoded);
         for (const representation of [value, encoded])
-          for (let i = 0; i <= representation.length - 12; i++)
-            candidates.push(representation.slice(i, i + 12));
+          for (let i = 0; i <= representation.length - 8; i++)
+            candidates.push(representation.slice(i, i + 8));
       }
       for (const candidate of candidates)
         if (candidate && output.includes(candidate))
