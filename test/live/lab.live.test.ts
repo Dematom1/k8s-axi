@@ -136,10 +136,15 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     for (const [noun, name] of [
       ["pods", "no-such-pod"],
       ["deployments", "no-such-deployment"],
+      ["secrets", "no-such-secret"],
     ])
       expect(run([noun, "view", name, "-n", "fixtures"], 1).code).toBe(
         "NOT_FOUND",
       );
+    for (const noun of ["jobs", "pvcs", "services"])
+      expect(run([noun, "view", "no-such-object", "-n", "fixtures"], 1)).toMatchObject({
+        code: "VALIDATION_ERROR",
+      });
     expect(
       run(["secrets", "-n", "fixtures", "--context", "limited"], 1).code,
     ).toBe("FORBIDDEN");
@@ -185,7 +190,24 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       "CANARY_ENV_8KSA",
       "CANARY_LOG_8KSA",
       "admin",
+      "YWRtaW4=",
+      "Q0FOQVJZX0RCX1BBU1NXT1JEXzhLU0E=",
+      "Q0FOQVJZX05FVVRSQUxfRFNOXzhLU0E=",
     ];
+    const secretObjects = spawnSync(
+      "kubectl",
+      ["get", "secrets", "-n", "fixtures", "-o", "json"],
+      { encoding: "utf8", env },
+    );
+    expect(secretObjects.status).toBe(0);
+    const secretList = JSON.parse(secretObjects.stdout) as {
+      items: { data?: Record<string, string>; metadata?: { annotations?: Record<string, string> } }[];
+    };
+    for (const secret of secretList.items) {
+      secrets.push(...Object.values(secret.data ?? {}));
+      const applied = secret.metadata?.annotations?.["kubectl.kubernetes.io/last-applied-configuration"];
+      if (applied) secrets.push(applied, Buffer.from(applied).toString("base64"));
+    }
     const credentials = [
       process.env.K8S_AXI_LIMITED_TOKEN,
       process.env.K8S_AXI_NSONLY_TOKEN,
@@ -199,7 +221,8 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     for (const value of [...secrets, ...credentials]) {
       const candidates = [value, Buffer.from(value).toString("base64")];
       if (credentials.includes(value) && value.length >= 12)
-        candidates.push(value.slice(0, 12), value.slice(-12));
+        for (let i = 0; i <= value.length - 12; i++)
+          candidates.push(value.slice(i, i + 12));
       for (const candidate of candidates)
         if (candidate && output.includes(candidate))
           throw new Error("Sensitive material appeared in CLI output");
