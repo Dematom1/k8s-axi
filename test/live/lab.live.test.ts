@@ -109,15 +109,37 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       0,
     );
 
+    const alternate = run([
+      "pods",
+      "-n",
+      "fixtures",
+      "--context",
+      "kind-k8sx-alt",
+    ], 0);
+    expect(JSON.stringify(alternate)).toContain("chatty");
+
     const missing = `axi-missing-${Date.now()}`;
-    for (const noun of ["pods", "events", "deployments", "secrets", "triage"])
+    for (const noun of [
+      "pods",
+      "events",
+      "deployments",
+      "jobs",
+      "pvcs",
+      "services",
+      "secrets",
+      "triage",
+    ])
       expect(run([noun, "-n", missing], 1).code).toBe("NAMESPACE_NOT_FOUND");
     expect(run(["triage", "--context", missing], 1).code).toBe(
       "CONTEXT_NOT_FOUND",
     );
-    expect(run(["pods", "view", "no-such-pod", "-n", "fixtures"], 1).code).toBe(
-      "NOT_FOUND",
-    );
+    for (const [noun, name] of [
+      ["pods", "no-such-pod"],
+      ["deployments", "no-such-deployment"],
+    ])
+      expect(run([noun, "view", name, "-n", "fixtures"], 1).code).toBe(
+        "NOT_FOUND",
+      );
     expect(
       run(["secrets", "-n", "fixtures", "--context", "limited"], 1).code,
     ).toBe("FORBIDDEN");
