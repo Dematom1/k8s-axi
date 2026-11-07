@@ -26,7 +26,10 @@ function validPortMapping(value: string): boolean {
   const ports = value.split(":");
   return (
     ports.length === 2 &&
-    ports.every((port) => /^\d{1,5}$/.test(port) && Number(port) >= 1 && Number(port) <= 65535)
+    ports.every(
+      (port) =>
+        /^\d{1,5}$/.test(port) && Number(port) >= 1 && Number(port) <= 65535,
+    )
   );
 }
 

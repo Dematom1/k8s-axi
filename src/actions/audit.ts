@@ -77,7 +77,12 @@ function safeDirectoryExists(path: string): boolean {
     try {
       info = lstatSync(current);
     } catch (error) {
-      if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")
+      if (
+        error !== null &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "ENOENT"
+      )
         return false;
       throw error;
     }
@@ -111,7 +116,8 @@ export function appendAudit(
       constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
     );
     try {
-      if (!fstatSync(dirFd).isDirectory()) throw new Error("invalid audit directory");
+      if (!fstatSync(dirFd).isDirectory())
+        throw new Error("invalid audit directory");
       fchmodSync(dirFd, 0o700);
     } finally {
       closeSync(dirFd);
@@ -129,7 +135,10 @@ export function appendAudit(
       }) + "\n";
     const fd = openSync(
       path,
-      constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW,
+      constants.O_WRONLY |
+        constants.O_APPEND |
+        constants.O_CREAT |
+        constants.O_NOFOLLOW,
       0o600,
     );
     let opened: ReturnType<typeof fstatSync>;
@@ -189,20 +198,61 @@ function parseRecord(value: unknown): AuditRecord {
     throw new Error("invalid audit record");
   const record = Object.fromEntries(Object.entries(value));
   const strings = ["id", "ts", "tool", "version"];
-  const numbers = ["uid", "pid", "exit", "duration_ms", "stdout_bytes", "stderr_bytes", "redactions", "scrubbed"];
-  const stringFields = ["context", "server", "namespace", "target", "argv_sha256", "cwd", "code"];
-  const outcomes = ["ok", "remote_nonzero", "timeout", "forbidden", "refused", "error", "expired", "stopped", "reaped", "exited"];
+  const numbers = [
+    "uid",
+    "pid",
+    "exit",
+    "duration_ms",
+    "stdout_bytes",
+    "stderr_bytes",
+    "redactions",
+    "scrubbed",
+  ];
+  const stringFields = [
+    "context",
+    "server",
+    "namespace",
+    "target",
+    "argv_sha256",
+    "cwd",
+    "code",
+  ];
+  const outcomes = [
+    "ok",
+    "remote_nonzero",
+    "timeout",
+    "forbidden",
+    "refused",
+    "error",
+    "expired",
+    "stopped",
+    "reaped",
+    "exited",
+  ];
   if (
     record.v !== 1 ||
     strings.some((key) => typeof record[key] !== "string") ||
     record.tool !== "k8s-axi" ||
     !Number.isFinite(Date.parse(String(record.ts))) ||
-    !(record.phase === "start" || record.phase === "end" || record.phase === "refused") ||
+    !(
+      record.phase === "start" ||
+      record.phase === "end" ||
+      record.phase === "refused"
+    ) ||
     !ACTIONS.some((action) => action === record.action) ||
-    stringFields.some((key) => key in record && typeof record[key] !== "string") ||
-    numbers.some((key) => key in record && (typeof record[key] !== "number" || !Number.isFinite(record[key]))) ||
-    ("argv" in record && (!Array.isArray(record.argv) || record.argv.some((arg) => typeof arg !== "string"))) ||
-    ("outcome" in record && !outcomes.some((outcome) => outcome === record.outcome))
+    stringFields.some(
+      (key) => key in record && typeof record[key] !== "string",
+    ) ||
+    numbers.some(
+      (key) =>
+        key in record &&
+        (typeof record[key] !== "number" || !Number.isFinite(record[key])),
+    ) ||
+    ("argv" in record &&
+      (!Array.isArray(record.argv) ||
+        record.argv.some((arg) => typeof arg !== "string"))) ||
+    ("outcome" in record &&
+      !outcomes.some((outcome) => outcome === record.outcome))
   )
     throw new Error("invalid audit record");
   return record as AuditRecord;
@@ -219,7 +269,9 @@ export function readAudit(options: {
     const row = parseRecord(JSON.parse(line) as unknown);
     if (options.action && row.action !== options.action) return;
     rows.push(row);
-    rows.sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts) || a.id.localeCompare(b.id));
+    rows.sort(
+      (a, b) => Date.parse(a.ts) - Date.parse(b.ts) || a.id.localeCompare(b.id),
+    );
     if (rows.length > options.limit) rows.shift();
   };
   const consume = (file: string) => {
@@ -227,7 +279,12 @@ export function readAudit(options: {
     try {
       fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
     } catch (error) {
-      if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")
+      if (
+        error !== null &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "ENOENT"
+      )
         return;
       throw error;
     }
@@ -239,8 +296,13 @@ export function readAudit(options: {
       while ((count = readSync(fd, chunk, 0, chunk.length, null)) > 0) {
         const data = Buffer.concat([remainder, chunk.subarray(0, count)]);
         let start = 0;
-        for (let end = data.indexOf(10); end !== -1; end = data.indexOf(10, start)) {
-          if (end - start > MAX_RECORD_BYTES) throw new Error("audit record too large");
+        for (
+          let end = data.indexOf(10);
+          end !== -1;
+          end = data.indexOf(10, start)
+        ) {
+          if (end - start > MAX_RECORD_BYTES)
+            throw new Error("audit record too large");
           const line = data.subarray(start, end).toString("utf8");
           start = end + 1;
           consumeLine(line);
@@ -262,7 +324,12 @@ export function readAudit(options: {
     try {
       entries = opendirSync(dir);
     } catch (error) {
-      if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")
+      if (
+        error !== null &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "ENOENT"
+      )
         return [];
       throw error;
     }
@@ -278,7 +345,11 @@ export function readAudit(options: {
     }
     consume(path);
   } catch {
-    throw new AxiError("audit log is unavailable or invalid", "AUDIT_UNAVAILABLE", []);
+    throw new AxiError(
+      "audit log is unavailable or invalid",
+      "AUDIT_UNAVAILABLE",
+      [],
+    );
   }
   return rows.reverse();
 }
