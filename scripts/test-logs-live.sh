@@ -2,7 +2,7 @@
 set -euo pipefail
 root=$PWD
 lab=$root/.lab-live
-lock=/tmp/k8s-axi-kind-lab.lock
+lock=${K8S_AXI_LAB_LOCK:-/tmp/k8s-axi-kind-lab.lock}
 mkdir -p "$lab/bin"
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) platform=darwin-arm64 ;;
