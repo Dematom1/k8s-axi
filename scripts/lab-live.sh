@@ -10,11 +10,11 @@ locked=0
 kind_bin="$lab/kind"
 
 cleanup() {
-  if [ "$created" -eq 1 ]; then
-    KUBECONFIG="$lab/kubeconfig" "$kind_bin" delete cluster --name "$name" >/dev/null 2>&1 || true
-  fi
-  rm -rf "$lab"
-  if [ "$locked" -eq 1 ]; then
+  if [ "$locked" -eq 1 ] && [ -f "$lock/pid" ] && [ "$(cat "$lock/pid")" = "$$" ]; then
+    if [ "$created" -eq 1 ]; then
+      KUBECONFIG="$lab/kubeconfig" "$kind_bin" delete cluster --name "$name" >/dev/null 2>&1 || true
+    fi
+    rm -rf "$lab"
     rm -f "$lock/pid"
     rmdir "$lock"
   fi

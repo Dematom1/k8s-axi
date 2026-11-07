@@ -71,6 +71,29 @@ test("audit reader includes a complete final record without newline", () => {
   }
 });
 
+test("audit reader rejects oversized records without exposing their contents", () => {
+  const state = join(root, "oversized");
+  const previous = process.env.XDG_STATE_HOME;
+  process.env.XDG_STATE_HOME = state;
+  const secret = "x".repeat(1024 * 1024 + 1);
+  try {
+    mkdirSync(dirname(auditPath()), { recursive: true });
+    writeFileSync(auditPath(), secret);
+    let error: unknown;
+    try {
+      readAudit({ limit: 1 });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({ code: "AUDIT_UNAVAILABLE" });
+    expect(String(error)).not.toContain(secret);
+  } finally {
+    if (previous === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previous;
+    rmSync(state, { recursive: true, force: true });
+  }
+});
+
 test("audit rotation keeps one generation", () => {
   mkdirSync(dirname(auditPath()), { recursive: true });
   writeFileSync(auditPath(), "x".repeat(10 * 1024 * 1024), { mode: 0o600 });

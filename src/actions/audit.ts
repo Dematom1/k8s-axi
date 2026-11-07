@@ -20,6 +20,7 @@ import { redactText } from "../redact.js";
 import { VERSION } from "../version.js";
 
 const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_RECORD_BYTES = 1024 * 1024;
 const ACTIONS = ["exec", "port-forward", "apply"] as const;
 export type AuditedAction = (typeof ACTIONS)[number];
 export type AuditPhase = "start" | "end" | "refused";
@@ -215,11 +216,14 @@ export function readAudit(options: {
         const data = Buffer.concat([remainder, chunk.subarray(0, count)]);
         let start = 0;
         for (let end = data.indexOf(10); end !== -1; end = data.indexOf(10, start)) {
+          if (end - start > MAX_RECORD_BYTES) throw new Error("audit record too large");
           const line = data.subarray(start, end).toString("utf8");
           start = end + 1;
           consumeLine(line);
         }
         remainder = data.subarray(start);
+        if (remainder.length > MAX_RECORD_BYTES)
+          throw new Error("audit record too large");
       }
       if (remainder.length) consumeLine(remainder.toString("utf8"));
     } finally {
