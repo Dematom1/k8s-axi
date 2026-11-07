@@ -41,17 +41,6 @@ export function hookStatus() {
     "settings.json",
   );
   s.claude.path = claudePath;
-  s.claude.installed =
-    existsSync(claudePath) &&
-    objects(
-      object(object(JSON.parse(readFileSync(claudePath, "utf8"))).hooks)
-        .SessionStart,
-    ).some((group) =>
-      objects(group.hooks).some((hook) => {
-        const command = object(hook).command;
-        return typeof command === "string" && command.includes("k8s-axi");
-      }),
-    );
   for (const [file, json] of [
     [s.claude.path, true],
     [s.codex.path, true],
@@ -86,6 +75,17 @@ export function hookStatus() {
       fail("CONFIG_INVALID", `cannot read or parse hook destination ${file}`);
     }
   }
+  s.claude.installed =
+    existsSync(claudePath) &&
+    objects(
+      object(object(JSON.parse(readFileSync(claudePath, "utf8"))).hooks)
+        .SessionStart,
+    ).some((group) =>
+      objects(group.hooks).some((hook) => {
+        const command = object(hook).command;
+        return typeof command === "string" && command.includes("k8s-axi");
+      }),
+    );
   const expected = `${quote(process.execPath)} ${quote(entrypoint())}`;
   const starts = (file: string) => {
     const commands = objects(
