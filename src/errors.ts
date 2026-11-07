@@ -19,6 +19,7 @@ export const CODES = [
   "NAMESPACE_UNVERIFIED",
   "PARTIAL",
   "CONFIG_INVALID",
+  "LOGS_UNAVAILABLE",
 ] as const;
 export type ErrorCode = (typeof CODES)[number];
 export function fail(
