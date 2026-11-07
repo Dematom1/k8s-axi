@@ -110,27 +110,32 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     );
 
     const output = outputs.join("\n");
-    for (const value of [
+    const secrets = [
       "CANARY_DB_PASSWORD_8KSA",
       "CANARY_API_TOKEN_8KSA",
       "CANARY_NEUTRAL_DSN_8KSA",
       "CANARY_NEUTRAL_CONN_8KSA",
       "CANARY_ENV_8KSA",
       "CANARY_LOG_8KSA",
-    ]) {
-      expect(output).not.toContain(value);
-      expect(output).not.toContain(Buffer.from(value).toString("base64"));
-    }
+      "admin",
+    ];
+    const credentials = [
+      process.env.K8S_AXI_LIMITED_TOKEN,
+      process.env.K8S_AXI_NSONLY_TOKEN,
+    ].filter((value): value is string => Boolean(value));
     const kubeconfig = readFileSync(kubeconfigPath, "utf8");
     for (const match of kubeconfig.matchAll(
-      /^\s*(?:client-key-data|token):\s*(\S+)/gm,
+      /^\s*(?:client-key-data|client-certificate-data|token|password|username):\s*(\S+)/gm,
     )) {
-      const value = match[1];
-      if (!value) continue;
-      expect(output).not.toContain(value);
-      expect(output).not.toContain(
-        Buffer.from(value, "base64").toString("utf8"),
-      );
+      if (match[1]) credentials.push(match[1]);
+    }
+    for (const value of [...secrets, ...credentials]) {
+      const candidates = [value, Buffer.from(value).toString("base64")];
+      if (credentials.includes(value) && value.length >= 12)
+        candidates.push(value.slice(0, 12), value.slice(-12));
+      for (const candidate of candidates)
+        if (candidate && output.includes(candidate))
+          throw new Error("Sensitive material appeared in CLI output");
     }
 
     const missing = `axi-missing-${Date.now()}`;
