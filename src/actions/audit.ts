@@ -7,6 +7,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  readdirSync,
   renameSync,
   statSync,
   writeSync,
@@ -97,12 +98,28 @@ export function appendAudit(
     let fd = openSync(path, "a", 0o600);
     try {
       fchmodSync(fd, 0o600);
-      if (fstatSync(fd).size + Buffer.byteLength(line) > MAX_BYTES) {
-        closeSync(fd);
-        fd = -1;
-        renameSync(path, join(dir, "audit.1.jsonl"));
-        fd = openSync(path, "a", 0o600);
-        fchmodSync(fd, 0o600);
+      const opened = fstatSync(fd);
+      if (opened.size + Buffer.byteLength(line) > MAX_BYTES) {
+        const current = statSync(path);
+        if (current.dev === opened.dev && current.ino === opened.ino) {
+          try {
+            renameSync(
+              path,
+              join(
+                dir,
+                `audit.${Date.now()}.${process.pid}.${randomUUID()}.jsonl`,
+              ),
+            );
+          } catch (error) {
+            if (
+              error === null ||
+              typeof error !== "object" ||
+              !("code" in error) ||
+              error.code !== "ENOENT"
+            )
+              throw error;
+          }
+        }
       }
       writeSync(fd, line);
     } finally {
@@ -145,16 +162,16 @@ export function readAudit(options: {
   let text: string;
   try {
     const path = auditPath();
-    const rotated = join(dirname(path), "audit.1.jsonl");
-    const maxHistoryBytes = 2 * MAX_BYTES;
-    const activeSize = existsSync(path) ? statSync(path).size : 0;
-    const rotatedSize = existsSync(rotated) ? statSync(rotated).size : 0;
-    if (activeSize + rotatedSize > maxHistoryBytes)
+    const dir = dirname(path);
+    const rotated = readdirSync(dir)
+      .filter((name) => /^audit\.(?:1|\d+\.\d+\.[0-9a-f-]+)\.jsonl$/.test(name))
+      .sort()
+      .map((name) => join(dir, name));
+    const files = [...rotated, path].filter(existsSync);
+    const totalBytes = files.reduce((total, file) => total + statSync(file).size, 0);
+    if (totalBytes > 2 * MAX_BYTES)
       throw new Error("audit history exceeds retained size");
-    text = [
-      existsSync(rotated) ? readFileSync(rotated, "utf8") : "",
-      existsSync(path) ? readFileSync(path, "utf8") : "",
-    ].join("\n");
+    text = files.map((file) => readFileSync(file, "utf8")).join("\n");
   } catch (error) {
     if (
       error !== null &&
