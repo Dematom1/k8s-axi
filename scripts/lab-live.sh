@@ -6,12 +6,13 @@ lab="$root/.lab-live"
 lock=/tmp/k8s-axi-kind-lab.lock
 name=k8s-axi-live
 created=0
+creating=0
 locked=0
 kind_bin="$lab/kind"
 
 cleanup() {
   if [ "$locked" -eq 1 ] && [ -f "$lock/pid" ] && [ "$(cat "$lock/pid")" = "$$" ]; then
-    if [ "$created" -eq 1 ]; then
+    if [ "$created" -eq 1 ] || { [ "$creating" -eq 1 ] && "$kind_bin" get clusters 2>/dev/null | grep -Fx "$name" >/dev/null; }; then
       KUBECONFIG="$lab/kubeconfig" "$kind_bin" delete cluster --name "$name" >/dev/null 2>&1 || true
     fi
     rm -rf "$lab"
@@ -41,6 +42,11 @@ export KUBECONFIG="$lab/kubeconfig"
 export K8S_AXI_KIND="$kind_bin"
 export K8S_AXI_LIVE=1
 export XDG_STATE_HOME="$lab/state"
+if "$kind_bin" get clusters | grep -Fx "$name" >/dev/null; then
+  echo "refusing to replace existing kind cluster: $name" >&2
+  exit 1
+fi
+creating=1
 "$kind_bin" create cluster --name "$name" --image kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0 --wait 120s
 created=1
 docker update --cpus=2 "${name}-control-plane" >/dev/null
