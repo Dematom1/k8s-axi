@@ -62,7 +62,7 @@ export function writeClaudeSettings(value: Record<string, unknown>): void {
       readFileSync(file, "utf8") === `${JSON.stringify(value, null, 2)}\n`
     )
       return;
-    mkdirSync(join(file, ".."), { recursive: true });
+    mkdirSync(join(file, ".."), { recursive: true, mode: 0o700 });
     const mode = existsSync(file) ? statSync(file).mode & 0o777 : 0o600;
     writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode });
     chmodSync(temporary, mode);

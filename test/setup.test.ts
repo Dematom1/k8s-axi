@@ -199,8 +199,8 @@ test("Claude hooks use CLAUDE_CONFIG_DIR settings", () => {
         .filter(
           (hook: { command: string }) =>
             hook.command === "k8s-axi-ctx" ||
-            hook.command.endsWith("/k8s-axi-ctx.js'") ||
-            hook.command.endsWith("/k8s-axi-ctx.js"),
+            (hook.command.includes("/k8s-axi/") &&
+              hook.command.includes("/k8s-axi-ctx.js")),
         ).length;
     const defaultSettings = join(l.env.HOME, ".claude/settings.json");
     expect(count(settings)).toBe(1);
@@ -241,7 +241,21 @@ test("setup creates a missing custom Claude settings directory", () => {
     const value = JSON.parse(readFileSync(settings, "utf8"));
     expect(value.hooks.SessionStart).toHaveLength(1);
     expect(value.hooks.SessionEnd).toHaveLength(1);
+    expect(statSync(configDir).mode & 0o777).toBe(0o700);
     expect(statSync(settings).mode & 0o777).toBe(0o600);
+    expect(
+      cli(["setup", "status"], { ...l.env, CLAUDE_CONFIG_DIR: configDir })
+        .stdout,
+    ).toContain("sessionEnd: installed");
+    expect(
+      cli(["setup", "uninstall"], { ...l.env, CLAUDE_CONFIG_DIR: configDir })
+        .status,
+    ).toBe(0);
+    expect(JSON.parse(readFileSync(settings, "utf8"))).toEqual({});
+    expect(
+      cli(["setup", "status"], { ...l.env, CLAUDE_CONFIG_DIR: configDir })
+        .stdout,
+    ).toContain("sessionEnd: absent");
   } finally {
     l.clean();
   }
