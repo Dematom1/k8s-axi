@@ -143,7 +143,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       );
     for (const noun of ["jobs", "pvcs", "services"])
       expect(
-        run([noun, "view", "no-such-object", "-n", "fixtures"], 1),
+        run([noun, "view", "no-such-object", "-n", "fixtures"], 2),
       ).toMatchObject({
         code: "VALIDATION_ERROR",
         help: [`Run \`k8s-axi ${noun} --help\``],
