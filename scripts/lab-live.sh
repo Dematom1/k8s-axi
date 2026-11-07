@@ -41,8 +41,8 @@ export KUBECONFIG="$lab/kubeconfig"
 export K8S_AXI_KIND="$kind_bin"
 export K8S_AXI_LIVE=1
 export XDG_STATE_HOME="$lab/state"
-created=1
 "$kind_bin" create cluster --name "$name" --image kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0 --wait 120s
+created=1
 docker update --cpus=2 "${name}-control-plane" >/dev/null
 "$kind_bin" export kubeconfig --name "$name" --kubeconfig "$KUBECONFIG"
 kubectl --context "kind-$name" apply -f "$root/test/live/fixtures.yaml"
