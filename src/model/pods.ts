@@ -62,12 +62,14 @@ export function classifyPod(pod: Obj, now = Date.now()): PodHealth {
     };
   if (["Failed", "Unknown"].includes(phase))
     return { state: "problem", reason: text(s.reason, phase) };
+  const reason = waiting[0] ?? (phase === "Running" ? "NotReady" : phase);
+  if (statuses.some((c) => c.ready === false && number(c.restartCount) > 0))
+    return { state: "problem", reason };
   if (
     phase === "Running" &&
     objects(s.conditions).some((c) => c.type === "Ready" && c.status === "True")
   )
     return { state: "running" };
-  const reason = waiting[0] ?? (phase === "Running" ? "NotReady" : phase);
   const hasRestarts = statuses.some((c) => number(c.restartCount) > 0);
   if (hasRestarts) return { state: "problem", reason };
   const initializing = waiting.some((x) =>

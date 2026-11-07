@@ -73,6 +73,18 @@ test("phase, readiness, startup, init and termination", () => {
       ...recent,
       status: {
         ...recent.status,
+        conditions: [{ type: "Ready", status: "True" }],
+        containerStatuses: [
+          { ready: false, restartCount: 1, state: { running: {} } },
+        ],
+      },
+    }),
+  ).toMatchObject({ state: "problem", reason: "NotReady" });
+  expect(
+    classifyPod({
+      ...recent,
+      status: {
+        ...recent.status,
         containerStatuses: [
           {
             ready: false,
