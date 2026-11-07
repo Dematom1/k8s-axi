@@ -27,7 +27,8 @@ export async function readServices(
 }
 export async function servicesCommand(p: Parsed): Promise<string> {
   validateFields(serviceSpec, p);
-  if (p.action === "view") usage("services does not support object views", "services");
+  if (p.action === "view")
+    usage("services does not support object views", "services");
   const d = deadline(p.timeout),
     t = await resolveTarget(p.context, d),
     s = resolveScope(p, t);
