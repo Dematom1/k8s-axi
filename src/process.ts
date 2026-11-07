@@ -46,6 +46,15 @@ export async function runProcess(
           // The process group has already exited.
         }
     };
+    const groupExists = () => {
+      if (!child.pid) return false;
+      try {
+        process.kill(-child.pid, 0);
+        return true;
+      } catch (error) {
+        return error instanceof Error && "code" in error && error.code !== "ESRCH";
+      }
+    };
     const timer = setTimeout(() => {
       timedOut = true;
       terminate();
@@ -84,6 +93,10 @@ export async function runProcess(
     child.once("close", (exit, signal) => {
       clearTimeout(timer);
       childClosed = true;
+      if (terminating && !groupExists()) {
+        if (escalationTimer) clearTimeout(escalationTimer);
+        escalationComplete = true;
+      }
       result = {
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),

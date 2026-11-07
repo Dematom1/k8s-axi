@@ -262,7 +262,8 @@ export function readAudit(options: {
   limit: number;
   action?: AuditedAction;
 }): AuditRecord[] {
-  if (options.limit <= 0) return [];
+  if (options.limit < 0) throw new RangeError("audit limit cannot be negative");
+  if (options.limit === 0) return [];
   const rows: AuditRecord[] = [];
   const consumeLine = (line: string) => {
     if (!line) return;

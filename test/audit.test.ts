@@ -59,6 +59,11 @@ test("audit log is private, redacts credentials, and reads newest records", asyn
   ]);
 });
 
+test("audit reader accepts zero limit and rejects negative limits", () => {
+  expect(readAudit({ limit: 0 })).toEqual([]);
+  expect(() => readAudit({ limit: -1 })).toThrow(RangeError);
+});
+
 test("audit command returns empty history before first write", async () => {
   const state = join(root, "fresh");
   const previous = process.env.XDG_STATE_HOME;
