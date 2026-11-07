@@ -4,11 +4,14 @@ root=$PWD
 lab=$root/.lab-live/run-$$-$RANDOM
 mkdir -p "$lab/bin"
 name=k8s-axi-lab
+lock=$root/.lab-live/cluster.lock
+owned_lock=0
 owned_cluster=0
 create_pid=
 cleanup() {
   if [[ -n $create_pid ]] && wait "$create_pid"; then owned_cluster=1; fi
   if (( owned_cluster )); then kind delete cluster --name "$name" >/dev/null 2>&1 || true; fi
+  if (( owned_lock )); then rmdir "$lock" 2>/dev/null || true; fi
   rm -rf "$lab"
   rmdir "$root/.lab-live" 2>/dev/null || true
 }
@@ -33,6 +36,11 @@ curl -fsSLo "$lab/kubectl.sha256" "$kubectl_url.sha256"
 chmod +x "$lab/bin/kind" "$lab/bin/kubectl"
 export PATH="$lab/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 start=$SECONDS
+while ! mkdir "$lock" 2>/dev/null; do
+  (( SECONDS - start < 1200 )) || { echo 'timed out waiting for kind cluster lock' >&2; exit 1; }
+  sleep 1
+done
+owned_lock=1
 while (( SECONDS - start < 1200 )); do
   if ! kind get clusters | grep -Fxq "$name"; then
     kind create cluster --name "$name" --kubeconfig "$KUBECONFIG" >"$lab/kind-create.log" 2>&1 &

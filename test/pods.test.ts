@@ -105,6 +105,7 @@ test("phase, readiness, startup, init and termination", () => {
   expect(classifyPod(recoveredPod("2024-12-31T23:49:59Z"), now)).toEqual({
     state: "running",
   });
+  expect(classifyPod(recoveredPod(""), now)).toEqual({ state: "running" });
   expect(
     classifyPod({
       ...recent,
