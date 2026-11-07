@@ -179,9 +179,15 @@ test("Claude hooks use CLAUDE_CONFIG_DIR settings", () => {
   const settings = join(configDir, "settings.json");
   mkdirSync(configDir);
   const userHook = { type: "command", command: "echo k8s-axi" };
+  const unrelatedHook = {
+    type: "command",
+    command: "/opt/other/k8s-axi-ctx.js",
+  };
   writeFileSync(
     settings,
-    JSON.stringify({ hooks: { SessionStart: [{ hooks: [userHook] }] } }),
+    JSON.stringify({
+      hooks: { SessionStart: [{ hooks: [userHook, unrelatedHook] }] },
+    }),
   );
   const env = { ...l.env, CLAUDE_CONFIG_DIR: configDir };
   try {
@@ -202,6 +208,9 @@ test("Claude hooks use CLAUDE_CONFIG_DIR settings", () => {
       1,
     );
     expect(readFileSync(settings, "utf8")).toContain("echo k8s-axi");
+    expect(readFileSync(settings, "utf8")).toContain(
+      "/opt/other/k8s-axi-ctx.js",
+    );
     expect(cli(["setup", "status"], env).stdout).toContain(
       "sessionEnd: installed",
     );
@@ -209,6 +218,9 @@ test("Claude hooks use CLAUDE_CONFIG_DIR settings", () => {
     expect(count(settings)).toBe(0);
     expect(count(defaultSettings)).toBe(0);
     expect(readFileSync(settings, "utf8")).toContain("echo k8s-axi");
+    expect(readFileSync(settings, "utf8")).toContain(
+      "/opt/other/k8s-axi-ctx.js",
+    );
     expect(cli(["setup", "status"], env).stdout).toContain(
       "sessionEnd: absent",
     );

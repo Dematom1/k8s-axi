@@ -36,11 +36,14 @@ function quote(s: string): string {
 }
 function isManagedClaudeStartHook(hook: unknown): boolean {
   const command = object(hook).command;
+  if (typeof command !== "string") return false;
+  const expected = `${quote(process.execPath)} ${quote(entrypoint())}`;
   return (
+    command === expected ||
     command === "k8s-axi-ctx" ||
-    (typeof command === "string" &&
-      (command.endsWith("/k8s-axi-ctx.js'") ||
-        command.endsWith("/k8s-axi-ctx.js")))
+    /(?:^|\/)node_modules\/k8s-axi\/(?:dist\/)?bin\/k8s-axi-ctx\.js['"]?$/.test(
+      command,
+    )
   );
 }
 function updateClaudeStartHook(
