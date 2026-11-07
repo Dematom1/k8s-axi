@@ -11,18 +11,20 @@ import {
 import { redactText } from "./redact.js";
 import { OUTPUT_CAP, runProcess } from "./process.js";
 export { OUTPUT_CAP } from "./process.js";
-export function mapKubectlFailure(stderr: string): AxiError {
+export function mapKubectlFailure(
+  stderr: string,
+  operation?: Read["op"],
+): AxiError {
+  if (
+    operation === "logs" &&
+    /unable to retrieve container logs for|previous terminated container.*not found|previous.*not available/i.test(
+      stderr,
+    )
+  )
+    return new AxiError("container logs are unavailable", "LOGS_UNAVAILABLE", [
+      "Run `k8s-axi pods view <pod>` or check events for the pod",
+    ]);
   const cases: [RegExp, ErrorCode, string][] = [
-    [
-      /unable to retrieve container logs for/i,
-      "LOGS_UNAVAILABLE",
-      "container logs are unavailable",
-    ],
-    [
-      /previous terminated container.*not found|previous.*not available/i,
-      "LOGS_UNAVAILABLE",
-      "container logs are unavailable",
-    ],
     [
       /context.*(?:was not found|not found)/i,
       "CONTEXT_NOT_FOUND",
@@ -115,7 +117,7 @@ export async function kubectl(
       "OUTPUT_TOO_LARGE",
     );
   if (result.exit !== 0)
-    throw mapKubectlFailure(redactText(result.stderr).text);
+    throw mapKubectlFailure(redactText(result.stderr).text, read.op);
   return result.stdout;
 }
 export type Obj = Record<string, unknown>;
