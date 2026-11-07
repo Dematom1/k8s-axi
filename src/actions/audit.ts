@@ -6,7 +6,7 @@ import {
   fstatSync,
   mkdirSync,
   openSync,
-  readFileSync,
+  readSync,
   readdirSync,
   renameSync,
   statSync,
@@ -189,28 +189,38 @@ export function readAudit(options: {
       path,
     ];
     for (const file of files) {
-      let text: string;
+      let fd: number;
       try {
-        text = readFileSync(file, "utf8");
+        fd = openSync(file, "r");
       } catch (error) {
         if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")
           continue;
         throw error;
       }
-      const lines = text.split("\n");
-      if (!text.endsWith("\n")) lines.pop();
-      for (const line of lines) {
-        if (!line) continue;
-        const row = parseRecord(JSON.parse(line) as unknown);
-        if (options.action && row.action !== options.action) continue;
-        rows.push(row);
-        rows.sort((a, b) => a.ts.localeCompare(b.ts) || a.id.localeCompare(b.id));
-        if (rows.length > options.limit) rows.shift();
+      try {
+        const chunk = Buffer.alloc(64 * 1024);
+        let remainder = Buffer.alloc(0);
+        let count: number;
+        while ((count = readSync(fd, chunk, 0, chunk.length, null)) > 0) {
+          const data = Buffer.concat([remainder, chunk.subarray(0, count)]);
+          let start = 0;
+          for (let end = data.indexOf(10); end !== -1; end = data.indexOf(10, start)) {
+            const line = data.subarray(start, end).toString("utf8");
+            start = end + 1;
+            if (!line) continue;
+            const row = parseRecord(JSON.parse(line) as unknown);
+            if (options.action && row.action !== options.action) continue;
+            rows.push(row);
+            rows.sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts) || a.id.localeCompare(b.id));
+            if (rows.length > options.limit) rows.shift();
+          }
+          remainder = data.subarray(start);
+        }
+      } finally {
+        closeSync(fd);
       }
     }
-  } catch (error) {
-    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")
-      return [];
+  } catch {
     throw new AxiError("audit log is unavailable or invalid", "AUDIT_UNAVAILABLE", []);
   }
   return rows.reverse();
