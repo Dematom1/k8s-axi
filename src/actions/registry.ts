@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { AxiError } from "axi-sdk-js";
+import { validateResourceName } from "../args.js";
 import type { Target } from "../registry.js";
 
 export type Action =
@@ -12,19 +13,30 @@ export type Action =
   | { kind: "port-forward"; target: string; ports: readonly string[] }
   | { kind: "apply"; manifest: string };
 
-const dns = (value: string) =>
-  value.length <= 253 &&
-  value
-    .split(".")
-    .every((part) => /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(part));
+function validResourceName(value: string): boolean {
+  try {
+    validateResourceName(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function validPortMapping(value: string): boolean {
+  const ports = value.split(":");
+  return (
+    ports.length === 2 &&
+    ports.every((port) => /^\d{1,5}$/.test(port) && Number(port) >= 1 && Number(port) <= 65535)
+  );
+}
 
 export function argvForAction(action: Action, target: Target): string[] {
   const base = [`--context=${target.context}`];
   switch (action.kind) {
     case "exec":
       if (
-        !dns(action.target) ||
-        !dns(action.container) ||
+        !validResourceName(action.target) ||
+        !validResourceName(action.container) ||
         !action.command.length
       )
         throw new Error("invalid exec action");
@@ -41,9 +53,9 @@ export function argvForAction(action: Action, target: Target): string[] {
       ];
     case "port-forward":
       if (
-        !dns(action.target) ||
+        !validResourceName(action.target) ||
         action.ports.length !== 1 ||
-        !/^\d{1,5}:\d{1,5}$/.test(action.ports[0] ?? "")
+        !validPortMapping(action.ports[0] ?? "")
       )
         throw new Error("invalid port-forward action");
       return [

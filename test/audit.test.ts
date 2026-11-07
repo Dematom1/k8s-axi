@@ -97,6 +97,22 @@ test("audit write failures fail closed", () => {
   ).toThrow(expect.objectContaining({ code: "AUDIT_UNAVAILABLE" }));
 });
 
+test("action inputs reject invalid DNS labels and ports", () => {
+  const target = {
+    context: "production" as Target["context"],
+    server: "https://cluster.example",
+    defaultNamespace: validateNamespace("apps"),
+    source: "flag",
+  } satisfies Target;
+  for (const action of [
+    { kind: "exec", target: `${"a".repeat(64)}`, container: "app", command: ["true"] },
+    { kind: "exec", target: "pod", container: `${"a".repeat(64)}`, command: ["true"] },
+    { kind: "port-forward", target: "pod", ports: ["0:80"] },
+    { kind: "port-forward", target: "pod", ports: ["80:70000"] },
+  ] as const)
+    expect(() => argvForAction(action, target)).toThrow();
+});
+
 test("execute requires explicit context and namespace", () => {
   expect(() =>
     requireExecuteTarget({ execute: true, namespace: "default" }),
