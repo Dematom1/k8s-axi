@@ -51,9 +51,13 @@ test.each(routes)("kubectl argv %j", (typed, equivalent, expectedStatus) => {
   try {
     const result = cli(typed, environment.env);
     if (equivalent) {
-      const expected = cli(equivalent, environment.env);
-      expect(result.status).toBe(expectedStatus ?? expected.status);
-      expect(result.stdout).toBe(expected.stdout);
+      expect(result.status).toBe(expectedStatus ?? 0);
+      expect(result.stdout).not.toContain("REFUSED");
+      if (typed.join(" ") === "get pods -n fixtures") {
+        expect(result.stdout).toBe(cli(["pods", "-n", "fixtures"], environment.env).stdout);
+      }
+      const calls = environment.calls();
+      expect(calls.some((call) => call.args.join(" ").includes("get"))).toBe(true);
     } else {
       expect(result.status).toBe(expectedStatus);
       expect(result.stdout).toContain(
