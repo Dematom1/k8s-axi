@@ -8,7 +8,6 @@ import {
   openSync,
   readFileSync,
   renameSync,
-  rmdirSync,
   statSync,
   writeSync,
 } from "node:fs";
@@ -84,36 +83,30 @@ export function appendAudit(
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     chmodSync(dir, 0o700);
-    const lock = `${path}.lock`;
-    mkdirSync(lock, { mode: 0o700 });
+    const safe = Object.fromEntries(
+      Object.entries(record).map(([key, value]) => [key, safeValue(value)]),
+    );
+    const line =
+      JSON.stringify({
+        ...safe,
+        v: 1,
+        ts: new Date().toISOString(),
+        tool: "k8s-axi",
+        version: VERSION,
+      }) + "\n";
+    let fd = openSync(path, "a", 0o600);
     try {
-      const safe = Object.fromEntries(
-        Object.entries(record).map(([key, value]) => [key, safeValue(value)]),
-      );
-      const line =
-        JSON.stringify({
-          ...safe,
-          v: 1,
-          ts: new Date().toISOString(),
-          tool: "k8s-axi",
-          version: VERSION,
-        }) + "\n";
-      let fd = openSync(path, "a", 0o600);
-      try {
+      fchmodSync(fd, 0o600);
+      if (fstatSync(fd).size + Buffer.byteLength(line) > MAX_BYTES) {
+        closeSync(fd);
+        fd = -1;
+        renameSync(path, join(dir, "audit.1.jsonl"));
+        fd = openSync(path, "a", 0o600);
         fchmodSync(fd, 0o600);
-        if (fstatSync(fd).size + Buffer.byteLength(line) > MAX_BYTES) {
-          closeSync(fd);
-          fd = -1;
-          renameSync(path, join(dir, "audit.1.jsonl"));
-          fd = openSync(path, "a", 0o600);
-          fchmodSync(fd, 0o600);
-        }
-        writeSync(fd, line);
-      } finally {
-        if (fd >= 0) closeSync(fd);
       }
+      writeSync(fd, line);
     } finally {
-      rmdirSync(lock);
+      if (fd >= 0) closeSync(fd);
     }
   } catch {
     throw new AxiError("audit log unavailable", "AUDIT_UNAVAILABLE", []);
