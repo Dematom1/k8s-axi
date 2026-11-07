@@ -52,12 +52,114 @@ for (const reason of [
   );
 test("phase, readiness, startup, init and termination", () => {
   expect(classifyPod(pod).state).toBe("problem");
+  const recent = {
+    ...pod,
+    metadata: { ...pod.metadata, creationTimestamp: new Date().toISOString() },
+  };
+  expect(classifyPod(recent).state).toBe("problem");
   expect(
     classifyPod({
-      ...pod,
-      metadata: {
-        ...pod.metadata,
-        creationTimestamp: new Date().toISOString(),
+      ...recent,
+      status: {
+        ...recent.status,
+        containerStatuses: [
+          { ready: false, restartCount: 1, state: { running: {} } },
+        ],
+      },
+    }),
+  ).toMatchObject({ state: "problem", reason: "NotReady" });
+  expect(
+    classifyPod({
+      ...recent,
+      status: {
+        ...recent.status,
+        conditions: [{ type: "Ready", status: "True" }],
+        containerStatuses: [
+          { ready: false, restartCount: 1, state: { running: {} } },
+        ],
+      },
+    }),
+  ).toMatchObject({ state: "problem", reason: "NotReady" });
+  const now = Date.parse("2025-01-01T00:00:00Z");
+  const recoveredPod = (finishedAt: string) => ({
+    ...recent,
+    status: {
+      ...recent.status,
+      conditions: [{ type: "Ready", status: "True" }],
+      containerStatuses: [
+        {
+          ready: true,
+          restartCount: 1,
+          lastState: {
+            terminated: { reason: "Error", exitCode: 7, finishedAt },
+          },
+          state: { running: { startedAt: old } },
+        },
+      ],
+    },
+  });
+  expect(classifyPod(recoveredPod("2024-12-31T23:55:00Z"), now)).toMatchObject({
+    state: "problem",
+    reason: "recovered after Error (exit 7)",
+  });
+  expect(classifyPod(recoveredPod("2024-12-31T23:49:59Z"), now)).toEqual({
+    state: "running",
+  });
+  expect(classifyPod(recoveredPod(""), now)).toEqual({ state: "running" });
+  expect(
+    classifyPod({
+      ...recent,
+      status: {
+        ...recent.status,
+        containerStatuses: [
+          {
+            ready: false,
+            restartCount: 1,
+            lastState: { terminated: { reason: "Error", exitCode: 7 } },
+            state: { running: {} },
+          },
+        ],
+      },
+    }),
+  ).toMatchObject({ state: "problem", reason: "Error (7)" });
+  expect(
+    classifyPod({
+      ...recent,
+      status: {
+        ...recent.status,
+        containerStatuses: [
+          { ready: false, restartCount: 0, state: { running: {} } },
+        ],
+      },
+    }),
+  ).toMatchObject({ state: "problem", reason: "NotReady" });
+  expect(
+    classifyPod({
+      ...recent,
+      status: {
+        ...recent.status,
+        containerStatuses: [
+          {
+            ready: false,
+            restartCount: 0,
+            state: { terminated: { reason: "OOMKilled", exitCode: 137 } },
+          },
+        ],
+      },
+    }),
+  ).toMatchObject({ state: "problem", reason: "OOMKilled (137)" });
+  expect(
+    classifyPod({
+      ...recent,
+      status: {
+        ...recent.status,
+        containerStatuses: [
+          {
+            ready: false,
+            restartCount: 0,
+            state: { waiting: { reason: "ContainerCreating" } },
+          },
+        ],
       },
     }).state,
   ).toBe("starting");

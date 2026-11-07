@@ -36,27 +36,64 @@ export function classifyPod(pod: Obj, now = Date.now()): PodHealth {
       number(spec.terminationGracePeriodSeconds, 30) + 60
   )
     return { state: "problem", reason: "StuckTerminating" };
-  const waiting = [
+  const statuses = [
     ...objects(s.initContainerStatuses),
     ...objects(s.containerStatuses),
-  ]
+  ];
+  const waiting = statuses
     .map((c) => text(object(object(c.state).waiting).reason))
     .filter(Boolean);
   const failure = waiting.find(
     (x) => !["ContainerCreating", "PodInitializing"].includes(x),
   );
   if (failure) return { state: "problem", reason: failure };
+  const terminated = statuses
+    .flatMap((c) => {
+      const current = object(object(c.state).terminated);
+      const last = object(object(c.lastState).terminated);
+      const runningReady =
+        c.ready === true &&
+        Object.keys(object(object(c.state).running)).length > 0;
+      const finishedAt = text(last.finishedAt);
+      const recentLast =
+        finishedAt !== "" && elapsed(finishedAt, now) <= 10 * 60;
+      return [
+        { state: current, recovered: false },
+        {
+          state: runningReady && !recentLast ? {} : last,
+          recovered: runningReady,
+        },
+      ];
+    })
+    .find(
+      ({ state }) =>
+        Object.keys(state).length > 0 && number(state.exitCode) !== 0,
+    );
+  if (terminated)
+    return {
+      state: "problem",
+      reason: terminated.recovered
+        ? `recovered after ${text(terminated.state.reason, "Error")} (exit ${number(terminated.state.exitCode)})`
+        : `${text(terminated.state.reason, "Error")} (${number(terminated.state.exitCode)})`,
+    };
   if (["Failed", "Unknown"].includes(phase))
     return { state: "problem", reason: text(s.reason, phase) };
+  const reason = waiting[0] ?? (phase === "Running" ? "NotReady" : phase);
+  if (statuses.some((c) => c.ready === false && number(c.restartCount) > 0))
+    return { state: "problem", reason };
   if (
     phase === "Running" &&
     objects(s.conditions).some((c) => c.type === "Ready" && c.status === "True")
   )
     return { state: "running" };
-  const reason = waiting[0] ?? (phase === "Running" ? "NotReady" : phase);
-  return elapsed(text(meta.creationTimestamp), now) > 120
-    ? { state: "problem", reason }
-    : { state: "starting", reason };
+  const hasRestarts = statuses.some((c) => number(c.restartCount) > 0);
+  if (hasRestarts) return { state: "problem", reason };
+  const initializing = waiting.some((x) =>
+    ["ContainerCreating", "PodInitializing"].includes(x),
+  );
+  return initializing && elapsed(text(meta.creationTimestamp), now) <= 120
+    ? { state: "starting", reason }
+    : { state: "problem", reason };
 }
 export function owner(raw: Obj): string {
   return (
