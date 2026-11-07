@@ -173,6 +173,91 @@ for (const dir of [".claude", ".codex", ".config", "all"])
         l.clean();
       }
     });
+test("Claude hooks use CLAUDE_CONFIG_DIR settings", () => {
+  const l = lab();
+  const configDir = join(l.dir, "custom-claude");
+  const settings = join(configDir, "settings.json");
+  mkdirSync(configDir);
+  const userHook = { type: "command", command: "echo k8s-axi" };
+  const unrelatedHook = {
+    type: "command",
+    command: "/opt/other/k8s-axi-ctx.js",
+  };
+  writeFileSync(
+    settings,
+    JSON.stringify({
+      hooks: { SessionStart: [{ hooks: [userHook, unrelatedHook] }] },
+    }),
+  );
+  const env = { ...l.env, CLAUDE_CONFIG_DIR: configDir };
+  try {
+    const installed = cli(["setup", "hooks"], env);
+    expect(installed.status, installed.stdout).toBe(0);
+    const managedCommand = `'${process.execPath.replaceAll("'", "'\\''")}' '${resolve(
+      process.env.K8S_AXI_TEST_PACKAGE ?? ".",
+      "dist/bin/k8s-axi-ctx.js",
+    ).replaceAll("'", "'\\''")}'`;
+    const count = (file: string) =>
+      (JSON.parse(readFileSync(file, "utf8")).hooks?.SessionStart ?? [])
+        .flatMap((group: { hooks: { command: string }[] }) => group.hooks)
+        .filter((hook: { command: string }) => hook.command === managedCommand)
+        .length;
+    const defaultSettings = join(l.env.HOME, ".claude/settings.json");
+    expect(count(settings)).toBe(1);
+    expect(count(defaultSettings)).toBe(0);
+    expect(readFileSync(settings, "utf8")).toContain("echo k8s-axi");
+    expect(readFileSync(settings, "utf8")).toContain(
+      "/opt/other/k8s-axi-ctx.js",
+    );
+    expect(cli(["setup", "status"], env).stdout).toContain(
+      "sessionEnd: installed",
+    );
+    expect(cli(["setup", "uninstall"], env).status).toBe(0);
+    expect(count(settings)).toBe(0);
+    expect(count(defaultSettings)).toBe(0);
+    expect(readFileSync(settings, "utf8")).toContain("echo k8s-axi");
+    expect(readFileSync(settings, "utf8")).toContain(
+      "/opt/other/k8s-axi-ctx.js",
+    );
+    expect(cli(["setup", "status"], env).stdout).toContain(
+      "sessionEnd: absent",
+    );
+  } finally {
+    l.clean();
+  }
+});
+test("setup creates a missing custom Claude settings directory", () => {
+  const l = lab();
+  const configDir = join(l.dir, "missing-claude");
+  const settings = join(configDir, "settings.json");
+  try {
+    const result = cli(["setup", "hooks"], {
+      ...l.env,
+      CLAUDE_CONFIG_DIR: configDir,
+    });
+    expect(result.status, result.stdout).toBe(0);
+    const value = JSON.parse(readFileSync(settings, "utf8"));
+    expect(value.hooks.SessionStart).toHaveLength(1);
+    expect(value.hooks.SessionEnd).toHaveLength(1);
+    expect(statSync(configDir).mode & 0o777).toBe(0o700);
+    expect(statSync(settings).mode & 0o777).toBe(0o600);
+    expect(
+      cli(["setup", "status"], { ...l.env, CLAUDE_CONFIG_DIR: configDir })
+        .stdout,
+    ).toContain("sessionEnd: installed");
+    expect(
+      cli(["setup", "uninstall"], { ...l.env, CLAUDE_CONFIG_DIR: configDir })
+        .status,
+    ).toBe(0);
+    expect(JSON.parse(readFileSync(settings, "utf8"))).toEqual({});
+    expect(
+      cli(["setup", "status"], { ...l.env, CLAUDE_CONFIG_DIR: configDir })
+        .stdout,
+    ).toContain("sessionEnd: absent");
+  } finally {
+    l.clean();
+  }
+});
 test("invalid nested settings fail, ctx missing kubectl remains harmless", () => {
   const l = lab();
   try {

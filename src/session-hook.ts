@@ -13,7 +13,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { AxiError } from "axi-sdk-js";
 
-const path = () => join(homedir(), ".claude", "settings.json");
+const path = () =>
+  join(
+    process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"),
+    "settings.json",
+  );
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -49,7 +53,7 @@ function settings(): Record<string, unknown> {
   return value;
 }
 
-function writeSettings(value: Record<string, unknown>): void {
+export function writeClaudeSettings(value: Record<string, unknown>): void {
   const file = path();
   const temporary = `${file}.${randomUUID()}.tmp`;
   try {
@@ -58,7 +62,7 @@ function writeSettings(value: Record<string, unknown>): void {
       readFileSync(file, "utf8") === `${JSON.stringify(value, null, 2)}\n`
     )
       return;
-    mkdirSync(join(file, ".."), { recursive: true });
+    mkdirSync(join(file, ".."), { recursive: true, mode: 0o700 });
     const mode = existsSync(file) ? statSync(file).mode & 0o777 : 0o600;
     writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode });
     chmodSync(temporary, mode);
@@ -102,7 +106,7 @@ export function installSessionEndHook(entrypoint: string): void {
     ],
   });
   hooks.SessionEnd = next;
-  writeSettings(value);
+  writeClaudeSettings(value);
 }
 
 export function sessionEndHookStatus(): boolean {
@@ -137,7 +141,7 @@ export function uninstallSessionEndHook(): boolean {
   if (next.length) hooks.SessionEnd = next;
   else delete hooks.SessionEnd;
   if (Object.keys(hooks).length === 0) delete value.hooks;
-  writeSettings(value);
+  writeClaudeSettings(value);
   if (sessionEndHookStatus())
     throw new AxiError(
       `SessionEnd hook remains in ${path()}`,
