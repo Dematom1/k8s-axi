@@ -147,6 +147,10 @@ test("transport is the only subprocess boundary in shipped source", () => {
     );
   }
   for (const file of walk(root))
-    if (file.endsWith(".js") && !file.endsWith("/kubectl.js"))
+    if (
+      file.endsWith(".js") &&
+      !file.endsWith("/kubectl.js") &&
+      !file.endsWith("/process.js")
+    )
       expect(readFileSync(file, "utf8")).not.toMatch(/(?:node:)?child_process/);
 });

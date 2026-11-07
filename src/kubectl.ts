@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { AxiError } from "axi-sdk-js";
 import { fail, type ErrorCode } from "./errors.js";
 import {
@@ -10,7 +9,8 @@ import {
   type Deadline,
 } from "./registry.js";
 import { redactText } from "./redact.js";
-export const OUTPUT_CAP = 128 * 1024 * 1024;
+import { OUTPUT_CAP, runProcess } from "./process.js";
+export { OUTPUT_CAP } from "./process.js";
 export function mapKubectlFailure(stderr: string): AxiError {
   const cases: [RegExp, ErrorCode, string][] = [
     [
@@ -80,85 +80,36 @@ export async function kubectl(
   if (budget <= 0) fail("TIMEOUT", "overall read deadline exceeded");
   const argv = argvFor(read, target, d);
   assertSafe(argv);
-  return new Promise((resolve, reject) => {
-    const child = spawn("kubectl", argv, {
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: true,
-      env: { ...process.env, KUBERC: "off" },
-    });
-    let done = false,
-      bytes = 0;
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    const kill = (signal: NodeJS.Signals) => {
-      if (child.pid)
-        try {
-          process.kill(-child.pid, signal);
-        } catch {
-          /* Already exited. */
-        }
-    };
-    const finish = (error?: AxiError) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      child.stdout.destroy();
-      child.stderr.destroy();
-      if (error) reject(error);
-      else resolve(Buffer.concat(stdout).toString("utf8"));
-    };
-    const terminate = (error: AxiError) => {
-      kill("SIGTERM");
-      setTimeout(() => kill("SIGKILL"), 2000);
-      finish(error);
-    };
-    const timer = setTimeout(
-      () =>
-        terminate(
-          new AxiError("the cluster read timed out", "TIMEOUT", [
-            "Retry with --timeout <seconds>",
-          ]),
-        ),
-      budget,
+  let result;
+  try {
+    result = await runProcess("kubectl", argv, budget, cap);
+  } catch (error) {
+    const code =
+      error instanceof Error &&
+      "code" in error &&
+      typeof error.code === "string"
+        ? error.code
+        : undefined;
+    throw new AxiError(
+      code === "ENOENT"
+        ? "kubectl is not installed"
+        : "could not start the cluster reader",
+      code === "ENOENT" ? "KUBECTL_NOT_INSTALLED" : "UPSTREAM_ERROR",
+      ["Install kubectl, then run `k8s-axi ctx`"],
     );
-    for (const [stream, chunks] of [
-      [child.stdout, stdout],
-      [child.stderr, stderr],
-    ] as const)
-      stream.on("data", (b: Buffer) => {
-        if (done) return;
-        bytes += b.length;
-        if (bytes > cap)
-          terminate(
-            new AxiError(
-              "read output exceeds 128 MiB; narrow the namespace or selector",
-              "OUTPUT_TOO_LARGE",
-            ),
-          );
-        else chunks.push(b);
-      });
-    child.on("error", (error: NodeJS.ErrnoException) =>
-      finish(
-        new AxiError(
-          error.code === "ENOENT"
-            ? "kubectl is not installed"
-            : "could not start the cluster reader",
-          error.code === "ENOENT" ? "KUBECTL_NOT_INSTALLED" : "UPSTREAM_ERROR",
-          ["Install kubectl, then run `k8s-axi ctx`"],
-        ),
-      ),
+  }
+  if (result.timedOut)
+    throw new AxiError("the cluster read timed out", "TIMEOUT", [
+      "Retry with --timeout <seconds>",
+    ]);
+  if (result.capped)
+    throw new AxiError(
+      "read output exceeds 128 MiB; narrow the namespace or selector",
+      "OUTPUT_TOO_LARGE",
     );
-    child.on("close", (code) => {
-      if (done) return;
-      finish(
-        code === 0
-          ? undefined
-          : mapKubectlFailure(
-              redactText(Buffer.concat(stderr).toString("utf8")).text,
-            ),
-      );
-    });
-  });
+  if (result.exit !== 0)
+    throw mapKubectlFailure(redactText(result.stderr).text);
+  return result.stdout;
 }
 export type Obj = Record<string, unknown>;
 export function object(value: unknown): Obj {

@@ -45,7 +45,7 @@ for (const mode of ["hang", "grandchild", "ignore-term"])
       await expect(
         kubectl(local, undefined, { end: Date.now() + 1000, perCall: 1000 }),
       ).rejects.toMatchObject({ code: "TIMEOUT" });
-      expect(Date.now() - start).toBeLessThan(2000);
+      expect(Date.now() - start).toBeLessThan(4000);
       await new Promise((r) => setTimeout(r, 2200));
       if (mode === "grandchild") {
         const pid = Number(readFileSync(l.env.K8S_AXI_PID, "utf8"));

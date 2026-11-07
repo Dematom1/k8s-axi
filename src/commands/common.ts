@@ -5,11 +5,11 @@ import { COMMAND_LINES } from "../help.js";
 export function refuse(command: string): never {
   return fail(
     "REFUSED",
-    `${command} is not available: k8s-axi is strictly read-only`,
+    `${command} is not supported: k8s-axi only runs guarded exec, port-forward, and apply previews`,
     [
       command === "update"
         ? "A human can run npm install -g k8s-axi@latest"
-        : "Run `k8s-axi --help` for read-only noun commands",
+        : "Run `k8s-axi --help` for supported commands",
     ],
   );
 }
@@ -35,46 +35,53 @@ export async function dispatch(
         (line) =>
           line.startsWith(command + " ") || line.startsWith(command + ":"),
       ),
-      flags: [
-        "--context <name>",
-        "--timeout <seconds> (20)",
-        "--help",
-        ...(["ctx", "setup", "context"].includes(command)
-          ? []
+      flags:
+        command === "audit"
+          ? [
+              "--limit <1..1000> (100)",
+              "--action exec|port-forward|apply",
+              "--help",
+            ]
           : [
-              ...(["nodes", "namespaces"].includes(command)
+              "--context <name>",
+              "--timeout <seconds> (20)",
+              "--help",
+              ...(["ctx", "setup", "context"].includes(command)
                 ? []
                 : [
-                    p.action === "list"
-                      ? "-n <namespace> | -A"
-                      : "-n <namespace>",
-                  ]),
-              ...(p.action === "list"
-                ? [
-                    "--limit <1..1000> (100)",
-                    ...(["home", "triage"].includes(command)
+                    ...(["nodes", "namespaces"].includes(command)
                       ? []
-                      : ["--fields <a,b>", "--problems"]),
+                      : [
+                          p.action === "list"
+                            ? "-n <namespace> | -A"
+                            : "-n <namespace>",
+                        ]),
+                    ...(p.action === "list"
+                      ? [
+                          "--limit <1..1000> (100)",
+                          ...(["home", "triage"].includes(command)
+                            ? []
+                            : ["--fields <a,b>", "--problems"]),
+                        ]
+                      : []),
+                    ...(["home", "triage"].includes(command) ? [] : ["--full"]),
+                    ...(["pods", "deployments", "jobs"].includes(command) &&
+                    p.action === "list"
+                      ? ["-l, --selector <selector>"]
+                      : []),
+                  ]),
+              ...(command === "pods" && p.action === "logs"
+                ? [
+                    "-c, --container <name> (annotation, then sole container)",
+                    "--tail <1..1000> (100)",
+                    "--since <duration>",
+                    "--previous",
                   ]
                 : []),
-              ...(["home", "triage"].includes(command) ? [] : ["--full"]),
-              ...(["pods", "deployments", "jobs"].includes(command) &&
-              p.action === "list"
-                ? ["-l, --selector <selector>"]
+              ...(command === "events"
+                ? ["--warnings", "--since <duration>", "--for Kind/name"]
                 : []),
-            ]),
-        ...(command === "pods" && p.action === "logs"
-          ? [
-              "-c, --container <name> (annotation, then sole container)",
-              "--tail <1..1000> (100)",
-              "--since <duration>",
-              "--previous",
-            ]
-          : []),
-        ...(command === "events"
-          ? ["--warnings", "--since <duration>", "--for Kind/name"]
-          : []),
-      ],
+            ],
       examples:
         command === "setup"
           ? [

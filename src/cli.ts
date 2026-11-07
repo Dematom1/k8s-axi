@@ -16,6 +16,7 @@ import { secretsCommand } from "./commands/secrets.js";
 import { triageCommand } from "./commands/triage.js";
 import { setupCommand } from "./commands/setup.js";
 import { contextCommand } from "./commands/context.js";
+import { auditCommand } from "./commands/audit.js";
 const implementations = {
   nodes: nodesCommand,
   pods: podsCommand,
@@ -27,6 +28,7 @@ const implementations = {
   secrets: secretsCommand,
   setup: setupCommand,
   context: contextCommand,
+  audit: auditCommand,
   triage: triageCommand,
   home: triageCommand,
   ctx: ctxCommand,

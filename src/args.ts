@@ -60,6 +60,7 @@ export const NOUNS = [
   "ctx",
   "setup",
   "context",
+  "audit",
 ] as const;
 export type Noun = (typeof NOUNS)[number];
 const globalFlags = ["context", "timeout", "help"];
@@ -123,19 +124,22 @@ export interface Parsed {
   container?: ResourceName;
   tail: number;
   previous: boolean;
+  auditAction?: "exec" | "port-forward" | "apply";
 }
 export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
   const pos: string[] = [];
   const flags = new Map<string, string | true>();
   const allowed = [
     ...globalFlags,
-    ...(["ctx", "context", "setup"].includes(command)
-      ? []
-      : listFlags.filter(
-          (f) =>
-            f !== "selector" ||
-            ["pods", "deployments", "jobs"].includes(command),
-        )),
+    ...(command === "audit"
+      ? ["limit", "action"]
+      : ["ctx", "context", "setup"].includes(command)
+        ? []
+        : listFlags.filter(
+            (f) =>
+              f !== "selector" ||
+              ["pods", "deployments", "jobs"].includes(command),
+          )),
     ...(command === "events" ? ["warnings", "since", "for"] : []),
     ...(command === "pods" ? ["container", "tail", "since", "previous"] : []),
   ];
@@ -211,6 +215,9 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     ["selector", "problems", "limit", "fields"].some((f) => flags.has(f))
   )
     usage("list flags require a list command", command);
+  const auditAction = str("action");
+  if (auditAction && !["exec", "port-forward", "apply"].includes(auditAction))
+    usage("--action must be exec, port-forward, or apply", command);
   const forObject = str("for");
   if (
     forObject &&
@@ -243,5 +250,11 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
       : undefined,
     tail: integer(str("tail") ?? "100", "--tail", 1, 1000),
     previous: flags.has("previous"),
+    auditAction:
+      auditAction === "exec" ||
+      auditAction === "port-forward" ||
+      auditAction === "apply"
+        ? auditAction
+        : undefined,
   };
 }
