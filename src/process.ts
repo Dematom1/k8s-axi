@@ -33,10 +33,12 @@ export async function runProcess(
     let childClosed = false;
     let escalationComplete = false;
     let result: ProcessResult | undefined;
+    let stdinError: NodeJS.ErrnoException | undefined;
     let escalationTimer: NodeJS.Timeout | undefined;
     const finish = () => {
-      if (childClosed && (!terminating || escalationComplete) && result)
-        resolve(result);
+      if (!childClosed || (terminating && !escalationComplete) || !result) return;
+      if (stdinError) reject(stdinError);
+      else resolve(result);
     };
     const kill = (signal: NodeJS.Signals) => {
       if (child.pid)
@@ -70,7 +72,10 @@ export async function runProcess(
       }, 2000);
     };
     child.stdin?.on("error", (error: NodeJS.ErrnoException) => {
-      if (error.code !== "EPIPE") terminate();
+      if (error.code !== "EPIPE") {
+        stdinError = error;
+        terminate();
+      }
     });
     if (stdin !== undefined) child.stdin?.end(stdin);
     for (const [stream, chunks] of [
