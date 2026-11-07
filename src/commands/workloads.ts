@@ -1,5 +1,5 @@
 import type { Parsed } from "../args.js";
-import { deadline, type ListResource } from "../registry.js";
+import { deadline, remaining, type ListResource } from "../registry.js";
 import { resolveTarget, resolveScope, scopeLabel, scoped } from "../target.js";
 import {
   kubectl,
@@ -52,40 +52,49 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
         ),
       ),
     ];
-    const rows = s.kind === "namespace" ? await scoped(s, t, d, read) : await read();
-    const deployment = rows[0] ?? {};
-    const deadlineExceeded = objects(object(deployment.status).conditions).find(
-      (condition) =>
-        condition.type === "Progressing" &&
-        condition.status === "False" &&
-        condition.reason === "ProgressDeadlineExceeded",
-    );
+    let rows = s.kind === "namespace" ? await scoped(s, t, d, read) : await read();
     if (p.rolloutStatus) {
-      const metadata = object(deployment.metadata);
-      const status = object(deployment.status);
-      const desired = number(object(deployment.spec).replicas, 1);
-      const conditions = objects(status.conditions);
-      const complete =
-        number(status.observedGeneration) >= number(metadata.generation) &&
-        number(status.replicas) === desired &&
-        number(status.updatedReplicas) === desired &&
-        number(status.availableReplicas) === desired &&
-        conditions.some(
+      while (true) {
+        const deployment = rows[0] ?? {};
+        const conditions = objects(object(deployment.status).conditions);
+        const deadlineExceeded = conditions.find(
           (condition) =>
-            condition.type === "Progressing" && condition.status === "True",
-        ) &&
-        conditions.some(
-          (condition) =>
-            condition.type === "Available" && condition.status === "True",
+            condition.type === "Progressing" &&
+            condition.status === "False" &&
+            condition.reason === "ProgressDeadlineExceeded",
         );
-      if (deadlineExceeded || !complete)
-        fail(
-          "UPSTREAM_ERROR",
-          deadlineExceeded
-            ? `deployment ${name} rollout failed: ${text(deadlineExceeded.reason)}`
-            : `deployment ${name} rollout is not complete`,
-          [`Inspect pods for deployment ${name}`],
-        );
+        const metadata = object(deployment.metadata);
+        const status = object(deployment.status);
+        const desired = number(object(deployment.spec).replicas, 1);
+        const complete =
+          number(status.observedGeneration) >= number(metadata.generation) &&
+          number(status.replicas) === desired &&
+          number(status.updatedReplicas) === desired &&
+          number(status.availableReplicas) === desired &&
+          conditions.some(
+            (condition) =>
+              condition.type === "Progressing" && condition.status === "True",
+          ) &&
+          conditions.some(
+            (condition) =>
+              condition.type === "Available" && condition.status === "True",
+          );
+        if (deadlineExceeded)
+          fail(
+            "UPSTREAM_ERROR",
+            `deployment ${name} rollout failed: ${text(deadlineExceeded.reason)}`,
+            [`Inspect pods for deployment ${name}`],
+          );
+        if (complete) break;
+        if (remaining(d) === 0)
+          fail(
+            "UPSTREAM_ERROR",
+            `deployment ${name} rollout is not complete`,
+            [`Inspect pods for deployment ${name}`],
+          );
+        await new Promise((resolve) => setTimeout(resolve, Math.min(1000, remaining(d))));
+        rows = s.kind === "namespace" ? await scoped(s, t, d, read) : await read();
+      }
     }
     return encodeObject({
       context: t.context,
