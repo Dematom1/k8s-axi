@@ -7,7 +7,7 @@ config="$lab/kubeconfig"
 [ "${1:-}" = run ] || { echo 'usage: scripts/lab-live.sh run' >&2; exit 2; }
 command -v docker >/dev/null || { echo 'docker is required' >&2; exit 1; }
 command -v curl >/dev/null || { echo 'curl is required' >&2; exit 1; }
-lock=/tmp/k8s-axi-kind-lab.lock
+lock=${K8S_AXI_LAB_LOCK:-/tmp/k8s-axi-kind-lab.lock}
 start=$(date +%s)
 while ! mkdir "$lock" 2>/dev/null; do
   if [ -f "$lock/pid" ]; then
