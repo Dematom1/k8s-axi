@@ -9,6 +9,7 @@ import { resolveTarget, resolveScope, scopeLabel, scoped } from "../target.js";
 import { readList, type Obj } from "../kubectl.js";
 import { serviceRows, serviceSpec } from "../model/services.js";
 import { renderList, validateFields } from "../render.js";
+import { usage } from "../errors.js";
 export async function readServices(
   t: Target,
   s: Scope,
@@ -26,6 +27,8 @@ export async function readServices(
 }
 export async function servicesCommand(p: Parsed): Promise<string> {
   validateFields(serviceSpec, p);
+  if (p.action === "view")
+    usage("services does not support object views", "services");
   const d = deadline(p.timeout),
     t = await resolveTarget(p.context, d),
     s = resolveScope(p, t);

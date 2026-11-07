@@ -145,7 +145,7 @@ npm run build:skill
 ```
 
 Tests use a fake kubectl and a loopback API server. The real kubectl lane requires no cluster credentials.
-`scripts/live-readonly.mjs` is manual only and requires an explicit context and a temporary working directory.
+`npm run test:live` runs the disposable kind-cluster suite against the packed tarball; Docker is required.
 
 ## Releases
 

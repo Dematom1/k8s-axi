@@ -1,0 +1,154 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fixtures
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-creds
+  namespace: fixtures
+data:
+  username: YWRtaW4=
+  password: Q0FOQVJZX0RCX1BBU1NXT1JEXzhLU0E=
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-token
+  namespace: fixtures
+stringData:
+  token: CANARY_API_TOKEN_8KSA
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-dsn
+  namespace: fixtures
+data:
+  dsn: Q0FOQVJZX05FVVRSQUxfRFNOXzhLU0E=
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-conn
+  namespace: fixtures
+stringData:
+  conn: CANARY_NEUTRAL_CONN_8KSA
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: fixtures
+data:
+  setting: safe
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: fixtures
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: web }
+  template:
+    metadata:
+      labels: { app: web }
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["sh", "-c", "echo 'password=CANARY_LOG_8KSA'; sleep 3600"]
+          env:
+            - name: API_KEY
+              value: CANARY_ENV_8KSA
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken
+  namespace: fixtures
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 10
+  selector:
+    matchLabels: { app: broken }
+  template:
+    metadata:
+      labels: { app: broken }
+    spec:
+      containers:
+        - name: broken
+          image: registry.invalid/nope:0.0.0
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: chatty
+  namespace: fixtures
+spec:
+  restartPolicy: Never
+  containers:
+    - name: chatty
+      image: busybox:1.36
+      command:
+        [
+          "sh",
+          "-c",
+          "i=0; while [ $i -lt 3000 ]; do echo line-$i; i=$((i+1)); done; sleep 3600",
+        ]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orphan-svc
+  namespace: fixtures
+spec:
+  selector: { app: does-not-exist }
+  ports: [{ port: 80 }]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: crashy
+  namespace: fixtures
+spec:
+  restartPolicy: Always
+  containers:
+    - name: crash
+      image: busybox:1.36
+      command: ["sh", "-c", "exit 3"]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: crashy2
+  namespace: fixtures
+spec:
+  restartPolicy: Always
+  containers:
+    - name: crash
+      image: busybox:1.36
+      command: ["sh", "-c", "exit 7"]
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: failjob
+  namespace: fixtures
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: fail
+          image: busybox:1.36
+          command: ["sh", "-c", "exit 1"]
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: emptyns
