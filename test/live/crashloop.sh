@@ -7,7 +7,11 @@ name="k8s-axi-$$-$RANDOM"
 lock=/tmp/k8s-axi-kind-lab.lock
 owned_lock=0
 cleanup() {
-  if (( owned_lock )); then kind delete cluster --name "$name" >/dev/null 2>&1 || true; rm -rf "$lock"; fi
+  if (( owned_lock )) && [[ $(cat "$lock/pid" 2>/dev/null || true) == $$ ]]; then
+    kind delete cluster --name "$name" >/dev/null 2>&1 || true
+    rm -f "$lock/pid"
+    rmdir "$lock" 2>/dev/null || true
+  fi
   rm -rf "$lab"
 }
 trap cleanup EXIT INT TERM
@@ -34,7 +38,11 @@ start=$SECONDS
 while ! mkdir "$lock" 2>/dev/null; do
   if [[ -d $lock && $(($(date +%s) - $(stat -f %m "$lock" 2>/dev/null || stat -c %Y "$lock"))) -gt 1800 ]]; then
     pid=$(cat "$lock/pid" 2>/dev/null || true)
-    if [[ -n $pid ]] && ! kill -0 "$pid" 2>/dev/null; then rm -rf "$lock"; continue; fi
+    if [[ $pid =~ ^[0-9]+$ ]] && ! kill -0 "$pid" 2>/dev/null; then
+      rm -f "$lock/pid"
+      rmdir "$lock" 2>/dev/null || true
+      continue
+    fi
   fi
   (( SECONDS - start < 1200 )) || { echo 'timed out waiting for kind lab lock' >&2; exit 1; }
   sleep 10
@@ -42,6 +50,7 @@ done
 owned_lock=1
 echo $$ > "$lock/pid"
 kind create cluster --name "$name" --kubeconfig "$KUBECONFIG"
+npm run build --silent
 node=$(kind get nodes --name "$name" | head -n1)
 docker update --cpus=2 "$node"
 kubectl create namespace fixtures
@@ -68,7 +77,7 @@ kind: Pod
 metadata:
   name: oom
 spec:
-  restartPolicy: Always
+  restartPolicy: Never
   containers:
   - name: app
     image: busybox:1.36
@@ -82,7 +91,6 @@ while [[ $(kubectl -n fixtures get pod crashy2 -o jsonpath='{.status.containerSt
   sleep 1
 done
 first_restart=$SECONDS
-npm run build --silent
 for at in 15 30 45 60 90 120; do
   remaining=$((at - (SECONDS - first_restart)))
   if (( remaining > 0 )); then sleep "$remaining"; fi
@@ -97,14 +105,14 @@ while [[ $(kubectl -n fixtures get pod restarting-not-ready -o jsonpath='{.statu
   sleep 1
 done
 started=$SECONDS
-while [[ $(kubectl -n fixtures get pod oom -o jsonpath='{.status.containerStatuses[0].lastState.terminated.reason}' 2>/dev/null || true) != OOMKilled ]]; do
+while [[ $(kubectl -n fixtures get pod oom -o jsonpath='{.status.containerStatuses[0].state.terminated.reason}' 2>/dev/null || true) != OOMKilled ]]; do
   (( SECONDS - started < 90 )) || { echo 'timed out waiting for OOMKilled state' >&2; exit 1; }
   sleep 1
 done
 pod_output=$(node dist/bin/k8s-axi.js pods -n fixtures --problems)
 grep -E 'restarting-not-ready.*Error \(1\)' <<<"$pod_output" || { echo 'restarting-not-ready not classified as Error (1) problem' >&2; exit 1; }
-grep -E 'oom.*(OOMKilled|CrashLoopBackOff)' <<<"$pod_output" || { echo 'oom not classified as a problem' >&2; exit 1; }
-[[ $(kubectl -n fixtures get pod oom -o jsonpath='{.status.containerStatuses[0].lastState.terminated.reason}') == OOMKilled ]] || { echo 'oom did not terminate with OOMKilled' >&2; exit 1; }
+grep -F 'oom' <<<"$pod_output" | grep -F 'OOMKilled (137)' || { echo 'oom not classified as OOMKilled (137)' >&2; exit 1; }
+[[ $(kubectl -n fixtures get pod oom -o jsonpath='{.status.containerStatuses[0].state.terminated.reason}') == OOMKilled ]] || { echo 'oom did not terminate with OOMKilled' >&2; exit 1; }
 node dist/bin/k8s-axi.js triage -n fixtures | grep -q 'pods/restarting-not-ready' || { echo 'triage omitted restarting-not-ready' >&2; exit 1; }
 node dist/bin/k8s-axi.js triage -n fixtures | grep -q 'pods/oom' || { echo 'triage omitted oom' >&2; exit 1; }
 # restartPolicy Always creates the terminated-between-restarts state for crashy2.
