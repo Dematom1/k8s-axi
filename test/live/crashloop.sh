@@ -4,7 +4,7 @@ root=$PWD
 lab=$root/.lab-live
 mkdir -p "$lab/bin"
 name="k8s-axi-$$-$RANDOM"
-lock=/tmp/k8s-axi-kind-lab.lock
+lock=${K8S_AXI_LAB_LOCK:-/tmp/k8s-axi-kind-lab.lock}
 owned_lock=0
 cleanup() {
   if (( owned_lock )) && [[ $(cat "$lock/pid" 2>/dev/null || true) == $$ ]]; then
