@@ -14,7 +14,8 @@ for (const annotation of [undefined, "a"])
       { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
       {
         prefix: ["logs"],
-        stdout: "password=CANARY\nDB_PASS=CANARY\nnormal log\n",
+        stdout:
+          "password=CANARY\nDB_PASS=CANARY\nunable to retrieve container logs for fixture\nnormal log\n",
       },
       ...targetRules(),
     ]);
@@ -25,6 +26,9 @@ for (const annotation of [undefined, "a"])
         expect(p.stdout).not.toContain("CANARY");
         expect(p.stdout).toContain("best effort");
         expect(p.stdout).toContain("redacted: 2");
+        expect(p.stdout).toContain(
+          "unable to retrieve container logs for fixture",
+        );
       } else expect(p.stdout).toContain("a, b");
       expect(
         cli(
@@ -58,6 +62,62 @@ for (const annotation of [undefined, "a"])
       l.clean();
     }
   });
+test("a full tail gives a runnable continuation hint", () => {
+  const pod = {
+    metadata: { name: "p" },
+    spec: { containers: [{ name: "c" }] },
+  };
+  const l = lab([
+    { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
+    {
+      prefix: ["logs"],
+      stdout: `${Array.from({ length: 1000 }, (_, i) => `line ${i}`).join("\n")}\n`,
+    },
+    ...targetRules(),
+  ]);
+  try {
+    const p = cli(
+      [
+        "pods",
+        "logs",
+        "p",
+        "-c",
+        "c",
+        "--tail",
+        "1000",
+        "--since",
+        "15m",
+        "--previous",
+      ],
+      l.env,
+    );
+    expect(p.status).toBe(0);
+    expect(p.stdout).toContain("--tail 1000");
+    expect(p.stdout).toContain("--since 900s");
+    expect(p.stdout).toContain("--previous");
+    expect(p.stdout).toContain("-c c");
+    expect(
+      cli(
+        [
+          "pods",
+          "logs",
+          "p",
+          "-c",
+          "c",
+          "--tail",
+          "1000",
+          "--since",
+          "900s",
+          "--previous",
+          "--full",
+        ],
+        l.env,
+      ).status,
+    ).toBe(0);
+  } finally {
+    l.clean();
+  }
+});
 for (const missing of ["namespace", "pod"])
   test(`missing ${missing} logs`, () => {
     const l = lab([

@@ -11,18 +11,20 @@ import {
 } from "./registry.js";
 import { redactText } from "./redact.js";
 export const OUTPUT_CAP = 128 * 1024 * 1024;
-export function mapKubectlFailure(stderr: string): AxiError {
+export function mapKubectlFailure(
+  stderr: string,
+  operation?: Read["op"],
+): AxiError {
+  if (
+    operation === "logs" &&
+    /unable to retrieve container logs for|previous terminated container.*not found|previous.*not available/i.test(
+      stderr,
+    )
+  )
+    return new AxiError("container logs are unavailable", "LOGS_UNAVAILABLE", [
+      "Run `k8s-axi pods view <pod>` or check events for the pod",
+    ]);
   const cases: [RegExp, ErrorCode, string][] = [
-    [
-      /unable to retrieve container logs for/i,
-      "LOGS_UNAVAILABLE",
-      "container logs are unavailable",
-    ],
-    [
-      /previous terminated container.*not found|previous.*not available/i,
-      "LOGS_UNAVAILABLE",
-      "container logs are unavailable",
-    ],
     [
       /context.*(?:was not found|not found)/i,
       "CONTEXT_NOT_FOUND",
@@ -162,6 +164,7 @@ export async function kubectl(
           ? undefined
           : mapKubectlFailure(
               redactText(Buffer.concat(stderr).toString("utf8")).text,
+              read.op,
             ),
       );
     });
