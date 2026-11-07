@@ -54,7 +54,7 @@ npm run build --silent
 node=$(kind get nodes --name "$name" | head -n1)
 docker update --cpus=2 "$node"
 kubectl create namespace fixtures
-kubectl -n fixtures create serviceaccount default
+kubectl -n fixtures create serviceaccount default --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n fixtures run crashy2 --image=busybox:1.36 --restart=Always -- /bin/sh -c 'exit 7'
 kubectl apply -n fixtures -f - <<'YAML'
 apiVersion: v1
@@ -66,10 +66,16 @@ spec:
   containers:
   - name: app
     image: busybox:1.36
-    command: ["/bin/sh", "-c", "if [ ! -f /tmp/restarted ]; then touch /tmp/restarted; exit 1; fi; sleep 3600"]
+    command: ["/bin/sh", "-c", "if [ ! -f /restart-state/restarted ]; then touch /restart-state/restarted; exit 1; fi; sleep 3600"]
+    volumeMounts:
+    - name: restart-state
+      mountPath: /restart-state
     readinessProbe:
       exec: { command: ["/bin/false"] }
       periodSeconds: 1
+  volumes:
+  - name: restart-state
+    emptyDir: {}
 YAML
 kubectl apply -n fixtures -f - <<'YAML'
 apiVersion: v1
