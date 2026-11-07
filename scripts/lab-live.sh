@@ -72,12 +72,14 @@ export KUBECONFIG="$config" HOME="$lab/home" TMPDIR="$lab/tmp" KUBERC=off K8S_AX
 kubectl apply -f "$root/test/live/fixtures.yaml"
 kubectl create serviceaccount limited -n fixtures
 kubectl create clusterrolebinding "limited-$name" --clusterrole=view --serviceaccount=fixtures:limited
-kubectl config set-credentials limited --token="$(kubectl create token limited -n fixtures --duration=1h)" >/dev/null
+limited_token=$(kubectl create token limited -n fixtures --duration=1h)
+kubectl config set-credentials limited --token="$limited_token" >/dev/null
 kubectl config set-context limited --cluster="kind-$name" --user=limited --namespace=fixtures >/dev/null
 kubectl create serviceaccount nsonly -n fixtures
 kubectl create role nsonly --verb=get,list,watch --resource=pods,events -n fixtures
 kubectl create rolebinding nsonly --role=nsonly --serviceaccount=fixtures:nsonly -n fixtures
-kubectl config set-credentials nsonly --token="$(kubectl create token nsonly -n fixtures --duration=1h)" >/dev/null
+nsonly_token=$(kubectl create token nsonly -n fixtures --duration=1h)
+kubectl config set-credentials nsonly --token="$nsonly_token" >/dev/null
 kubectl config set-context nsonly --cluster="kind-$name" --user=nsonly --namespace=fixtures >/dev/null
 kubectl wait -n fixtures --for=condition=Available deployment/web --timeout=120s
 kubectl wait -n fixtures --for=condition=Ready pod/chatty --timeout=120s
@@ -85,6 +87,6 @@ cd "$root"
 npm run build
 archive=$(npm pack --silent --pack-destination "$lab")
 npm install --prefix "$lab/package" --ignore-scripts --no-audit --no-fund "$lab/$archive"
-export K8S_AXI_TEST_PACKAGE="$lab/package/node_modules/k8s-axi"
+export K8S_AXI_TEST_PACKAGE="$lab/package/node_modules/k8s-axi" K8S_AXI_LIMITED_TOKEN="$limited_token" K8S_AXI_NSONLY_TOKEN="$nsonly_token"
 npx vitest run test/live/*.live.test.ts --reporter=default --reporter=json --outputFile "$lab/live-results.json"
 node -e 'const r=require(process.argv[1]); if (!r.numTotalTests || r.numPendingTests || r.numFailedTests) { console.error("live tests did not all execute and pass", r); process.exit(1); }' "$lab/live-results.json"
