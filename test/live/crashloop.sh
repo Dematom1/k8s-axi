@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root=$PWD
-lab=$root/.lab-live
+lab=$root/.lab-live/run-$$-$RANDOM
 mkdir -p "$lab/bin"
 name="k8s-axi-$$-$RANDOM"
 lock=${K8S_AXI_LAB_LOCK:-/tmp/k8s-axi-kind-lab.lock}
@@ -13,6 +13,7 @@ cleanup() {
     rmdir "$lock" 2>/dev/null || true
   fi
   rm -rf "$lab"
+  rmdir "$root/.lab-live" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 export HOME=$lab/home TMPDIR=$lab/tmp KUBECONFIG=$lab/kubeconfig
@@ -36,12 +37,19 @@ chmod +x "$lab/bin/kind" "$lab/bin/kubectl"
 export PATH="$lab/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 start=$SECONDS
 while ! mkdir "$lock" 2>/dev/null; do
-  if [[ -d $lock && $(($(date +%s) - $(stat -f %m "$lock" 2>/dev/null || stat -c %Y "$lock"))) -gt 1800 ]]; then
-    pid=$(cat "$lock/pid" 2>/dev/null || true)
-    if [[ $pid =~ ^[0-9]+$ ]] && ! kill -0 "$pid" 2>/dev/null; then
-      rm -f "$lock/pid"
-      rmdir "$lock" 2>/dev/null || true
-      continue
+  if [[ -d $lock ]]; then
+    case "$(uname -s)" in
+      Darwin) lock_mtime=$(stat -f %m "$lock") ;;
+      Linux) lock_mtime=$(stat -c %Y "$lock") ;;
+      *) echo "unsupported lock host: $(uname -s)" >&2; exit 1 ;;
+    esac
+    if (( $(date +%s) - lock_mtime > 1800 )); then
+      pid=$(cat "$lock/pid" 2>/dev/null || true)
+      if [[ $pid =~ ^[0-9]+$ ]] && ! kill -0 "$pid" 2>/dev/null; then
+        rm -f "$lock/pid"
+        rmdir "$lock" 2>/dev/null || true
+        continue
+      fi
     fi
   fi
   (( SECONDS - start < 1200 )) || { echo 'timed out waiting for kind lab lock' >&2; exit 1; }
@@ -55,7 +63,6 @@ node=$(kind get nodes --name "$name" | head -n1)
 docker update --cpus=2 "$node"
 kubectl create namespace fixtures
 kubectl -n fixtures create serviceaccount default --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n fixtures run crashy2 --image=busybox:1.36 --restart=Always -- /bin/sh -c 'exit 7'
 kubectl apply -n fixtures -f - <<'YAML'
 apiVersion: v1
 kind: Pod
@@ -77,6 +84,20 @@ spec:
   - name: restart-state
     emptyDir: {}
 YAML
+started=$SECONDS
+while [[ $(kubectl -n fixtures get pod restarting-not-ready -o jsonpath='{.status.containerStatuses[0].restartCount}' 2>/dev/null || echo 0) -le 0 ]] || [[ -z $(kubectl -n fixtures get pod restarting-not-ready -o jsonpath='{.status.containerStatuses[0].state.running.startedAt}' 2>/dev/null || true) ]]; do
+  (( SECONDS - started < 90 )) || { echo 'timed out waiting for restarting-not-ready to restart and run' >&2; exit 1; }
+  sleep 1
+done
+immediate_triage=$(node dist/bin/k8s-axi.js triage -n fixtures)
+grep -q 'pods/restarting-not-ready' <<<"$immediate_triage" || { echo 'triage omitted restarting-not-ready immediately after first restart' >&2; exit 1; }
+kubectl -n fixtures run crashy2 --image=busybox:1.36 --restart=Always -- /bin/sh -c 'exit 7'
+started=$SECONDS
+while [[ $(kubectl -n fixtures get pod crashy2 -o jsonpath='{.status.containerStatuses[0].restartCount}' 2>/dev/null || echo 0) -le 0 ]]; do
+  (( SECONDS - started < 90 )) || { echo 'timed out waiting for crashy2 first restart' >&2; exit 1; }
+  sleep 1
+done
+first_restart=$SECONDS
 kubectl apply -n fixtures -f - <<'YAML'
 apiVersion: v1
 kind: Pod
@@ -91,12 +112,6 @@ spec:
     resources:
       limits: { memory: 16Mi }
 YAML
-started=$SECONDS
-while [[ $(kubectl -n fixtures get pod crashy2 -o jsonpath='{.status.containerStatuses[0].restartCount}' 2>/dev/null || echo 0) -le 0 ]]; do
-  (( SECONDS - started < 90 )) || { echo 'timed out waiting for crashy2 first restart' >&2; exit 1; }
-  sleep 1
-done
-first_restart=$SECONDS
 for at in 15 30 45 60 90 120; do
   remaining=$((at - (SECONDS - first_restart)))
   if (( remaining > 0 )); then sleep "$remaining"; fi
@@ -104,11 +119,6 @@ for at in 15 30 45 60 90 120; do
   grep -Eq 'pods/crashy2.*(CrashLoopBackOff|Error \(7\))' <<<"$triage" || { echo "triage missed crashy2 at ${at}s" >&2; exit 1; }
   pods=$(node dist/bin/k8s-axi.js pods -n fixtures)
   ! grep -E 'crashy2.*NotReady' <<<"$pods" || { echo "pods labeled crashy2 NotReady at ${at}s" >&2; exit 1; }
-done
-started=$SECONDS
-while [[ $(kubectl -n fixtures get pod restarting-not-ready -o jsonpath='{.status.containerStatuses[0].restartCount}' 2>/dev/null || echo 0) -le 0 ]] || [[ -z $(kubectl -n fixtures get pod restarting-not-ready -o jsonpath='{.status.containerStatuses[0].state.running.startedAt}' 2>/dev/null || true) ]]; do
-  (( SECONDS - started < 90 )) || { echo 'timed out waiting for restarting-not-ready to restart and run' >&2; exit 1; }
-  sleep 1
 done
 started=$SECONDS
 while [[ $(kubectl -n fixtures get pod oom -o jsonpath='{.status.containerStatuses[0].state.terminated.reason}' 2>/dev/null || true) != OOMKilled ]]; do
@@ -137,12 +147,12 @@ data:
 YAML
 kubectl apply -f "$lab/secret.yaml" >/dev/null
 safety_output=$( {
-  node dist/bin/k8s-axi.js pods -n fixtures
-  node dist/bin/k8s-axi.js triage -n fixtures
-  node dist/bin/k8s-axi.js pods view crashy2 -n fixtures
-  node dist/bin/k8s-axi.js pods view oom -n fixtures
+  node dist/bin/k8s-axi.js pods -n fixtures || exit $?
+  node dist/bin/k8s-axi.js triage -n fixtures || exit $?
+  node dist/bin/k8s-axi.js pods view crashy2 -n fixtures || exit $?
+  node dist/bin/k8s-axi.js pods view oom -n fixtures || exit $?
   node dist/bin/k8s-axi.js describe pod crashy2 -n fixtures || true
-  node dist/bin/k8s-axi.js secrets view leak-check -n fixtures --full
+  node dist/bin/k8s-axi.js secrets view leak-check -n fixtures --full || exit $?
 } 2>&1 )
 if grep -Fq "$secret_value" <<<"$safety_output" || grep -Fq "$secret_b64" <<<"$safety_output"; then echo 'Secret canary leaked in diagnostic output' >&2; exit 1; fi
 set +e

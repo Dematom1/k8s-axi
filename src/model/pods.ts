@@ -50,7 +50,10 @@ export function classifyPod(pod: Obj, now = Date.now()): PodHealth {
   const terminated = statuses
     .flatMap((c) => [
       object(object(c.state).terminated),
-      object(object(c.lastState).terminated),
+      c.ready === true &&
+      Object.keys(object(object(c.state).running)).length > 0
+        ? {}
+        : object(object(c.lastState).terminated),
     ])
     .find(
       (state) => Object.keys(state).length > 0 && number(state.exitCode) !== 0,
