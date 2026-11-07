@@ -86,6 +86,7 @@ const booleans = new Set([
   "full",
   "warnings",
   "previous",
+  "rollout-status",
 ]);
 const hints: Record<string, string> = {
   follow: "Nothing streams; use --tail and --since",
@@ -123,6 +124,7 @@ export interface Parsed {
   container?: ResourceName;
   tail: number;
   previous: boolean;
+  rolloutStatus: boolean;
 }
 export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
   const pos: string[] = [];
@@ -138,6 +140,7 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
         )),
     ...(command === "events" ? ["warnings", "since", "for"] : []),
     ...(command === "pods" ? ["container", "tail", "since", "previous"] : []),
+    ...(command === "deployments" ? ["rollout-status"] : []),
   ];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? "";
@@ -243,5 +246,6 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
       : undefined,
     tail: integer(str("tail") ?? "100", "--tail", 1, 1000),
     previous: flags.has("previous"),
+    rolloutStatus: flags.has("rollout-status"),
   };
 }

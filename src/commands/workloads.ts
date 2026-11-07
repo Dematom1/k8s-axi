@@ -49,7 +49,7 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
         condition.status === "False" &&
         condition.reason === "ProgressDeadlineExceeded",
     );
-    if (deadlineExceeded)
+    if (p.rolloutStatus && deadlineExceeded)
       fail(
         "UPSTREAM_ERROR",
         `deployment ${name} rollout failed: ${text(deadlineExceeded.reason)}`,

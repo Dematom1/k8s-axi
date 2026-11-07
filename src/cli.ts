@@ -77,6 +77,7 @@ function routeKubectlArgs(argv: string[]): string[] {
     const [rawNoun, ...rest] = args;
     const singular: Record<string, Noun> = {
       node: "nodes",
+      ns: "namespaces",
       namespace: "namespaces",
       pod: "pods",
       deployment: "deployments",
@@ -95,7 +96,9 @@ function routeKubectlArgs(argv: string[]): string[] {
       );
     const name = rest[0]?.startsWith("-") ? undefined : rest[0];
     const flags = name ? rest.slice(1) : rest;
-    if (name && !["pods", "deployments", "secrets", "namespaces"].includes(noun))
+    if (name && noun === "namespaces")
+      usage("use the equivalent command: k8s-axi namespaces");
+    if (name && !["pods", "deployments", "secrets"].includes(noun))
       usage(`use the equivalent command: k8s-axi ${noun}`);
     if (verb === "describe") {
       if (!name) usage("describe requires a resource name");

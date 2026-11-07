@@ -46,6 +46,8 @@ const routes: [string[], string[] | undefined, string[]?, number?][] = [
   ],
   [["get", "nodes"], ["nodes"], ["get", "nodes"]],
   [["get", "namespace", "fixtures"], undefined, undefined, 2],
+  [["get", "ns", "fixtures"], undefined, undefined, 2],
+  [["get", "namespaces", "fixtures"], undefined, undefined, 2],
   [["rollout", "status", "statefulset/web"], undefined, undefined, 2],
   [
     ["get", "events", "-n", "fixtures"],
