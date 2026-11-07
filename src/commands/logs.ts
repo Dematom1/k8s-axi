@@ -87,8 +87,12 @@ export async function logsCommand(p: Parsed): Promise<string> {
     "omitted-lines": omitted,
     shown: shownLines.length ? `${shownLines[0]}..${shownLines.at(-1)}` : "",
     logs: shownLines,
-    help: [
-      `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --tail ${p.tail}${p.since ? ` --since ${p.since}` : ""}${p.previous ? " --previous" : ""} --full\` for the newest logs`,
-    ],
+    ...(cut || omitted > 0
+      ? {
+          help: [
+            `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --tail ${p.tail}${p.since ? ` --since ${p.since}` : ""}${p.previous ? " --previous" : ""} --full\` for the newest logs`,
+          ],
+        }
+      : {}),
   });
 }
