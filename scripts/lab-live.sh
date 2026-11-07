@@ -8,6 +8,11 @@ config="$lab/kubeconfig"
 command -v docker >/dev/null || { echo 'docker is required' >&2; exit 1; }
 command -v curl >/dev/null || { echo 'curl is required' >&2; exit 1; }
 lock=${K8S_AXI_LAB_LOCK:-/tmp/k8s-axi-kind-lab.lock}
+kind_bin="$lab/bin/kind"
+cleanup() {
+  if [ -x "$kind_bin" ]; then KUBECONFIG="$config" "$kind_bin" delete cluster --name "$name" >/dev/null 2>&1 || true; fi
+  rm -rf "$lab" "$lock"
+}
 start=$(date +%s)
 while ! mkdir "$lock" 2>/dev/null; do
   if [ -f "$lock/pid" ]; then
@@ -20,14 +25,9 @@ while ! mkdir "$lock" 2>/dev/null; do
   [ "$(( $(date +%s) - start ))" -lt 1200 ] || { echo 'FAIL: timed out waiting 20 minutes for the shared kind lab lock' >&2; exit 1; }
   sleep 10
 done
+trap cleanup EXIT HUP INT TERM
 printf '%s\n' "$$" > "$lock/pid"
 mkdir -p "$lab/bin" "$lab/home" "$lab/tmp"
-kind_bin="$lab/bin/kind"
-cleanup() {
-  if [ -x "$kind_bin" ]; then KUBECONFIG="$config" "$kind_bin" delete cluster --name "$name" >/dev/null 2>&1 || true; fi
-  rm -rf "$lab" "$lock"
-}
-trap cleanup EXIT HUP INT TERM
 case "$(uname -s)/$(uname -m)" in
   Darwin/arm64) platform=darwin-arm64; kubectl_platform=darwin/arm64 ;;
   Darwin/x86_64) platform=darwin-amd64; kubectl_platform=darwin/amd64 ;;
@@ -52,14 +52,22 @@ verify "$lab/bin/kubectl"
 chmod +x "$kind_bin" "$lab/bin/kubectl"
 PATH="$lab/bin:$PATH"
 export PATH
-kind create cluster --name "$name" --kubeconfig "$config" --wait 120s
+kind create cluster --name "$name" --kubeconfig "$config" --wait 120s &
+create_pid=$!
+node="${name}-control-plane"
+cap_deadline=$(( $(date +%s) + 15 ))
+while ! docker inspect "$node" >/dev/null 2>&1; do
+  [ "$(date +%s)" -lt "$cap_deadline" ] || { echo 'FAIL: kind node did not appear within 15 seconds' >&2; exit 1; }
+  sleep 0.5
+done
+docker update --cpus=2 --memory=4g "$node" >/dev/null
+wait "$create_pid"
 KUBECONFIG="$config" kubectl config set-context kind-k8sx-alt --cluster="kind-$name" --user="kind-$name" --namespace=fixtures >/dev/null
 KUBECONFIG="$config" kubectl config set-cluster ghost --server=https://127.0.0.1:1 >/dev/null
 KUBECONFIG="$config" kubectl config set-context ghost --cluster=ghost --user="kind-$name" --namespace=fixtures >/dev/null
 KUBECONFIG="$config" kubectl config set-cluster blackhole --server=https://10.255.255.1:6443 >/dev/null
 KUBECONFIG="$config" kubectl config set-context blackhole --cluster=blackhole --user="kind-$name" --namespace=fixtures >/dev/null
 node=$(KUBECONFIG="$config" kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
-docker update --cpus=2 "$node" >/dev/null
 export KUBECONFIG="$config" HOME="$lab/home" TMPDIR="$lab/tmp" KUBERC=off K8S_AXI_LAB_LIVE=1
 kubectl apply -f "$root/test/live/fixtures.yaml"
 kubectl create serviceaccount limited -n fixtures

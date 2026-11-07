@@ -38,6 +38,11 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       ["get", "nodes", "-o", "jsonpath={.items[0].metadata.name}"],
       { encoding: "utf8", env },
     ).stdout;
+    const inspect = spawnSync("docker", ["inspect", nodeName], {
+      encoding: "utf8",
+    });
+    expect(inspect.status).toBe(0);
+    expect(JSON.parse(inspect.stdout)[0].HostConfig.NanoCpus).toBe(2_000_000_000);
     for (const args of [
       [],
       ["ctx"],
