@@ -109,8 +109,14 @@ function routeKubectlArgs(argv: string[]): string[] {
   if (verb === "rollout") {
     if (args[0] !== "status") return argv;
     const target = args[1];
-    const match = /^(?:deployment(?:\.apps)?\/)?([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)$/.exec(target ?? "");
-    if (!match) usage("rollout status supports deployments only; use k8s-axi deployments view NAME");
+    const match =
+      /^(?:deployment(?:\.apps)?\/)?([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)$/.exec(
+        target ?? "",
+      );
+    if (!match)
+      usage(
+        "rollout status supports deployments only; use k8s-axi deployments view NAME",
+      );
     return ["deployments", "view", match[1]!, ...args.slice(2)];
   }
   return argv;

@@ -53,7 +53,8 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
         ),
       ),
     ];
-    let rows = s.kind === "namespace" ? await scoped(s, t, d, read) : await read();
+    let rows =
+      s.kind === "namespace" ? await scoped(s, t, d, read) : await read();
     if (p.rolloutStatus) {
       while (true) {
         const deployment = rows[0] ?? {};
@@ -87,13 +88,14 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
           );
         if (complete) break;
         if (remaining(d) === 0)
-          fail(
-            "UPSTREAM_ERROR",
-            `deployment ${name} rollout is not complete`,
-            [`Inspect pods for deployment ${name}`],
-          );
-        await new Promise((resolve) => setTimeout(resolve, Math.min(1000, remaining(d))));
-        rows = s.kind === "namespace" ? await scoped(s, t, d, read) : await read();
+          fail("UPSTREAM_ERROR", `deployment ${name} rollout is not complete`, [
+            `Inspect pods for deployment ${name}`,
+          ]);
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(1000, remaining(d))),
+        );
+        rows =
+          s.kind === "namespace" ? await scoped(s, t, d, read) : await read();
       }
     }
     return encodeObject({

@@ -90,8 +90,16 @@ test.each(routes)(
             updatedReplicas: 2,
             availableReplicas: 2,
             conditions: [
-              { type: "Progressing", status: "True", reason: "ReplicaSetUpdated" },
-              { type: "Available", status: "True", reason: "MinimumReplicasAvailable" },
+              {
+                type: "Progressing",
+                status: "True",
+                reason: "ReplicaSetUpdated",
+              },
+              {
+                type: "Available",
+                status: "True",
+                reason: "MinimumReplicasAvailable",
+              },
             ],
           },
         }),
@@ -188,7 +196,8 @@ test.each(routes)(
         expect(result.stdout).toContain(
           expectedStatus === 1 ? "REFUSED" : "VALIDATION_ERROR",
         );
-        if (typed[0] === "top") expect(result.stdout).toContain("not supported");
+        if (typed[0] === "top")
+          expect(result.stdout).toContain("not supported");
         if (typed[0] === "describe")
           expect(result.stdout).toContain("k8s-axi configmaps");
       }
