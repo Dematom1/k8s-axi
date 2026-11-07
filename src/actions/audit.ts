@@ -201,7 +201,7 @@ function parseRecord(value: unknown): AuditRecord {
     !ACTIONS.some((action) => action === record.action) ||
     stringFields.some((key) => key in record && typeof record[key] !== "string") ||
     numbers.some((key) => key in record && (typeof record[key] !== "number" || !Number.isFinite(record[key]))) ||
-    ("argv" in record && (!Array.isArray(record.argv) || record.argv.some((arg) => typeof arg !== "string))) ||
+    ("argv" in record && (!Array.isArray(record.argv) || record.argv.some((arg) => typeof arg !== "string"))) ||
     ("outcome" in record && !outcomes.some((outcome) => outcome === record.outcome))
   )
     throw new Error("invalid audit record");

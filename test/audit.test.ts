@@ -8,7 +8,6 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   appendAudit,
@@ -27,7 +26,7 @@ import type { Target } from "../src/registry.js";
 import { parseArgs } from "../src/args.js";
 import { auditCommand } from "../src/commands/audit.js";
 
-const root = join(tmpdir(), `k8s-axi-audit-${newAuditId()}`);
+const root = join(process.cwd(), `.test-audit-${newAuditId()}`);
 const oldState = process.env.XDG_STATE_HOME;
 beforeEach(() => {
   process.env.XDG_STATE_HOME = root;
@@ -198,16 +197,21 @@ test("audit reader rejects symlink generations", () => {
 });
 
 test("audit rotation keeps one generation", () => {
+  const state = join(root, "rotation");
+  const previous = process.env.XDG_STATE_HOME;
+  process.env.XDG_STATE_HOME = state;
   mkdirSync(dirname(auditPath()), { recursive: true });
   writeFileSync(auditPath(), "x".repeat(10 * 1024 * 1024), { mode: 0o600 });
   appendAudit({ id: newAuditId(), phase: "start", action: "apply" });
-  const rotated = readdirSync(join(root, "k8s-axi")).find((name) =>
+  const rotated = readdirSync(join(state, "k8s-axi")).find((name) =>
     /^audit\.\d+\.\d+\.[0-9a-f-]+\.jsonl$/.test(name),
   );
   expect(rotated).toBeDefined();
-  expect(statSync(join(root, "k8s-axi", rotated ?? "")).size).toBe(
+  expect(statSync(join(state, "k8s-axi", rotated ?? "")).size).toBeGreaterThan(
     10 * 1024 * 1024,
   );
+  if (previous === undefined) delete process.env.XDG_STATE_HOME;
+  else process.env.XDG_STATE_HOME = previous;
 });
 
 test("action argv is exact and audit parses supported filters", async () => {
