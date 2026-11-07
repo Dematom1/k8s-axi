@@ -193,20 +193,18 @@ test("Claude hooks use CLAUDE_CONFIG_DIR settings", () => {
   try {
     const installed = cli(["setup", "hooks"], env);
     expect(installed.status, installed.stdout).toBe(0);
+    const managedCommand = `'${process.execPath.replaceAll("'", "'\\''")}' '${resolve(
+      process.env.K8S_AXI_TEST_PACKAGE ?? ".",
+      "dist/bin/k8s-axi-ctx.js",
+    ).replaceAll("'", "'\\''")}'`;
     const count = (file: string) =>
       (JSON.parse(readFileSync(file, "utf8")).hooks?.SessionStart ?? [])
         .flatMap((group: { hooks: { command: string }[] }) => group.hooks)
-        .filter(
-          (hook: { command: string }) =>
-            hook.command === "k8s-axi-ctx" ||
-            (hook.command.includes("/k8s-axi/") &&
-              hook.command.includes("/k8s-axi-ctx.js")),
-        ).length;
+        .filter((hook: { command: string }) => hook.command === managedCommand)
+        .length;
     const defaultSettings = join(l.env.HOME, ".claude/settings.json");
     expect(count(settings)).toBe(1);
-    expect(count(defaultSettings), readFileSync(defaultSettings, "utf8")).toBe(
-      1,
-    );
+    expect(count(defaultSettings)).toBe(0);
     expect(readFileSync(settings, "utf8")).toContain("echo k8s-axi");
     expect(readFileSync(settings, "utf8")).toContain(
       "/opt/other/k8s-axi-ctx.js",
