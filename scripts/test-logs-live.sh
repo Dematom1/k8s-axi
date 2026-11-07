@@ -106,9 +106,9 @@ check_tail() {
       import { decode } from "@toon-format/toon";
       let input = "";
       process.stdin.on("data", chunk => input += chunk).on("end", () => {
-        const help = decode(input).help ?? [];
-        if (!help.some(line => line.includes("--tail 1000"))) {
-          console.error("FAIL: continuation hint omitted --tail 1000");
+        const result = decode(input);
+        if (result["omitted-lines"] !== 0 || result.help?.length) {
+          console.error("FAIL: complete --tail 1000 output should not include a continuation hint");
           process.exitCode = 1;
         }
       });
