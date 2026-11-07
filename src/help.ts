@@ -22,6 +22,7 @@ export const COMMAND_LINES = [
   "setup uninstall: remove managed hooks, preserve unrelated config",
   "context: last session summary for this directory",
   "context end: record command counts and most-used context from stdin hook payload",
+  "audit: show the local log of executed guarded actions",
 ];
 export const TOP_HELP = [
   DESCRIPTION,
@@ -31,5 +32,6 @@ export const TOP_HELP = [
   "Lists: -n <namespace> or -A, --limit <n> (100, max 1000), --fields <a,b>, --problems",
   "Output is TOON. Exit 0: completed reads, including problems. Exit 1: failed or partial reads. Exit 2: usage.",
   "Secret values never enter this process. --full only untruncates allowlisted text.",
-  "Writes, raw output, exec, streaming and self-update are refused.",
+  "Reads are the only enabled cluster operations. Guarded actions will be preview-only by default and require an explicit --execute to run.",
+  "Secret values are never shown. Executed guarded actions will be recorded in a local audit log.",
 ];

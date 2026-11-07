@@ -7,4 +7,4 @@
 - Published-artifact verification after the first approved npm stage.
 - First GitHub workflow execution after repository creation and import.
 
-Cluster writes, exec, raw passthrough, and Secret value output are not planned.
+Guarded exec, port-forward, and apply preview are planned. Cluster writes and Secret value output remain unsupported.

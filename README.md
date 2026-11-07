@@ -35,6 +35,7 @@ Run `k8s-axi` for an all-namespace overview or `k8s-axi <command> --help` for fl
 - `secrets`, `secrets view <name>`: metadata and key names only.
 - `setup hooks`, `setup status`, `setup uninstall`: opt-in local agent integration.
 - `context`, `context end`: directory-scoped session summary.
+- `audit [--limit <n>] [--action exec|port-forward|apply]`: newest local guarded-action records; no network access.
 
 Global flags: `--context <name>`, `--timeout <seconds>` (default 20, range 1 to 120), `--help`, and `--version` (`-v`, `-V`).
 Namespaced lists default to the kubeconfig namespace, falling back to `default`. Home and triage default to all namespaces.
@@ -72,13 +73,22 @@ A missing context or namespace is an error. An empty namespace that cannot be ve
 | NAMESPACE_UNVERIFIED  | Namespace lookup forbidden and result empty.                                |
 | PARTIAL               | One or more triage checks failed.                                           |
 | CONFIG_INVALID        | Local configuration or integration could not be read, written, or verified. |
+| SECRET_EXPOSURE       | Action input could expose Secret material.                                  |
+| SCRUB_UNAVAILABLE     | Secret values could not be loaded for safe output scrubbing.                |
+| REMOTE_EXIT_NONZERO   | The remote command returned a nonzero exit status.                          |
+| AUDIT_UNAVAILABLE     | The action audit log could not be written or read.                          |
+| AUDIT_INCOMPLETE      | The action ran, but its completion record could not be written.             |
+| SESSION_LIMIT         | The maximum number of owned port-forward sessions is running.               |
+| SESSION_NOT_FOUND     | The requested owned session does not exist.                                 |
+| PORT_IN_USE           | The requested local port is already in use.                                 |
+| SECRET_MANIFEST       | A Secret manifest contains values instead of redacted placeholders.         |
+| INVALID_MANIFEST      | The manifest is invalid or unsupported.                                     |
 
 ## Safety model
 
-The only cluster operations are fixed `get`, `logs`, and `version` reads. Local configuration reads are limited to `current-context`, `get-contexts`, and a server-and-namespace projection.
-There is no arbitrary kubectl argument path, shell, write opt-in, exec, attach, proxy, port-forward, raw output, auth review, or self-update.
+Cluster access is read-only by default. The shared safety foundation for guarded `exec`, `port-forward`, apply preview, and diff is in place; those action commands are not enabled until their implementation lanes ship. When enabled, execution will require an explicit `--execute`, echo the target context, namespace, and target, and be recorded in a local audit log. `k8s-axi audit` reads that log without contacting the cluster. There is no arbitrary kubectl argument path, attach, proxy, raw output, auth review, or self-update.
 Every network call pins the resolved context. Namespace preflight distinguishes a missing namespace from an empty list.
-Subprocesses have closed stdin, a shared overall deadline, per-call timeouts, a process-group kill, and a 128 MiB combined output cap.
+Subprocesses have closed stdin, a shared overall deadline, per-call timeouts, process-group cleanup, and a 128 MiB combined output cap. The audit log is stored at `${XDG_STATE_HOME:-$HOME/.local/state}/k8s-axi/audit.jsonl`, with private directory and file permissions.
 KUBERC is disabled so user defaults cannot silently rewrite a read. kubectl can write its own discovery cache, but k8s-axi never modifies kubeconfig or cluster resources.
 
 Secrets are read only through a fixed go-template. Only namespace, name, type, creation time, and key names reach this process. Secret data, stringData, annotations, and labels do not.
@@ -140,6 +150,8 @@ rules:
 npm ci
 npm run check
 npm run test:real
+npm run test:live
+sh scripts/lab-live.sh
 sh scripts/real-kubectl.sh
 npm run build:skill
 ```
