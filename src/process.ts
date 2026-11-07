@@ -24,7 +24,6 @@ export async function runProcess(
       detached: true,
       env: { ...process.env, KUBERC: "off" },
     });
-    if (stdin !== undefined) child.stdin?.end(stdin);
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
     let bytes = 0;
@@ -51,6 +50,10 @@ export async function runProcess(
       kill("SIGTERM");
       setTimeout(() => kill("SIGKILL"), 2000).unref();
     };
+    child.stdin?.on("error", (error: NodeJS.ErrnoException) => {
+      if (error.code !== "EPIPE") terminate();
+    });
+    if (stdin !== undefined) child.stdin?.end(stdin);
     for (const [stream, chunks] of [
       [child.stdout, stdout],
       [child.stderr, stderr],

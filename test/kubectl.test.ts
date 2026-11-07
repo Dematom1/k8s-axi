@@ -1,6 +1,7 @@
 import { test, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { kubectl, parseList, mapKubectlFailure } from "../src/kubectl.js";
+import { runProcess } from "../src/process.js";
 import {
   argvFor,
   deadline,
@@ -15,6 +16,16 @@ test("secret cannot use JSON list operation", () => {
   const bad: Read = { op: "list", resource: "secrets", scope: { kind: "all" } };
   expect(bad.op).toBe("list");
   expect(SECRET_TEMPLATE).not.toContain("stringData");
+});
+test("early stdin close does not crash the process runner", async () => {
+  const result = await runProcess(
+    process.execPath,
+    ["-e", "process.stdin.destroy(); process.exit(0)"],
+    5000,
+    undefined,
+    "x".repeat(8 * 1024 * 1024),
+  );
+  expect(result.exit).toBe(0);
 });
 test("subprocess stdin is closed", async () => {
   const l = lab([], { mode: "stdin" }),
