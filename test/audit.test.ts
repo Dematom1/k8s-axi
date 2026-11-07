@@ -37,20 +37,26 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-test("audit log is private, redacts credentials, and reads newest records", () => {
+test("audit log is private, redacts credentials, and reads newest records", async () => {
+  const firstId = newAuditId();
+  const newestId = newAuditId();
   appendAudit({
-    id: newAuditId(),
+    id: firstId,
     phase: "start",
     action: "exec",
     argv: ["tool", "--password=CANARY_SECRET"],
   });
-  appendAudit({ id: newAuditId(), phase: "end", action: "exec", exit: 0 });
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  appendAudit({ id: newestId, phase: "end", action: "exec", exit: 0 });
   const path = auditPath();
   expect(statSync(join(root, "k8s-axi")).mode & 0o777).toBe(0o700);
   expect(statSync(path).mode & 0o777).toBe(0o600);
   expect(readFileSync(path, "utf8")).not.toContain("CANARY_SECRET");
-  expect(readAudit({ limit: 1 })).toHaveLength(1);
-  expect(readAudit({ limit: 5, action: "exec" })).toHaveLength(2);
+  expect(readAudit({ limit: 1 })[0]?.id).toBe(newestId);
+  expect(readAudit({ limit: 5, action: "exec" }).map(({ id }) => id)).toEqual([
+    newestId,
+    firstId,
+  ]);
 });
 
 test("audit command returns empty history before first write", async () => {
@@ -135,6 +141,18 @@ test("action argv is exact and audit parses supported filters", async () => {
     command: ["ls", "/app"],
   };
   const argv = argvForAction(action, target);
+  expect(argv).toEqual([
+    "exec",
+    "web-0",
+    "-n",
+    "apps",
+    "-c",
+    "app",
+    "--context=production",
+    "--",
+    "ls",
+    "/app",
+  ]);
   expect(() => assertSafeAction(action, target, argv)).not.toThrow();
   expect(() =>
     assertSafeAction(action, target, [...argv, "--token=x"]),
