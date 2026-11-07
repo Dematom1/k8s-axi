@@ -42,7 +42,9 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       encoding: "utf8",
     });
     expect(inspect.status).toBe(0);
-    expect(JSON.parse(inspect.stdout)[0].HostConfig.NanoCpus).toBe(2_000_000_000);
+    expect(JSON.parse(inspect.stdout)[0].HostConfig.NanoCpus).toBe(
+      2_000_000_000,
+    );
     for (const args of [
       [],
       ["ctx"],
@@ -109,13 +111,10 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       0,
     );
 
-    const alternate = run([
-      "pods",
-      "-n",
-      "fixtures",
-      "--context",
-      "kind-k8sx-alt",
-    ], 0);
+    const alternate = run(
+      ["pods", "-n", "fixtures", "--context", "kind-k8sx-alt"],
+      0,
+    );
     expect(JSON.stringify(alternate)).toContain("chatty");
 
     const missing = `axi-missing-${Date.now()}`;
@@ -204,12 +203,19 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     );
     expect(secretObjects.status).toBe(0);
     const secretList = JSON.parse(secretObjects.stdout) as {
-      items: { data?: Record<string, string>; metadata?: { annotations?: Record<string, string> } }[];
+      items: {
+        data?: Record<string, string>;
+        metadata?: { annotations?: Record<string, string> };
+      }[];
     };
     for (const secret of secretList.items) {
       secrets.push(...Object.values(secret.data ?? {}));
-      const applied = secret.metadata?.annotations?.["kubectl.kubernetes.io/last-applied-configuration"];
-      if (applied) secrets.push(applied, Buffer.from(applied).toString("base64"));
+      const applied =
+        secret.metadata?.annotations?.[
+          "kubectl.kubernetes.io/last-applied-configuration"
+        ];
+      if (applied)
+        secrets.push(applied, Buffer.from(applied).toString("base64"));
     }
     const credentials = [
       process.env.K8S_AXI_LIMITED_TOKEN,
