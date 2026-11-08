@@ -1,4 +1,4 @@
-import { chmodSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { decode } from "@toon-format/toon";
@@ -15,7 +15,19 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       process.env.K8S_AXI_TEST_PACKAGE ?? ".",
       "dist/bin/k8s-axi.js",
     );
-    const env: NodeJS.ProcessEnv = { ...process.env, KUBERC: "off" };
+    const home = resolve(process.env.HOME ?? "");
+    const labDir = resolve(home, "..");
+    expect(home.startsWith(`${labDir}/`)).toBe(true);
+    expect(home).toContain("/.lab-live/");
+    const claudeConfig = resolve(home, ".claude");
+    mkdirSync(claudeConfig, { recursive: true });
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      CLAUDE_CONFIG_DIR: claudeConfig,
+      XDG_CONFIG_HOME: resolve(home, ".config"),
+      XDG_STATE_HOME: resolve(home, ".local", "state"),
+      KUBERC: "off",
+    };
     const outputs: string[] = [];
     const run = (
       args: string[],
@@ -49,7 +61,11 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       [],
       ["ctx"],
       ["setup", "status"],
+      ["setup", "hooks"],
+      ["setup", "uninstall"],
       ["context"],
+      ["context", "end"],
+      ["audit"],
       ["nodes"],
       ["nodes", "view", nodeName],
       ["nodes", "view", nodeName, "--full"],
@@ -250,9 +266,12 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     for (const value of [...secrets, ...credentials]) {
       if (!value) continue;
       const candidates = [value, Buffer.from(value).toString("base64")];
-      if (credentials.includes(value))
-        candidates.push(Buffer.from(value).toString("base64"));
-      for (const candidate of candidates)
+      if (credentials.includes(value)) {
+        for (const representation of candidates)
+          for (let start = 0; start <= representation.length - 12; start++)
+            candidates.push(representation.slice(start, start + 12));
+      }
+      for (const candidate of new Set(candidates))
         if (candidate && output.includes(candidate))
           throw new Error("Sensitive material appeared in CLI output");
     }
