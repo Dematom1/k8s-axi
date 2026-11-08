@@ -267,7 +267,8 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       if (!value) continue;
       const candidates = [value, Buffer.from(value).toString("base64")];
       if (credentials.includes(value)) {
-        for (const representation of candidates)
+        const representations = [...candidates];
+        for (const representation of representations)
           for (let start = 0; start <= representation.length - 12; start++)
             candidates.push(representation.slice(start, start + 12));
       }
