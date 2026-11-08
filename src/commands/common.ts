@@ -82,19 +82,7 @@ export async function dispatch(
               ...(command === "events"
                 ? ["--warnings", "--since <duration>", "--for Kind/name"]
                 : []),
-            ]),
-        ...(command === "pods" && p.action === "logs"
-          ? [
-              "-c, --container <name> (annotation, then sole container)",
-              "--tail <1..1000> (100)",
-              "--since <duration>",
-              "--previous",
-            ]
-          : []),
-        ...(command === "events" && p.action === "list"
-          ? ["--warnings", "--since <duration>", "--for Kind/name"]
-          : []),
-      ],
+            ],
       examples:
         command === "setup"
           ? [
