@@ -98,7 +98,6 @@ while ! docker inspect "$node" >/dev/null 2>&1; do
   fi
   sleep 0.5
 done
-cluster_owned=1
 # kind has no create-time CPU limit, so cap the node as soon as Docker exposes it.
 if ! docker update --cpus=2 "$node" >/dev/null; then
   if wait "$create_pid"; then create_pid=; cluster_owned=1; fi
