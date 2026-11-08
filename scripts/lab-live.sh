@@ -88,12 +88,12 @@ done
 kind create cluster --name "$name" --kubeconfig "$config" --wait 300s &
 create_pid=$!
 node="${name}-control-plane"
-cap_deadline=$(( $(date +%s) + 120 ))
+cap_deadline=$(( $(date +%s) + 300 ))
 while ! docker inspect "$node" >/dev/null 2>&1; do
   if [ "$(date +%s)" -ge "$cap_deadline" ]; then
     kill "$create_pid" 2>/dev/null || true
     wait "$create_pid" 2>/dev/null || true
-    echo 'FAIL: kind node did not appear within 120 seconds' >&2
+    echo 'FAIL: kind node did not appear within 300 seconds' >&2
     exit 1
   fi
   sleep 0.5
