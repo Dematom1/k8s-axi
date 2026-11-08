@@ -85,6 +85,9 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       )
         run([...args, "--full"], 0);
     }
+    expect(
+      run(["deployments", "view", "broken", "-n", "fixtures", "--rollout-status"], 1).code,
+    ).toBe("UPSTREAM_ERROR");
     for (const name of ["db-creds", "api-token", "app-dsn", "app-conn"])
       for (const full of [[], ["--full"]])
         run(["secrets", "view", name, "-n", "fixtures", ...full], 0);
@@ -178,9 +181,16 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     writeFileSync(unreadable, "apiVersion: v1\n");
     chmodSync(unreadable, 0);
     try {
-      expect(run(["pods"], 1, { KUBECONFIG: unreadable }).code).toBe(
-        "UPSTREAM_ERROR",
-      );
+      let canRead = true;
+      try {
+        readFileSync(unreadable);
+      } catch {
+        canRead = false;
+      }
+      if (!canRead)
+        expect(run(["pods"], 1, { KUBECONFIG: unreadable }).code).toBe(
+          "UPSTREAM_ERROR",
+        );
     } finally {
       chmodSync(unreadable, 0o600);
       unlinkSync(unreadable);
@@ -194,8 +204,8 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       "CANARY_NEUTRAL_CONN_8KSA",
       "CANARY_ENV_8KSA",
       "CANARY_LOG_8KSA",
-      "admin",
-      "YWRtaW4=",
+      "CANARY_USERNAME_8KSA",
+      "Q0FOQVJZX1VTRVJOQU1FXzhLU0E=",
       "Q0FOQVJZX0RCX1BBU1NXT1JEXzhLU0E=",
       "Q0FOQVJZX05FVVRSQUxfRFNOXzhLU0E=",
     ];
@@ -212,7 +222,9 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       }[];
     };
     for (const secret of secretList.items) {
-      secrets.push(...Object.values(secret.data ?? {}));
+      for (const encoded of Object.values(secret.data ?? {})) {
+        secrets.push(encoded, Buffer.from(encoded, "base64").toString());
+      }
       const applied =
         secret.metadata?.annotations?.[
           "kubectl.kubernetes.io/last-applied-configuration"

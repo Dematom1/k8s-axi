@@ -2,29 +2,32 @@
 set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 lab="$root/.lab-live"
-name="k8s-axi-lab-$$"
+name="k8s-axi-lab"
 config="$lab/kubeconfig"
+lock="$root/.lab-live.lock"
+owned=0
 [ "${1:-}" = run ] || { echo 'usage: scripts/lab-live.sh run' >&2; exit 2; }
 command -v docker >/dev/null || { echo 'docker is required' >&2; exit 1; }
 command -v curl >/dev/null || { echo 'curl is required' >&2; exit 1; }
-lock=${K8S_AXI_LAB_LOCK:-/tmp/k8s-axi-kind-lab.lock}
 kind_bin="$lab/bin/kind"
+create_pid=
 cleanup() {
-  if [ -x "$kind_bin" ]; then KUBECONFIG="$config" "$kind_bin" delete cluster --name "$name" >/dev/null 2>&1 || true; fi
-  rm -rf "$lab" "$lock"
+  if [ -n "$create_pid" ]; then
+    kill "$create_pid" 2>/dev/null || true
+    wait "$create_pid" 2>/dev/null || true
+  fi
+  if [ "$owned" = 1 ]; then
+    if [ -x "$kind_bin" ]; then KUBECONFIG="$config" "$kind_bin" delete cluster --name "$name" >/dev/null 2>&1 || true; fi
+    rm -rf "$lab"
+    if [ "$(cat "$lock/pid" 2>/dev/null || true)" = "$$" ]; then rm -rf "$lock"; fi
+  fi
 }
 start=$(date +%s)
 while ! mkdir "$lock" 2>/dev/null; do
-  if [ -f "$lock/pid" ]; then
-    mtime=$(stat -c %Y "$lock" 2>/dev/null || stat -f %m "$lock" 2>/dev/null || echo 0)
-    if [ "$(( $(date +%s) - mtime ))" -gt 1800 ]; then
-      pid=$(cat "$lock/pid" 2>/dev/null || true)
-      if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then rm -rf "$lock"; continue; fi
-    fi
-  fi
   [ "$(( $(date +%s) - start ))" -lt 1200 ] || { echo 'FAIL: timed out waiting 20 minutes for the shared kind lab lock' >&2; exit 1; }
   sleep 10
 done
+owned=1
 trap cleanup EXIT HUP INT TERM
 printf '%s\n' "$$" > "$lock/pid"
 mkdir -p "$lab/bin" "$lab/home" "$lab/tmp"
@@ -52,18 +55,24 @@ verify "$lab/bin/kubectl"
 chmod +x "$kind_bin" "$lab/bin/kubectl"
 PATH="$lab/bin:$PATH"
 export PATH
-kind create cluster --name "$name" --kubeconfig "$config" --wait 120s &
+kind create cluster --name "$name" --kubeconfig "$config" --wait 300s &
 create_pid=$!
 node="${name}-control-plane"
-cap_deadline=$(( $(date +%s) + 15 ))
+cap_deadline=$(( $(date +%s) + 120 ))
 while ! docker inspect "$node" >/dev/null 2>&1; do
-  [ "$(date +%s)" -lt "$cap_deadline" ] || { echo 'FAIL: kind node did not appear within 15 seconds' >&2; exit 1; }
+  if [ "$(date +%s)" -ge "$cap_deadline" ]; then
+    kill "$create_pid" 2>/dev/null || true
+    wait "$create_pid" 2>/dev/null || true
+    echo 'FAIL: kind node did not appear within 120 seconds' >&2
+    exit 1
+  fi
   sleep 0.5
 done
 # kind has no create-time CPU limit, so cap the node as soon as Docker exposes it.
 docker update --cpus=2 "$node" >/dev/null
 [ "$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$node")" = 2000000000 ] || { echo 'FAIL: could not apply 2 CPU cap to kind node' >&2; exit 1; }
 wait "$create_pid"
+create_pid=
 KUBECONFIG="$config" kubectl config set-context kind-k8sx-alt --cluster="kind-$name" --user="kind-$name" --namespace=fixtures >/dev/null
 KUBECONFIG="$config" kubectl config set-cluster ghost --server=https://127.0.0.1:1 >/dev/null
 KUBECONFIG="$config" kubectl config set-context ghost --cluster=ghost --user="kind-$name" --namespace=fixtures >/dev/null
@@ -84,7 +93,8 @@ nsonly_token=$(kubectl create token nsonly -n fixtures --duration=1h)
 kubectl config set-credentials nsonly --token="$nsonly_token" >/dev/null
 kubectl config set-context nsonly --cluster="kind-$name" --user=nsonly --namespace=fixtures >/dev/null
 kubectl wait -n fixtures --for=condition=Available deployment/web --timeout=120s
-kubectl wait -n fixtures --for=condition=Ready pod/chatty --timeout=120s
+kubectl wait -n fixtures --for=condition=Ready pod/chatty --timeout=300s
+kubectl wait -n fixtures --for=jsonpath='{.status.conditions[?(@.type=="Progressing")].reason}'=ProgressDeadlineExceeded deployment/broken --timeout=300s
 cd "$root"
 npm run build
 archive=$(npm pack --silent --pack-destination "$lab")

@@ -9,7 +9,7 @@ metadata:
   name: db-creds
   namespace: fixtures
 data:
-  username: YWRtaW4=
+  username: Q0FOQVJZX1VTRVJOQU1FXzhLU0E=
   password: Q0FOQVJZX0RCX1BBU1NXT1JEXzhLU0E=
 ---
 apiVersion: v1
