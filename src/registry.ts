@@ -68,7 +68,15 @@ export type Read =
     }
   | {
       op: "get";
-      resource: "node" | "pod" | "deployment.apps" | "namespace";
+      resource:
+        | "node"
+        | "pod"
+        | "deployment.apps"
+        | "namespace"
+        | "job.batch"
+        | "persistentvolumeclaim"
+        | "service"
+        | "event";
       name: ResourceName | NamespaceName;
       namespace?: NamespaceName;
     }
@@ -293,14 +301,21 @@ export function assertSafe(argv: readonly string[]): void {
   const resource = a[1],
     rest = a.slice(2);
   if (
-    ["node", "pod", "deployment.apps", "namespace"].includes(resource ?? "") &&
+    [
+      "node",
+      "pod",
+      "deployment.apps",
+      "namespace",
+      "job.batch",
+      "persistentvolumeclaim",
+      "service",
+      "event",
+    ].includes(resource ?? "") &&
     dns(rest[0])
   ) {
     const scope = rest.slice(1, -2);
     if (
-      ((!scope.length &&
-        resource !== "pod" &&
-        resource !== "deployment.apps") ||
+      ((!scope.length && ["node", "namespace"].includes(resource ?? "")) ||
         (scope.length === 2 && scope[0] === "-n" && dns(scope[1]))) &&
       rest.at(-2) === "-o" &&
       (rest.at(-1) === "json" ||

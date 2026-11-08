@@ -15,6 +15,18 @@ function run(args: string[]) {
   return { ...result, elapsed: Date.now() - started };
 }
 
+liveTest("named namespaces and services route to single-object views", () => {
+  for (const [args, identity] of [
+    [["get", "namespace", "default"], "namespace: default"],
+    [["get", "service", "kubernetes", "-n", "default"], "service: kubernetes"],
+  ] as const) {
+    const result = run([...args]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(identity);
+    expect(result.stdout).toContain("context:");
+  }
+});
+
 liveTest("kubectl read vocabulary routes to bounded diagnostics", () => {
   for (const args of [
     ["get", "pods", "-n", "fixtures"],
