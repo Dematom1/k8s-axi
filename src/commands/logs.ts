@@ -61,13 +61,14 @@ export async function logsCommand(p: Parsed): Promise<string> {
   const lines = redacted.text.split(/\r?\n/);
   if (lines.at(-1) === "") lines.pop();
   const shownLines: string[] = [];
-  let shownChars = 0;
+  let shownBytes = 0;
   if (p.full) shownLines.push(...lines);
   else {
     for (const line of lines.slice(-1000).reverse()) {
-      if (shownChars + line.length > 10000 && shownLines.length > 0) break;
+      const lineBytes = Buffer.byteLength(line);
+      if (shownBytes + lineBytes > 10000 && shownLines.length > 0) break;
       shownLines.unshift(line);
-      shownChars += line.length;
+      shownBytes += lineBytes;
     }
   }
   const omitted = lines.length - shownLines.length;
