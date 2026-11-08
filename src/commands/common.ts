@@ -72,7 +72,7 @@ export async function dispatch(
               "--previous",
             ]
           : []),
-        ...(command === "events"
+        ...(command === "events" && p.action === "list"
           ? ["--warnings", "--since <duration>", "--for Kind/name"]
           : []),
       ],

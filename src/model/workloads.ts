@@ -93,6 +93,30 @@ export function workloadRow(
   }
   return { cells, problem, why: status, created };
 }
+export function claimOrJobDetail(
+  raw: Obj,
+  noun: "jobs" | "pvcs",
+  full = false,
+): Record<string, unknown> {
+  const spec = object(raw.spec),
+    status = object(raw.status);
+  return {
+    ...workloadRow(raw, noun).cells,
+    namespace: text(object(raw.metadata).namespace),
+    ...(noun === "jobs"
+      ? {
+          active: number(status.active),
+          succeeded: number(status.succeeded),
+          failed: number(status.failed),
+        }
+      : {
+          volume: text(spec.volumeName),
+          storageClass: text(spec.storageClassName),
+          requested: text(object(object(spec.resources).requests).storage),
+        }),
+    conditions: conditionRows(status.conditions, full),
+  };
+}
 export function deploymentDetail(
   raw: Obj,
   full = false,
