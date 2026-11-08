@@ -13,16 +13,13 @@ const spec = {
 };
 export async function namespacesCommand(p: Parsed): Promise<string> {
   validateFields(spec, p);
-  const name = p.action === "view" && p.name ? validateNamespace(p.name) : undefined;
+  const name =
+    p.action === "view" && p.name ? validateNamespace(p.name) : undefined;
   const d = deadline(p.timeout),
     target = await resolveTarget(p.context, d);
   if (name) {
     const raw = parseObject(
-      await kubectl(
-        { op: "get", resource: "namespace", name },
-        target,
-        d,
-      ),
+      await kubectl({ op: "get", resource: "namespace", name }, target, d),
     );
     const meta = object(raw.metadata),
       status = object(raw.status);

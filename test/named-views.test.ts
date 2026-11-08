@@ -122,8 +122,12 @@ for (const view of views) {
       expect(read).toBeDefined();
       expect(read).toContain("json");
       if (view.noun === "services") {
-        const slices = calls.find((args) => args[1] === "endpointslices.discovery.k8s.io");
-        expect(slices).toContain("--selector=kubernetes.io/service-name=sample");
+        const slices = calls.find(
+          (args) => args[1] === "endpointslices.discovery.k8s.io",
+        );
+        expect(slices).toContain(
+          "--selector=kubernetes.io/service-name=sample",
+        );
       }
       if (view.noun !== "namespaces") expect(read).toContain("sandbox");
       else expect(read).not.toContain("-n");
@@ -186,7 +190,9 @@ test("namespace view rejects dotted names before cluster access", () => {
   try {
     const result = cli(["namespaces", "view", "a.b"], environment.env);
     expect(result.status).toBe(2);
-    expect(result.data).toMatchObject({ error: "namespace must be a DNS label" });
+    expect(result.data).toMatchObject({
+      error: "namespace must be a DNS label",
+    });
     expect(environment.calls()).toEqual([]);
   } finally {
     environment.clean();
