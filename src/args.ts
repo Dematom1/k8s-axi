@@ -119,6 +119,7 @@ export interface Parsed {
   help: boolean;
   warnings: boolean;
   since?: number;
+  sinceArg?: string;
   forObject?: string;
   container?: ResourceName;
   tail: number;
@@ -238,6 +239,7 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     help: flags.has("help"),
     warnings: flags.has("warnings"),
     since: str("since") ? parseDuration(str("since") ?? "") : undefined,
+    sinceArg: str("since"),
     forObject,
     container: str("container")
       ? validateResourceName(str("container") ?? "")

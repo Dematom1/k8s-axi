@@ -99,6 +99,48 @@ test("preserves a logged blank line but drops the final newline artifact", () =>
   }
 });
 
+test("tail continuation increases the bound and preserves options", () => {
+  const pod = {
+    metadata: { name: "p" },
+    spec: { containers: [{ name: "c" }] },
+  };
+  const l = lab([
+    { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
+    {
+      prefix: ["logs"],
+      stdout: `${Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n")}\n`,
+    },
+    ...targetRules(),
+  ]);
+  try {
+    const p = cli(
+      [
+        "pods",
+        "logs",
+        "p",
+        "-n",
+        "sandbox",
+        "--context",
+        "default",
+        "-c",
+        "c",
+        "--tail",
+        "50",
+        "--since",
+        "15m",
+        "--previous",
+      ],
+      l.env,
+    );
+    expect(p.status).toBe(0);
+    expect(p.data.help[0]).toBe(
+      'Run `k8s-axi pods logs p -n sandbox --context "default" -c c --tail 100 --since 15m --previous` for more logs',
+    );
+  } finally {
+    l.clean();
+  }
+});
+
 test("continuation hints retain an inferred container", () => {
   const pod = {
     metadata: {
@@ -124,7 +166,7 @@ test("continuation hints retain an inferred container", () => {
   }
 });
 
-test("a full tail gives a runnable continuation hint", () => {
+test("a full tail recommends a wider since window", () => {
   const pod = {
     metadata: { name: "p" },
     spec: { containers: [{ name: "c" }] },
@@ -155,35 +197,8 @@ test("a full tail gives a runnable continuation hint", () => {
     );
     expect(p.status).toBe(0);
     expect(p.data.help).toEqual([
-      'Run `k8s-axi pods logs p -n sandbox --context "default" -c c --tail 1000 --since 900s --previous --full` for the newest logs',
+      "Widen the --since window (currently 15m) to include older logs; --tail is capped at 1000",
     ]);
-    const continued = cli(
-      [
-        "pods",
-        "logs",
-        "p",
-        "-n",
-        "sandbox",
-        "--context",
-        "default",
-        "-c",
-        "c",
-        "--tail",
-        "1000",
-        "--since",
-        "900s",
-        "--previous",
-        "--full",
-      ],
-      l.env,
-    );
-    expect(continued.status).toBe(0);
-    const logCall = l.calls().filter((call) => call.args[0] === "logs").at(-1);
-    expect(logCall.args).toContain("--tail=1000");
-    expect(logCall.args).toContain("--since=900s");
-    expect(logCall.args).toContain("--previous");
-    expect(logCall.args).toContain("-c");
-    expect(logCall.args).toContain("c");
   } finally {
     l.clean();
   }

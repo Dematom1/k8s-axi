@@ -62,6 +62,7 @@ export async function logsCommand(p: Parsed): Promise<string> {
   if (lines.at(-1) === "") lines.pop();
   const shownLines = p.full ? lines : lines.slice(-1000);
   const omitted = lines.length - shownLines.length;
+  const nextTail = Math.min(1000, p.tail * 2);
   return encodeObject({
     context: t.context,
     scope: scopeLabel(s),
@@ -77,7 +78,11 @@ export async function logsCommand(p: Parsed): Promise<string> {
     ...(cut || omitted > 0 || lines.length >= p.tail
       ? {
           help: [
-            `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --tail ${p.tail}${p.since ? ` --since ${p.since}s` : ""}${p.previous ? " --previous" : ""} --full\` for the newest logs`,
+            cut
+              ? `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --tail ${p.tail}${p.sinceArg ? ` --since ${p.sinceArg}` : ""}${p.previous ? " --previous" : ""} --full\` to remove the character preview limit`
+              : p.tail < 1000
+                ? `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --tail ${nextTail}${p.sinceArg ? ` --since ${p.sinceArg}` : ""}${p.previous ? " --previous" : ""}\` for more logs`
+                : `Widen the --since window${p.sinceArg ? ` (currently ${p.sinceArg})` : ""} to include older logs; --tail is capped at 1000`,
           ],
         }
       : {}),
