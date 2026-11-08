@@ -60,9 +60,29 @@ export async function logsCommand(p: Parsed): Promise<string> {
     cut = Buffer.byteLength(raw) >= 1048576;
   const lines = redacted.text.split(/\r?\n/);
   if (lines.at(-1) === "") lines.pop();
-  const shownLines = p.full ? lines : lines.slice(-1000);
+  const tailLines = lines.slice(-p.tail);
+  const shownLines: string[] = [];
+  let previewChars = 0;
+  for (const line of tailLines.slice().reverse()) {
+    const length = line.length + (shownLines.length ? 1 : 0);
+    if (!p.full && previewChars + length > 8000) break;
+    shownLines.unshift(line);
+    previewChars += length;
+  }
   const omitted = lines.length - shownLines.length;
+  const previewTruncated = !p.full && shownLines.length < tailLines.length;
   const nextTail = Math.min(1000, p.tail * 2);
+  const command = `k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container}`;
+  const carried = `${p.sinceArg ? ` --since ${p.sinceArg}` : ""}${p.previous ? " --previous" : ""}`;
+  const help = previewTruncated
+    ? `Run \`${command} --tail ${p.tail}${carried} --full\` to remove the character preview limit; --full does not fetch lines beyond --tail`
+    : lines.length >= p.tail && p.tail < 1000
+      ? `Run \`${command} --tail ${nextTail}${carried}\` for more logs`
+      : lines.length >= p.tail
+        ? `Use a wider --since duration to include older logs; --tail is capped at 1000${p.sinceArg ? ` (currently --since ${p.sinceArg})` : ""}. Request: \`${command} --tail 1000${carried}\``
+        : cut
+          ? `The log response reached kubectl's 1 MiB limit; try a smaller --tail or --since window. Request: \`${command} --tail ${p.tail}${carried}\``
+          : undefined;
   return encodeObject({
     context: t.context,
     scope: scopeLabel(s),
@@ -75,16 +95,6 @@ export async function logsCommand(p: Parsed): Promise<string> {
     "omitted-lines": omitted,
     shown: shownLines.length ? `${shownLines[0]}..${shownLines.at(-1)}` : "",
     logs: shownLines,
-    ...(cut || omitted > 0 || lines.length >= p.tail
-      ? {
-          help: [
-            cut
-              ? `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --tail ${p.tail}${p.sinceArg ? ` --since ${p.sinceArg}` : ""}${p.previous ? " --previous" : ""} --full\` to remove the character preview limit`
-              : p.tail < 1000
-                ? `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --tail ${nextTail}${p.sinceArg ? ` --since ${p.sinceArg}` : ""}${p.previous ? " --previous" : ""}\` for more logs`
-                : `Widen the --since window${p.sinceArg ? ` (currently ${p.sinceArg})` : ""} to include older logs; --tail is capped at 1000`,
-          ],
-        }
-      : {}),
+    ...(help ? { help: [help] } : {}),
   });
 }

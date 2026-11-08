@@ -75,8 +75,9 @@ test("bounded log cut and previous error are explicit", () => {
         expect(p.stdout).toContain("events for the pod");
       } else {
         expect(object(p.data)["byte-limited"]).toBe(true);
-        expect(p.data.help[0]).toContain("--full");
-        expect(p.data.help[0]).toContain("to remove the character preview limit");
+        const help = (p.data as { help: string[] }).help;
+        expect(help[0]).toContain("--full");
+        expect(help[0]).toContain("to remove the character preview limit");
       }
     } finally {
       l.clean();

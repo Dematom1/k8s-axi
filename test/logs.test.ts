@@ -1,6 +1,15 @@
 import { test, expect } from "vitest";
 import { cli } from "./helpers.js";
 import { lab, targetRules } from "./lab.js";
+
+type LogsOutput = {
+  logs: string[];
+  "omitted-lines": number;
+  shown: string;
+  help?: string[];
+};
+const logsOutput = (result: ReturnType<typeof cli>) =>
+  result.data as LogsOutput;
 for (const annotation of [undefined, "a"])
   test(`container selection ${annotation}`, () => {
     const pod = {
@@ -71,9 +80,10 @@ test("reports the exact newest tail, omitted count, and shown range", () => {
   try {
     const p = cli(["pods", "logs", "p", "-c", "c", "--tail", "2"], l.env);
     expect(p.status).toBe(0);
-    expect(p.data.logs).toEqual(["newer-1", "newer-2"]);
-    expect(p.data["omitted-lines"]).toBe(1);
-    expect(p.data.shown).toBe("newer-1..newer-2");
+    const data = logsOutput(p);
+    expect(data.logs).toEqual(["newer-1", "newer-2"]);
+    expect(data["omitted-lines"]).toBe(1);
+    expect(data.shown).toBe("newer-1..newer-2");
   } finally {
     l.clean();
   }
@@ -92,8 +102,9 @@ test("preserves a logged blank line but drops the final newline artifact", () =>
   try {
     const p = cli(["pods", "logs", "p", "-c", "c"], l.env);
     expect(p.status).toBe(0);
-    expect(p.data.logs).toEqual(["foo", ""]);
-    expect(p.data["omitted-lines"]).toBe(0);
+    const data = logsOutput(p);
+    expect(data.logs).toEqual(["foo", ""]);
+    expect(data["omitted-lines"]).toBe(0);
   } finally {
     l.clean();
   }
@@ -133,9 +144,82 @@ test("tail continuation increases the bound and preserves options", () => {
       l.env,
     );
     expect(p.status).toBe(0);
-    expect(p.data.help[0]).toBe(
+    const data = logsOutput(p);
+    expect(data.help?.[0]).toBe(
       'Run `k8s-axi pods logs p -n sandbox --context "default" -c c --tail 100 --since 15m --previous` for more logs',
     );
+  } finally {
+    l.clean();
+  }
+});
+
+test("character-preview hint keeps request options and --full semantics", () => {
+  const pod = {
+    metadata: { name: "p" },
+    spec: { containers: [{ name: "c" }] },
+  };
+  const l = lab([
+    { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
+    {
+      prefix: ["logs"],
+      stdout: `${Array.from({ length: 100 }, (_, i) => `${i}:${"x".repeat(100)}`).join("\n")}\n`,
+    },
+    ...targetRules(),
+  ]);
+  try {
+    const p = cli(
+      [
+        "pods",
+        "logs",
+        "p",
+        "-n",
+        "sandbox",
+        "--context",
+        "default",
+        "-c",
+        "c",
+        "--tail",
+        "100",
+        "--since",
+        "15m",
+        "--previous",
+      ],
+      l.env,
+    );
+    expect(p.status, p.stderr).toBe(0);
+    const data = logsOutput(p);
+    expect(data.logs.length).toBeLessThan(100);
+    expect(data["omitted-lines"]).toBe(100 - data.logs.length);
+    expect(data.help?.[0]).toContain(
+      'k8s-axi pods logs p -n sandbox --context "default" -c c --tail 100 --since 15m --previous --full',
+    );
+    expect(data.help?.[0]).toContain("does not fetch lines beyond --tail");
+  } finally {
+    l.clean();
+  }
+});
+
+test("--full does not fetch older lines than the requested tail", () => {
+  const pod = {
+    metadata: { name: "p" },
+    spec: { containers: [{ name: "c" }] },
+  };
+  const l = lab([
+    { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
+    { prefix: ["logs"], stdout: "older\nnewer-1\nnewer-2\n" },
+    ...targetRules(),
+  ]);
+  try {
+    const p = cli(
+      ["pods", "logs", "p", "-c", "c", "--tail", "2", "--full"],
+      l.env,
+    );
+    expect(p.status).toBe(0);
+    const data = logsOutput(p);
+    expect(data.logs).toEqual(["newer-1", "newer-2"]);
+    expect(data["omitted-lines"]).toBe(1);
+    expect(data.help?.[0]).toContain("--tail 4");
+    expect(data.help?.[0]).not.toContain("--full");
   } finally {
     l.clean();
   }
@@ -160,13 +244,13 @@ test("continuation hints retain an inferred container", () => {
   try {
     const p = cli(["pods", "logs", "p"], l.env);
     expect(p.status).toBe(0);
-    expect(p.data.help[0]).toContain("-c a --tail 100");
+    expect(logsOutput(p).help?.[0]).toContain("-c a --tail 200");
   } finally {
     l.clean();
   }
 });
 
-test("a full tail recommends a wider since window", () => {
+test("a full maximum tail recommends a wider since window", () => {
   const pod = {
     metadata: { name: "p" },
     spec: { containers: [{ name: "c" }] },
@@ -175,7 +259,7 @@ test("a full tail recommends a wider since window", () => {
     { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
     {
       prefix: ["logs"],
-      stdout: `${Array.from({ length: 1000 }, (_, i) => `line ${i}`).join("\n")}\n`,
+      stdout: `${Array.from({ length: 1000 }, (_, i) => String(i)).join("\n")}\n`,
     },
     ...targetRules(),
   ]);
@@ -196,8 +280,8 @@ test("a full tail recommends a wider since window", () => {
       l.env,
     );
     expect(p.status).toBe(0);
-    expect(p.data.help).toEqual([
-      "Widen the --since window (currently 15m) to include older logs; --tail is capped at 1000",
+    expect(logsOutput(p).help).toEqual([
+      'Use a wider --since duration to include older logs; --tail is capped at 1000 (currently --since 15m). Request: `k8s-axi pods logs p -n sandbox --context "default" -c c --tail 1000 --since 15m --previous`',
     ]);
   } finally {
     l.clean();
