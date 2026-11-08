@@ -1,12 +1,5 @@
 # Changelog
 
-## [0.1.2](https://github.com/Dematom1/k8s-axi/compare/k8s-axi-v0.1.1...k8s-axi-v0.1.2) (2026-11-07)
-
-
-### Bug Fixes
-
-* **claude:** honor CLAUDE_CONFIG_DIR for hooks ([#9](https://github.com/Dematom1/k8s-axi/issues/9)) ([b9c4f39](https://github.com/Dematom1/k8s-axi/commit/b9c4f395e47aba71e1868fb6e5d62ad6dd90f6ae))
-
 ## [0.1.1](https://github.com/Dematom1/k8s-axi/compare/k8s-axi-v0.1.0...k8s-axi-v0.1.1) (2026-11-04)
 
 
