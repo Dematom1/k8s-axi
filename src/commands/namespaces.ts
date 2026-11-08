@@ -1,4 +1,4 @@
-import type { Parsed } from "../args.js";
+import { validateNamespace, type Parsed } from "../args.js";
 import { resolveTarget } from "../target.js";
 import { deadline } from "../registry.js";
 import { kubectl, parseObject, readList, object, text } from "../kubectl.js";
@@ -13,12 +13,13 @@ const spec = {
 };
 export async function namespacesCommand(p: Parsed): Promise<string> {
   validateFields(spec, p);
+  const name = p.action === "view" && p.name ? validateNamespace(p.name) : undefined;
   const d = deadline(p.timeout),
     target = await resolveTarget(p.context, d);
-  if (p.action === "view" && p.name) {
+  if (name) {
     const raw = parseObject(
       await kubectl(
-        { op: "get", resource: "namespace", name: p.name },
+        { op: "get", resource: "namespace", name },
         target,
         d,
       ),

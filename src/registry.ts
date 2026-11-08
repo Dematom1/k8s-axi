@@ -354,7 +354,12 @@ export function assertSafe(argv: readonly string[]): void {
     reject();
   }
   if (
-    ["pods", "deployments.apps", "jobs.batch"].includes(resource ?? "") &&
+    [
+      "pods",
+      "deployments.apps",
+      "jobs.batch",
+      "endpointslices.discovery.k8s.io",
+    ].includes(resource ?? "") &&
     rest[0]?.startsWith("--selector=")
   )
     rest.shift();

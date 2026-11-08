@@ -1,4 +1,4 @@
-import type { Parsed } from "../args.js";
+import { validateSelector, type Parsed } from "../args.js";
 import {
   deadline,
   type Target,
@@ -51,7 +51,12 @@ export async function servicesCommand(p: Parsed): Promise<string> {
     ]);
     const raw = rows[0] ?? {};
     const slices = await readList(
-      { op: "list", resource: "endpointslices.discovery.k8s.io", scope: s },
+      {
+        op: "list",
+        resource: "endpointslices.discovery.k8s.io",
+        scope: s,
+        selector: validateSelector(`kubernetes.io/service-name=${name}`),
+      },
       t,
       d,
     );
