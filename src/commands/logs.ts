@@ -65,7 +65,7 @@ export async function logsCommand(p: Parsed): Promise<string> {
   if (p.full) shownLines.push(...lines);
   else {
     for (const line of lines.slice(-1000).reverse()) {
-      const lineBytes = Buffer.byteLength(line);
+      const lineBytes = Buffer.byteLength(line) + (shownLines.length > 0 ? 1 : 0);
       if (shownBytes + lineBytes > 10000 && shownLines.length > 0) break;
       shownLines.unshift(line);
       shownBytes += lineBytes;
