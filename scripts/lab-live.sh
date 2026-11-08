@@ -85,7 +85,6 @@ while kind get clusters | grep -Fxq "$name"; do
   [ "$(( $(date +%s) - cluster_wait_start ))" -lt 1200 ] || { echo 'FAIL: existing kind lab is still active after 20 minutes' >&2; exit 1; }
   sleep 15
 done
-cluster_owned=1
 kind create cluster --name "$name" --kubeconfig "$config" --wait 300s &
 create_pid=$!
 node="${name}-control-plane"
@@ -104,6 +103,7 @@ docker update --cpus=2 "$node" >/dev/null
 [ "$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$node")" = 2000000000 ] || { echo 'FAIL: could not apply 2 CPU cap to kind node' >&2; exit 1; }
 wait "$create_pid"
 create_pid=
+cluster_owned=1
 KUBECONFIG="$config" kubectl config set-context kind-k8sx-alt --cluster="kind-$name" --user="kind-$name" --namespace=fixtures >/dev/null
 KUBECONFIG="$config" kubectl config set-cluster ghost --server=https://127.0.0.1:1 >/dev/null
 KUBECONFIG="$config" kubectl config set-context ghost --cluster=ghost --user="kind-$name" --namespace=fixtures >/dev/null
