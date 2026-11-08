@@ -104,14 +104,23 @@ for (const [stderr, code] of [
 ])
   test(`map ${code}`, () =>
     expect(mapKubectlFailure(stderr ?? "").code).toBe(code));
-test("only failed log retrieval classifies kubelet log errors", () => {
-  for (const stderr of [
-    "unable to retrieve container logs for pod/app",
-    "failed to get container log for pod/app",
-  ]) {
-    expect(mapKubectlFailure(stderr, "logs").code).toBe("LOGS_UNAVAILABLE");
-    expect(mapKubectlFailure(stderr, "get").code).toBe("UPSTREAM_ERROR");
-  }
+test("classifies kubelet log retrieval failures without hiding transport errors", () => {
+  const retrieval =
+    'Error from server: Get "https://127.0.0.1:10250/containerLogs/sandbox/p/c": unable to retrieve container logs for containerd://0123456789abcdef';
+  expect(mapKubectlFailure(retrieval, "logs").code).toBe("LOGS_UNAVAILABLE");
+  expect(mapKubectlFailure(retrieval, "get").code).toBe("UPSTREAM_ERROR");
+  expect(
+    mapKubectlFailure(
+      "failed to get container logs for pod/app: dial tcp 10.0.0.1:10250: connection refused",
+      "logs",
+    ).code,
+  ).toBe("SERVER_UNREACHABLE");
+  expect(
+    mapKubectlFailure(
+      "failed to get container logs for pod/app: Unauthorized",
+      "logs",
+    ).code,
+  ).toBe("AUTH_REQUIRED");
 });
 for (const value of [
   "password=CANARY",

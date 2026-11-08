@@ -15,15 +15,6 @@ export function mapKubectlFailure(
   stderr: string,
   operation?: Read["op"],
 ): AxiError {
-  if (
-    operation === "logs" &&
-    /unable to retrieve container logs for|failed to get container logs?|previous terminated container.*not found|previous.*not available/i.test(
-      stderr,
-    )
-  )
-    return new AxiError("container logs are unavailable", "LOGS_UNAVAILABLE", [
-      "Run `k8s-axi pods view <pod>` or check events for the pod",
-    ]);
   const cases: [RegExp, ErrorCode, string][] = [
     [
       /context.*(?:was not found|not found)/i,
@@ -66,6 +57,16 @@ export function mapKubectlFailure(
     [/unable to parse requirement/i, "VALIDATION_ERROR", "invalid selector"],
   ];
   const found = cases.find(([re]) => re.test(stderr));
+  if (
+    !found &&
+    operation === "logs" &&
+    /unable to retrieve container logs for|failed to get container logs?|previous terminated container.*not found|previous.*not available/i.test(
+      stderr,
+    )
+  )
+    return new AxiError("container logs are unavailable", "LOGS_UNAVAILABLE", [
+      "Run `k8s-axi pods view <pod>` or check events for the pod",
+    ]);
   // Raw stderr is untrusted and can contain credentials or Secret values. Classify only.
   return new AxiError(
     found?.[2] ?? "the cluster read failed",
@@ -73,9 +74,7 @@ export function mapKubectlFailure(
     [
       found?.[1] === "CONTEXT_NOT_FOUND"
         ? "Run `k8s-axi ctx`"
-        : found?.[1] === "LOGS_UNAVAILABLE"
-          ? "Run `k8s-axi pods view <pod>` or check events for the pod"
-          : "Run `k8s-axi --help` or retry with a narrower namespace",
+        : "Run `k8s-axi --help` or retry with a narrower namespace",
     ],
   );
 }
