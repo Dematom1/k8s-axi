@@ -132,7 +132,7 @@ test("tail continuation increases the bound and preserves options", () => {
         "-n",
         "sandbox",
         "--context",
-        "ctx ;$(x)",
+        "ctx:/@",
         "-c",
         "c",
         "--tail",
@@ -146,7 +146,7 @@ test("tail continuation increases the bound and preserves options", () => {
     expect(p.status).toBe(0);
     const data = logsOutput(p);
     expect(data.help?.[0]).toBe(
-      "Run `k8s-axi pods logs p -n sandbox --context 'ctx ;$(x)' -c c --tail 100 --since 15m --previous` for more logs",
+      "Run `k8s-axi pods logs 'p' -n 'sandbox' --context 'ctx:/@' -c 'c' --tail 100 --since 15m --previous` for more logs",
     );
   } finally {
     l.clean();
@@ -191,7 +191,7 @@ test("character-preview hint keeps request options and --full semantics", () => 
     expect(data.logs.length).toBeLessThan(100);
     expect(data["omitted-lines"]).toBe(100 - data.logs.length);
     expect(data.help?.[0]).toContain(
-      "k8s-axi pods logs p -n sandbox --context 'default' -c c --tail 100 --since 15m --previous --full",
+      "k8s-axi pods logs 'p' -n 'sandbox' --context 'default' -c 'c' --tail 100 --since 15m --previous --full",
     );
     expect(data.help?.[0]).toContain("does not fetch lines beyond --tail");
   } finally {
@@ -244,7 +244,7 @@ test("continuation hints retain an inferred container", () => {
   try {
     const p = cli(["pods", "logs", "p"], l.env);
     expect(p.status).toBe(0);
-    expect(logsOutput(p).help?.[0]).toContain("-c a --tail 200");
+    expect(logsOutput(p).help?.[0]).toContain("-c 'a' --tail 200");
   } finally {
     l.clean();
   }
