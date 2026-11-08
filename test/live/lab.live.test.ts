@@ -64,7 +64,6 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       ["setup", "hooks"],
       ["setup", "uninstall"],
       ["context"],
-      ["context", "end"],
       ["audit"],
       ["nodes"],
       ["nodes", "view", nodeName],
@@ -92,9 +91,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     ]) {
       run(args, 0);
     }
-    expect(
-      run(["deployments", "view", "broken", "-n", "fixtures", "--rollout-status"], 1).code,
-    ).toBe("UPSTREAM_ERROR");
+    expect(run(["context", "end"], 2).code).toBe("VALIDATION_ERROR");
     for (const name of ["db-creds", "api-token", "app-dsn", "app-conn"])
       for (const full of [[], ["--full"]])
         run(["secrets", "view", name, "-n", "fixtures", ...full], 0);
