@@ -4,7 +4,7 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 lab="$root/.lab-live"
 name="k8s-axi-lab"
 config="$lab/kubeconfig"
-lock="$root/.lab-live.lock"
+lock="$lab/.lock"
 owned=0
 cluster_owned=0
 [ "${1:-}" = run ] || { echo 'usage: scripts/lab-live.sh run' >&2; exit 2; }
@@ -19,10 +19,14 @@ cleanup() {
   fi
   if [ "$owned" = 1 ]; then
     if [ "$cluster_owned" = 1 ] && [ -x "$kind_bin" ]; then KUBECONFIG="$config" "$kind_bin" delete cluster --name "$name" >/dev/null 2>&1 || true; fi
-    rm -rf "$lab"
-    if [ "$(cat "$lock/pid" 2>/dev/null || true)" = "$$" ]; then rm -rf "$lock"; fi
+    if [ "$(cat "$lock/pid" 2>/dev/null || true)" = "$$" ]; then
+      rm -rf "$lab/bin" "$lab/home" "$lab/tmp" "$lab/package" "$lab/kubeconfig" "$lab/live-results.json"
+      rm -rf "$lock"
+      rmdir "$lab" 2>/dev/null || true
+    fi
   fi
 }
+mkdir -p "$lab"
 start=$(date +%s)
 while ! mkdir "$lock" 2>/dev/null; do
   [ "$(( $(date +%s) - start ))" -lt 1200 ] || { echo 'FAIL: timed out waiting 20 minutes for the shared kind lab lock' >&2; exit 1; }
