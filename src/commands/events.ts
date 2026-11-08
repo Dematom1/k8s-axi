@@ -10,8 +10,9 @@ import {
   type Scope,
 } from "../registry.js";
 import { resolveTarget, resolveScope, scopeLabel, scoped } from "../target.js";
-import { readList } from "../kubectl.js";
-import { eventRows, eventSpec } from "../model/events.js";
+import { kubectl, parseObject, readList, object, text } from "../kubectl.js";
+import { encodeObject } from "../toon.js";
+import { eventRow, eventRows, eventSpec } from "../model/events.js";
 import { renderList, validateFields } from "../render.js";
 export async function recentEvents(
   target: Target,
@@ -44,6 +45,24 @@ export async function eventsCommand(p: Parsed): Promise<string> {
   const d = deadline(p.timeout),
     t = await resolveTarget(p.context, d),
     s = resolveScope(p, t);
+  if (p.action === "view" && p.name && s.kind === "namespace") {
+    const event = p.name;
+    const rows = await scoped(s, t, d, async () => [
+      parseObject(
+        await kubectl(
+          { op: "get", resource: "event", name: event, namespace: s.name },
+          t,
+          d,
+        ),
+      ),
+    ]);
+    const raw = rows[0] ?? {};
+    return encodeObject({
+      context: t.context,
+      event: text(object(raw.metadata).name),
+      ...eventRow(raw, p.full).cells,
+    });
+  }
   const raw = await scoped(s, t, d, () =>
     readList(
       {

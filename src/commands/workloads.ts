@@ -15,6 +15,7 @@ import {
   workloadRow,
   workloadSpecs,
   deploymentDetail,
+  claimOrJobDetail,
 } from "../model/workloads.js";
 import { renderList, validateFields } from "../render.js";
 import { encodeObject } from "../toon.js";
@@ -44,7 +45,12 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
         await kubectl(
           {
             op: "get",
-            resource: "deployment.apps",
+            resource:
+              noun === "deployments"
+                ? "deployment.apps"
+                : noun === "jobs"
+                  ? "job.batch"
+                  : "persistentvolumeclaim",
             name,
             ...(s.kind === "namespace" ? { namespace: s.name } : {}),
           },
@@ -100,8 +106,21 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
     }
     return encodeObject({
       context: t.context,
-      ...deploymentDetail(rows[0] ?? {}, p.full),
-      events: await recentEvents(t, s, d, "Deployment", name, p.full),
+      ...(noun === "deployments"
+        ? deploymentDetail(rows[0] ?? {}, p.full)
+        : claimOrJobDetail(rows[0] ?? {}, noun, p.full)),
+      events: await recentEvents(
+        t,
+        s,
+        d,
+        noun === "deployments"
+          ? "Deployment"
+          : noun === "jobs"
+            ? "Job"
+            : "PersistentVolumeClaim",
+        name,
+        p.full,
+      ),
     });
   }
   const resources: Record<typeof noun, ListResource> = {

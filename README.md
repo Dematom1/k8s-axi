@@ -26,13 +26,13 @@ Run `k8s-axi` for an all-namespace overview or `k8s-axi <command> --help` for fl
 - `triage`: seven checks covering nodes, pods, deployments, jobs, PVCs, service endpoints, and recent warnings.
 - `ctx`: local context, server, namespace, client version, and context names. No network.
 - `nodes`, `nodes view <node>`: readiness, pressure, version, conditions, taints, and resources.
-- `namespaces`: discover namespaces.
+- `namespaces`, `namespaces view <name>`: discover namespaces; inspect phase and conditions.
 - `pods`, `pods view <pod>`: readiness, waiting states, last termination, owner, and events.
 - `pods logs <pod> [-c <container>] [--tail <n>] [--since <duration>] [--previous]`: recent logs, never follows.
 - Common kubectl reads are accepted: `get <resource> [name]`, `describe <resource> <name>`, and `logs <pod>` map to these read commands. `rollout status deployment/<name>` checks bounded rollout status without watching; `top` is unsupported. Writes remain refused.
 - `deployments`, `deployments view <name>`: rollout state and conditions.
-- `jobs`, `pvcs`, `services`: completion, storage phase, and ready EndpointSlice counts.
-- `events [--warnings] [--since 15m] [--for Pod/name]`: newest first, timestamp, occurrence count, and message.
+- `jobs`, `pvcs`, `services`: completion, storage phase, and ready EndpointSlice counts. Each supports `view <name>` and named `get` reads.
+- `events [--warnings] [--since 15m] [--for Pod/name]`, `events view <name>`: newest first, timestamp, occurrence count, and message.
 - `secrets`, `secrets view <name>`: metadata and key names only.
 - `setup hooks`, `setup status`, `setup uninstall`: opt-in local agent integration.
 - `context`, `context end`: directory-scoped session summary.
