@@ -6,7 +6,7 @@ user-invocable: false
 
 # k8s-axi
 
-k8s-axi: strictly read-only Kubernetes diagnostics for agents.
+k8s-axi: Kubernetes diagnostics and guarded-action foundations for agents.
 
 Run `npx -y k8s-axi <command>`. kubectl must be on PATH with a named kubeconfig context.
 Use `npx -y k8s-axi ctx` to inspect local configuration without contacting a cluster.

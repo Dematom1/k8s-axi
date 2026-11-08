@@ -36,7 +36,8 @@ export async function runProcess(
     let stdinError: NodeJS.ErrnoException | undefined;
     let escalationTimer: NodeJS.Timeout | undefined;
     const finish = () => {
-      if (!childClosed || (terminating && !escalationComplete) || !result) return;
+      if (!childClosed || (terminating && !escalationComplete) || !result)
+        return;
       if (stdinError) reject(stdinError);
       else resolve(result);
     };
@@ -54,7 +55,9 @@ export async function runProcess(
         process.kill(-child.pid, 0);
         return true;
       } catch (error) {
-        return error instanceof Error && "code" in error && error.code !== "ESRCH";
+        return (
+          error instanceof Error && "code" in error && error.code !== "ESRCH"
+        );
       }
     };
     const timer = setTimeout(() => {
