@@ -55,7 +55,7 @@ spec:
     kubectl(["-n", namespace, "wait", "--for=jsonpath={.status.phase}=Running", "pod/chatty", "--timeout=120s"]);
     kubectl(["-n", namespace, "wait", "--for=jsonpath={.status.phase}=Succeeded", "pod/web", "--timeout=120s"]);
     for (let attempt = 0; attempt < 60; attempt++) {
-      if (kubectl(["-n", namespace, "logs", "chatty", "-c", "app"]).includes("line 2999")) break;
+      if (kubectl(["-n", namespace, "logs", "chatty", "-c", "app", "--tail=1"]).includes("line 2999")) break;
       await new Promise((resolve) => setTimeout(resolve, 500));
       if (attempt === 59) throw new Error("chatty fixture did not reach line 2999");
     }
