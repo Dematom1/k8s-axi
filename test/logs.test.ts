@@ -62,6 +62,27 @@ for (const annotation of [undefined, "a"])
       l.clean();
     }
   });
+test("keeps a newest whole line larger than the output budget", () => {
+  const pod = {
+    metadata: { name: "p" },
+    spec: { containers: [{ name: "c" }] },
+  };
+  const newest = `line ${"x".repeat(10_001)}`;
+  const l = lab([
+    { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
+    { prefix: ["logs"], stdout: `older line\n${newest}\n` },
+    ...targetRules(),
+  ]);
+  try {
+    const p = cli(["pods", "logs", "p", "-c", "c"], l.env);
+    expect(p.status).toBe(0);
+    expect(p.data.logs).toEqual([newest]);
+    expect(p.data["omitted-lines"]).toBe(1);
+  } finally {
+    l.clean();
+  }
+});
+
 test("a full tail gives a runnable continuation hint", () => {
   const pod = {
     metadata: { name: "p" },
