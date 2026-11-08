@@ -28,7 +28,7 @@ Run `k8s-axi` for an all-namespace overview or `k8s-axi <command> --help` for fl
 - `nodes`, `nodes view <node>`: readiness, pressure, version, conditions, taints, and resources.
 - `namespaces`, `namespaces view <name>`: discover namespaces; inspect phase and conditions.
 - `pods`, `pods view <pod>`: readiness, waiting states, last termination, owner, and events.
-- `pods logs <pod> [-c <container>] [--tail <n>] [--since <duration>] [--previous]`: newest whole log lines (default 100, maximum 1000), redacted best-effort, never follows. Output reports omitted lines and the shown first-to-last line; truncated output includes a continuation hint. Unavailable container logs return `LOGS_UNAVAILABLE` (exit 1) with a hint to inspect the pod or its events.
+- `pods logs <pod> [-c <container>] [--tail <n>] [--since <duration>] [--previous]`: fetches up to 1 MiB, then returns the newest whole lines (default 100, maximum 1000), redacted best-effort; `--full` lifts only the character preview, not the line cap or fetch window. Output reports omitted lines and the shown first-to-last line; if the 1 MiB fetch limit is reached, the omitted count is a lower bound. Truncated output includes a continuation hint. Unavailable container logs return `LOGS_UNAVAILABLE` (exit 1) with a hint to inspect the pod or its events.
 - Common kubectl reads are accepted: `get <resource> [name]`, `describe <resource> <name>`, and `logs <pod>` map to these read commands. `rollout status deployment/<name>` checks bounded rollout status without watching; `top` is unsupported. Writes remain refused.
 - `deployments`, `deployments view <name>`: rollout state and conditions.
 - `jobs`, `pvcs`, `services`: completion, storage phase, and ready EndpointSlice counts. Each supports `view <name>` and named `get` reads.
@@ -44,7 +44,7 @@ Use `-A` for all namespaces or `-n <namespace>` for one. They cannot be combined
 Lists accept `--limit` (default 100, maximum 1000), `--fields <a,b>`, and `--problems`.
 Pods, deployments, and jobs also accept `-l <selector>`. The default list schema has at most four columns.
 `--full` only untruncates allowlisted text. It never adds object fields and changes nothing for Secrets.
-Logs default to 100 lines (maximum 1000) and at most 1 MiB from the server.
+Logs use the limits described above.
 
 ## Errors and exits
 
