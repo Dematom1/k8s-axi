@@ -52,17 +52,21 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       ["context"],
       ["nodes"],
       ["nodes", "view", nodeName],
+      ["nodes", "view", nodeName, "--full"],
       ["namespaces"],
       ["pods", "-n", "fixtures"],
       ["pods", "-n", "emptyns"],
       ["pods", "-A"],
       ["pods", "view", "chatty", "-n", "fixtures"],
+      ["pods", "view", "chatty", "-n", "fixtures", "--full"],
       ["pods", "logs", "chatty", "-n", "fixtures"],
       ["events", "-n", "fixtures"],
       ["events", "-A"],
       ["deployments", "-n", "fixtures"],
       ["deployments", "view", "web", "-n", "fixtures"],
+      ["deployments", "view", "web", "-n", "fixtures", "--full"],
       ["deployments", "view", "broken", "-n", "fixtures"],
+      ["deployments", "view", "broken", "-n", "fixtures", "--full"],
       ["jobs", "-n", "fixtures"],
       ["pvcs", "-A"],
       ["services", "-n", "fixtures"],
@@ -108,6 +112,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     );
     expect(webPod.status).toBe(0);
     run(["pods", "logs", webPod.stdout, "-n", "fixtures", "--tail", "20"], 0);
+    run(["pods", "logs", webPod.stdout, "-n", "fixtures", "--tail", "20", "--full"], 0);
     run(["pods", "logs", "chatty", "--tail", "100", "-n", "fixtures"], 0);
     run(
       ["pods", "logs", "chatty", "--tail", "100", "-n", "fixtures", "--full"],

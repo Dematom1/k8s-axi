@@ -6,6 +6,7 @@ name="k8s-axi-lab"
 config="$lab/kubeconfig"
 lock="$root/.lab-live.lock"
 owned=0
+cluster_owned=0
 [ "${1:-}" = run ] || { echo 'usage: scripts/lab-live.sh run' >&2; exit 2; }
 command -v docker >/dev/null || { echo 'docker is required' >&2; exit 1; }
 command -v curl >/dev/null || { echo 'curl is required' >&2; exit 1; }
@@ -17,7 +18,7 @@ cleanup() {
     wait "$create_pid" 2>/dev/null || true
   fi
   if [ "$owned" = 1 ]; then
-    if [ -x "$kind_bin" ]; then KUBECONFIG="$config" "$kind_bin" delete cluster --name "$name" >/dev/null 2>&1 || true; fi
+    if [ "$cluster_owned" = 1 ] && [ -x "$kind_bin" ]; then KUBECONFIG="$config" "$kind_bin" delete cluster --name "$name" >/dev/null 2>&1 || true; fi
     rm -rf "$lab"
     if [ "$(cat "$lock/pid" 2>/dev/null || true)" = "$$" ]; then rm -rf "$lock"; fi
   fi
@@ -55,6 +56,21 @@ verify "$lab/bin/kubectl"
 chmod +x "$kind_bin" "$lab/bin/kubectl"
 PATH="$lab/bin:$PATH"
 export PATH
+cluster_wait_start=$(date +%s)
+while kind get clusters | grep -Fxq "$name"; do
+  node="${name}-control-plane"
+  if docker inspect "$node" >/dev/null 2>&1; then
+    started=$(docker inspect --format '{{.State.StartedAt}}' "$node")
+    age=$(node -e 'process.stdout.write(String(Math.floor((Date.now() - Date.parse(process.argv[1])) / 1000)))' "$started")
+    if [ "$age" -gt 2700 ]; then
+      kind delete cluster --name "$name" --kubeconfig "$config"
+      break
+    fi
+  fi
+  [ "$(( $(date +%s) - cluster_wait_start ))" -lt 1200 ] || { echo 'FAIL: existing kind lab is still active after 20 minutes' >&2; exit 1; }
+  sleep 15
+done
+cluster_owned=1
 kind create cluster --name "$name" --kubeconfig "$config" --wait 300s &
 create_pid=$!
 node="${name}-control-plane"
