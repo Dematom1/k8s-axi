@@ -6,10 +6,10 @@ import {
   type Deadline,
 } from "../registry.js";
 import { resolveTarget, resolveScope, scopeLabel, scoped } from "../target.js";
-import { readList, type Obj } from "../kubectl.js";
+import { kubectl, parseObject, readList, type Obj } from "../kubectl.js";
 import { serviceRows, serviceSpec } from "../model/services.js";
 import { renderList, validateFields } from "../render.js";
-import { usage } from "../errors.js";
+import { encodeObject } from "../toon.js";
 export async function readServices(
   t: Target,
   s: Scope,
@@ -27,11 +27,19 @@ export async function readServices(
 }
 export async function servicesCommand(p: Parsed): Promise<string> {
   validateFields(serviceSpec, p);
-  if (p.action === "view")
-    usage("services does not support object views", "services");
   const d = deadline(p.timeout),
     t = await resolveTarget(p.context, d),
     s = resolveScope(p, t);
+  if (p.action === "view" && p.name && s.kind === "namespace") {
+    const raw = parseObject(
+      await kubectl(
+        { op: "get", resource: "services", name: p.name, namespace: s.name },
+        t,
+        d,
+      ),
+    );
+    return encodeObject({ context: t.context, service: raw });
+  }
   const [raw] = await scoped(
     s,
     t,
