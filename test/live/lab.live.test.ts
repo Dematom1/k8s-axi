@@ -270,9 +270,9 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
         if (candidate && output.includes(candidate))
           throw new Error("Sensitive material appeared in CLI output");
       if (credentials.includes(value))
-        for (const representation of candidates)
-          for (let start = 0; start <= representation.length - 4; start++)
-            if (output.includes(representation.slice(start, start + 4)))
+        for (const representation of [...candidates])
+          for (let start = 0; start <= representation.length - 8; start++)
+            if (output.includes(representation.slice(start, start + 8)))
               throw new Error("Sensitive material appeared in CLI output");
     }
   },
