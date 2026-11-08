@@ -125,6 +125,33 @@ test("applies the output byte budget to multibyte lines", () => {
   }
 });
 
+test("counts line separators in the output byte budget", () => {
+  const pod = {
+    metadata: { name: "p" },
+    spec: { containers: [{ name: "c" }] },
+  };
+  const fixture = Array.from({ length: 1000 }, (_, i) =>
+    String(i).padStart(10, "0"),
+  );
+  const l = lab([
+    { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
+    { prefix: ["logs"], stdout: `${fixture.join("\n")}\n` },
+    ...targetRules(),
+  ]);
+  try {
+    const p = cli(
+      ["pods", "logs", "p", "-c", "c", "--tail", "1000"],
+      l.env,
+    );
+    expect(p.status).toBe(0);
+    expect(p.data.logs).toEqual(fixture.slice(-909));
+    expect(p.data["omitted-lines"]).toBe(91);
+    expect(p.data.shown).toBe("0000000091..0000000999");
+  } finally {
+    l.clean();
+  }
+});
+
 test("keeps a newest whole line larger than the output budget", () => {
   const pod = {
     metadata: { name: "p" },
