@@ -133,6 +133,8 @@ kubectl config set-credentials nsonly --token="$nsonly_token" >/dev/null
 kubectl config set-context nsonly --cluster="kind-$name" --user=nsonly --namespace=fixtures >/dev/null
 kubectl wait -n fixtures --for=condition=Available deployment/web --timeout=120s
 kubectl wait -n fixtures --for=condition=Ready pod/chatty --timeout=300s
+kubectl wait -n fixtures --for=condition=Failed job/failjob --timeout=300s
+kubectl wait -n fixtures --for=jsonpath='{.status.containerStatuses[0].restartCount}'=1 pod/crashy pod/crashy2 --timeout=300s
 kubectl wait -n fixtures --for=jsonpath='{.status.conditions[?(@.type=="Progressing")].reason}'=ProgressDeadlineExceeded deployment/broken --timeout=300s
 cd "$root"
 npm run build

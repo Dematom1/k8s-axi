@@ -105,6 +105,17 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       ["pods", "logs", "chatty", "--tail", "100", "-n", "fixtures", "--full"],
       0,
     );
+    for (const pod of ["crashy", "crashy2"])
+      for (const full of [[], ["--full"]])
+        run(["pods", "logs", pod, "-n", "fixtures", "--previous", ...full], 0);
+    const failedJobPod = spawnSync(
+      "kubectl",
+      ["get", "pods", "-n", "fixtures", "-l", "job-name=failjob", "-o", "jsonpath={.items[0].metadata.name}"],
+      { encoding: "utf8", env },
+    );
+    expect(failedJobPod.status).toBe(0);
+    for (const full of [[], ["--full"]])
+      run(["pods", "logs", failedJobPod.stdout, "-n", "fixtures", ...full], 0);
 
     const alternate = run(
       ["pods", "-n", "fixtures", "--context", "kind-k8sx-alt"],

@@ -8,6 +8,8 @@ kind: Secret
 metadata:
   name: db-creds
   namespace: fixtures
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: '{"apiVersion":"v1","kind":"Secret","data":{"username":"Q0FOQVJZX1VTRVJOQU1FXzhLU0E=","password":"Q0FOQVJZX0RCX1BBU1NXT1JEXzhLU0E="}}'
 data:
   username: Q0FOQVJZX1VTRVJOQU1FXzhLU0E=
   password: Q0FOQVJZX0RCX1BBU1NXT1JEXzhLU0E=
