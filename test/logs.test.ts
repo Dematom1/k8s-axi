@@ -53,6 +53,7 @@ for (const annotation of [undefined, "a"])
         ).status,
       ).toBe(0);
       const calls = l.calls().filter((c) => c.args[0] === "logs");
+      expect(calls.at(-1).args).not.toContain("--tail");
       expect(calls.at(-1).args).toContain("--limit-bytes=1048576");
       expect(calls.at(-1).args).toContain("--since=900s");
       expect(calls.at(-1).args).toContain("--previous");
@@ -67,6 +68,26 @@ for (const annotation of [undefined, "a"])
       l.clean();
     }
   });
+test.each([100, 1000])("applies --tail %i locally to all fetched logs", (tail) => {
+  const pod = { metadata: { name: "p" }, spec: { containers: [{ name: "c" }] } };
+  const output = `${Array.from({ length: 3000 }, (_, i) => String(i)).join("\n")}\n`;
+  const l = lab([
+    { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
+    { prefix: ["logs"], stdout: output },
+    ...targetRules(),
+  ]);
+  try {
+    const p = cli(["pods", "logs", "p", "-c", "c", "--tail", String(tail)], l.env);
+    expect(p.status).toBe(0);
+    const data = logsOutput(p);
+    expect(data.logs).toHaveLength(tail);
+    expect(data.logs.at(-1)).toBe("2999");
+    expect(data["omitted-lines"]).toBe(3000 - tail);
+  } finally {
+    l.clean();
+  }
+});
+
 test("reports the exact newest tail, omitted count, and shown range", () => {
   const pod = {
     metadata: { name: "p" },
