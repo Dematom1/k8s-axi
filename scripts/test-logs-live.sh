@@ -2,7 +2,7 @@
 set -euo pipefail
 root=$PWD
 lab=$root/.lab-live
-name=k8s-axi-lab
+name="k8s-axi-lab-$$-$(date +%s)"
 mkdir -p "$lab/bin"
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) platform=darwin-arm64 ;;
@@ -27,53 +27,26 @@ node_container="$name-control-plane"
 acquired=0
 cleanup() { if [ "$acquired" = 1 ]; then kind delete cluster --name "$name" >/dev/null 2>&1 || true; fi; }
 trap cleanup EXIT INT TERM
-is_stale_cluster() {
-  created=$(docker inspect -f '{{.Created}}' "$node_container")
-  python3 -c 'import datetime,sys; created=datetime.datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00")); now=datetime.datetime.now(datetime.timezone.utc); sys.exit(0 if (now-created).total_seconds()>2700 else 1)' "$created"
-}
-start=$SECONDS
-while [ $((SECONDS - start)) -lt 1200 ]; do
+kind create cluster --name "$name" --kubeconfig "$KUBECONFIG" >"$lab/kind-create.log" 2>&1 &
+create_pid=$!
+capped=0
+while kill -0 "$create_pid" 2>/dev/null; do
   if docker inspect "$node_container" >/dev/null 2>&1; then
-    if is_stale_cluster; then
-      kind delete cluster --name "$name"
-      continue
-    fi
-    sleep 15
-    continue
-  fi
-  create_started=$(date +%s)
-  kind create cluster --name "$name" --kubeconfig "$KUBECONFIG" >"$lab/kind-create.log" 2>&1 &
-  create_pid=$!
-  capped=0
-  while kill -0 "$create_pid" 2>/dev/null; do
-    if docker inspect "$node_container" >/dev/null 2>&1; then
-      created=$(docker inspect -f '{{.Created}}' "$node_container")
-      if python3 -c 'import datetime,sys; created=datetime.datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00")); sys.exit(0 if created.timestamp()>=int(sys.argv[2]) else 1)' "$created" "$create_started"; then
-        acquired=1
-        docker update --cpus=2 "$node_container"
-        capped=1
-        break
-      fi
-    fi
-    sleep 2
-  done
-  if wait "$create_pid"; then
     acquired=1
-    [ "$capped" = 1 ] || docker update --cpus=2 "$node_container"
+    docker update --cpus=2 "$node_container"
+    capped=1
     break
   fi
-  if ! grep -Eqi 'already exists|node\(s\) already exist' "$lab/kind-create.log"; then
-    cat "$lab/kind-create.log" >&2
-    echo 'FAIL: could not create kind cluster' >&2
-    exit 1
-  fi
-  if docker inspect "$node_container" >/dev/null 2>&1 && is_stale_cluster; then
-    kind delete cluster --name "$name"
-    continue
-  fi
-  sleep 15
+  sleep 2
 done
-[ "$acquired" = 1 ] || { echo 'FAIL: timed out waiting for shared kind cluster name' >&2; exit 1; }
+if wait "$create_pid"; then
+  acquired=1
+  [ "$capped" = 1 ] || docker update --cpus=2 "$node_container"
+else
+  cat "$lab/kind-create.log" >&2
+  echo 'FAIL: could not create kind cluster' >&2
+  exit 1
+fi
 node=$(kind get nodes --name "$name" | head -1)
 kubectl --kubeconfig "$KUBECONFIG" wait --for=condition=Ready node --all --timeout=120s
 kubectl --kubeconfig "$KUBECONFIG" create namespace fixtures
