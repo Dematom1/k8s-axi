@@ -72,14 +72,15 @@ export async function logsCommand(p: Parsed): Promise<string> {
   const omitted = lines.length - shownLines.length;
   const previewTruncated = !p.full && shownLines.length < tailLines.length;
   const nextTail = Math.min(1000, p.tail * 2);
-  const command = `k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container}`;
+  const quote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
+  const command = `k8s-axi pods logs ${quote(name)} -n ${quote(s.name)} --context ${quote(t.context)} -c ${quote(container)}`;
   const carried = `${p.sinceArg ? ` --since ${p.sinceArg}` : ""}${p.previous ? " --previous" : ""}`;
   const help = previewTruncated
     ? `Run \`${command} --tail ${p.tail}${carried} --full\` to remove the character preview limit; --full does not fetch lines beyond --tail`
     : lines.length >= p.tail && p.tail < 1000
       ? `Run \`${command} --tail ${nextTail}${carried}\` for more logs`
       : lines.length >= p.tail
-        ? `Use a wider --since duration to include older logs; --tail is capped at 1000${p.sinceArg ? ` (currently --since ${p.sinceArg})` : ""}. Request: \`${command} --tail 1000${carried}\``
+        ? `The current CLI cannot page farther back: --tail is capped at 1000. --since filters by time but does not bypass that cap${p.sinceArg ? ` (currently --since ${p.sinceArg})` : ""}.`
         : cut
           ? `The log response reached kubectl's 1 MiB limit; try a smaller --tail or --since window. Request: \`${command} --tail ${p.tail}${carried}\``
           : undefined;
