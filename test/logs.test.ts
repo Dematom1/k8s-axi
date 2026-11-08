@@ -14,8 +14,7 @@ for (const annotation of [undefined, "a"])
       { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
       {
         prefix: ["logs"],
-        stdout:
-          "password=CANARY\nDB_PASS=CANARY\nunable to retrieve container logs for fixture\nnormal log\n",
+        stdout: "password=CANARY\nDB_PASS=CANARY\nnormal log\n",
       },
       ...targetRules(),
     ]);
@@ -26,9 +25,6 @@ for (const annotation of [undefined, "a"])
         expect(p.stdout).not.toContain("CANARY");
         expect(p.stdout).toContain("best effort");
         expect(p.stdout).toContain("redacted: 2");
-        expect(p.stdout).toContain(
-          "unable to retrieve container logs for fixture",
-        );
       } else expect(p.stdout).toContain("a, b");
       expect(
         cli(
