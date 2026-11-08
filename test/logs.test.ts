@@ -62,6 +62,47 @@ for (const annotation of [undefined, "a"])
       l.clean();
     }
   });
+test("reports the exact newest tail, omitted count, and shown range", () => {
+  const pod = {
+    metadata: { name: "p" },
+    spec: { containers: [{ name: "c" }] },
+  };
+  const l = lab([
+    { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
+    { prefix: ["logs"], stdout: "older\nnewer-1\nnewer-2\n" },
+    ...targetRules(),
+  ]);
+  try {
+    const p = cli(["pods", "logs", "p", "-c", "c", "--tail", "2"], l.env);
+    expect(p.status).toBe(0);
+    expect(p.data.logs).toEqual(["newer-1", "newer-2"]);
+    expect(p.data["omitted-lines"]).toBe(1);
+    expect(p.data.shown).toBe("newer-1..newer-2");
+  } finally {
+    l.clean();
+  }
+});
+
+test("preserves a logged blank line but drops the final newline artifact", () => {
+  const pod = {
+    metadata: { name: "p" },
+    spec: { containers: [{ name: "c" }] },
+  };
+  const l = lab([
+    { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
+    { prefix: ["logs"], stdout: "foo\n\n" },
+    ...targetRules(),
+  ]);
+  try {
+    const p = cli(["pods", "logs", "p", "-c", "c"], l.env);
+    expect(p.status).toBe(0);
+    expect(p.data.logs).toEqual(["foo", ""]);
+    expect(p.data["omitted-lines"]).toBe(0);
+  } finally {
+    l.clean();
+  }
+});
+
 test("keeps a newest whole line larger than the output budget", () => {
   const pod = {
     metadata: { name: "p" },
