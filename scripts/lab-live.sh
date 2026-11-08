@@ -29,6 +29,17 @@ cleanup() {
 mkdir -p "$lab"
 start=$(date +%s)
 while ! mkdir "$lock" 2>/dev/null; do
+  owner=$(cat "$lock/pid" 2>/dev/null || true)
+  if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
+    stale="$lab/.stale-lock-$$"
+    if mv "$lock" "$stale" 2>/dev/null; then
+      if [ "$(cat "$stale/pid" 2>/dev/null || true)" = "$owner" ]; then
+        rm -rf "$stale"
+        continue
+      fi
+      mv "$stale" "$lock" 2>/dev/null || true
+    fi
+  fi
   [ "$(( $(date +%s) - start ))" -lt 1200 ] || { echo 'FAIL: timed out waiting 20 minutes for the shared kind lab lock' >&2; exit 1; }
   sleep 10
 done
