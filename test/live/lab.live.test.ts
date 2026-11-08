@@ -57,6 +57,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       ["pods", "-n", "fixtures"],
       ["pods", "-n", "emptyns"],
       ["pods", "-A"],
+      ["pods", "--problems", "-n", "fixtures"],
       ["pods", "view", "chatty", "-n", "fixtures"],
       ["pods", "view", "chatty", "-n", "fixtures", "--full"],
       ["pods", "logs", "chatty", "-n", "fixtures"],
