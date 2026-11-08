@@ -5,6 +5,13 @@ import { expect, test } from "vitest";
 
 const liveTest = test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1");
 const namespace = `logs-${process.pid}-${Date.now()}`;
+type LogsOutput = {
+  logs: string[];
+  "omitted-lines": number;
+  shown: string;
+  help?: string[];
+  redacted: number;
+};
 const cliPath = resolve("dist/bin/k8s-axi.js");
 function kubectl(args: string[], input?: string) {
   const result = spawnSync("kubectl", args, {
@@ -27,10 +34,14 @@ function run(args: string[]) {
   return result;
 }
 
-liveTest("log tails preserve newest whole lines and report errors safely", async () => {
-  try {
-    kubectl(["create", "namespace", namespace]);
-    kubectl(["-n", namespace, "apply", "-f", "-"], `apiVersion: v1
+liveTest(
+  "log tails preserve newest whole lines and report errors safely",
+  async () => {
+    try {
+      kubectl(["create", "namespace", namespace]);
+      kubectl(
+        ["-n", namespace, "apply", "-f", "-"],
+        `apiVersion: v1
 kind: Pod
 metadata:
   name: chatty
@@ -51,37 +62,101 @@ spec:
     - name: app
       image: busybox:1.36
       command: ["sh", "-c", "printf 'password=secret\\nAuthorization: Bearer token\\n'"]
-`);
-    kubectl(["-n", namespace, "wait", "--for=jsonpath={.status.phase}=Running", "pod/chatty", "--timeout=120s"]);
-    kubectl(["-n", namespace, "wait", "--for=jsonpath={.status.phase}=Succeeded", "pod/web", "--timeout=120s"]);
-    for (let attempt = 0; attempt < 60; attempt++) {
-      if (kubectl(["-n", namespace, "logs", "chatty", "-c", "app", "--tail=1"]).includes("line 2999")) break;
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      if (attempt === 59) throw new Error("chatty fixture did not reach line 2999");
+`,
+      );
+      kubectl([
+        "-n",
+        namespace,
+        "wait",
+        "--for=jsonpath={.status.phase}=Running",
+        "pod/chatty",
+        "--timeout=120s",
+      ]);
+      kubectl([
+        "-n",
+        namespace,
+        "wait",
+        "--for=jsonpath={.status.phase}=Succeeded",
+        "pod/web",
+        "--timeout=120s",
+      ]);
+      for (let attempt = 0; attempt < 60; attempt++) {
+        if (
+          kubectl([
+            "-n",
+            namespace,
+            "logs",
+            "chatty",
+            "-c",
+            "app",
+            "--tail=1",
+          ]).includes("line 2999")
+        )
+          break;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        if (attempt === 59)
+          throw new Error("chatty fixture did not reach line 2999");
+      }
+
+      for (const [tail, first] of [
+        [100, 2900],
+        [1000, 2000],
+      ] as const) {
+        const args = [
+          "pods",
+          "logs",
+          "chatty",
+          "-n",
+          namespace,
+          "--tail",
+          String(tail),
+        ];
+        if (tail === 1000) args.push("--full");
+        const result = run(args);
+        expect(result.status).toBe(0);
+        const output = decode(result.stdout) as LogsOutput;
+        expect(output.logs).toEqual(
+          Array.from({ length: tail }, (_, i) => `line ${first + i}`),
+        );
+        expect(output["omitted-lines"]).toBe(3000 - tail);
+        expect(output.shown).toBe(`line ${first}..line 2999`);
+        expect(output.help?.[0]).toBeDefined();
+        if (tail === 100) expect(output.help?.[0]).toContain("--tail 200");
+        if (tail === 1000)
+          expect(output.help?.[0]).toContain("--tail is capped at 1000");
+      }
+
+      const previous = run([
+        "pods",
+        "logs",
+        "chatty",
+        "-n",
+        namespace,
+        "--previous",
+      ]);
+      expect(previous.status).toBe(1);
+      expect(previous.stdout).toContain("LOGS_UNAVAILABLE");
+
+      const web = decode(
+        run(["pods", "logs", "web", "-n", namespace]).stdout,
+      ) as LogsOutput;
+      expect(web.redacted).toBe(2);
+      expect(web.logs).toEqual([
+        "password=[REDACTED]",
+        "Authorization: Bearer [REDACTED]",
+      ]);
+    } finally {
+      spawnSync(
+        "kubectl",
+        [
+          "delete",
+          "namespace",
+          namespace,
+          "--ignore-not-found=true",
+          "--wait=false",
+        ],
+        { stdio: "ignore", env: process.env },
+      );
     }
-
-    for (const [tail, first] of [[100, 2900], [1000, 2000]]) {
-      const result = run(["pods", "logs", "chatty", "-n", namespace, "--tail", String(tail)]);
-      expect(result.status).toBe(0);
-      const output = decode(result.stdout);
-      expect(output.logs).toEqual(Array.from({ length: tail }, (_, i) => `line ${first + i}`));
-      expect(output["omitted-lines"]).toBe(3000 - tail);
-      expect(output.shown).toBe(`line ${first}..line 2999`);
-      if (tail === 1000) expect(output.help?.[0]).toContain("--tail 1000");
-    }
-
-    const previous = run(["pods", "logs", "chatty", "-n", namespace, "--previous"]);
-    expect(previous.status).toBe(1);
-    expect(previous.stdout).toContain("LOGS_UNAVAILABLE");
-
-    const web = decode(run(["pods", "logs", "web", "-n", namespace]).stdout);
-    expect(web.redacted).toBe(2);
-    expect(web.logs).toEqual(["password=[REDACTED]", "Authorization: Bearer [REDACTED]"]);
-  } finally {
-    spawnSync(
-      "kubectl",
-      ["delete", "namespace", namespace, "--ignore-not-found=true", "--wait=false"],
-      { stdio: "ignore", env: process.env },
-    );
-  }
-});
+  },
+);
