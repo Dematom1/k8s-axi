@@ -1,4 +1,10 @@
-import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { decode } from "@toon-format/toon";
@@ -112,7 +118,19 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     );
     expect(webPod.status).toBe(0);
     run(["pods", "logs", webPod.stdout, "-n", "fixtures", "--tail", "20"], 0);
-    run(["pods", "logs", webPod.stdout, "-n", "fixtures", "--tail", "20", "--full"], 0);
+    run(
+      [
+        "pods",
+        "logs",
+        webPod.stdout,
+        "-n",
+        "fixtures",
+        "--tail",
+        "20",
+        "--full",
+      ],
+      0,
+    );
     run(["pods", "logs", "chatty", "--tail", "100", "-n", "fixtures"], 0);
     run(
       ["pods", "logs", "chatty", "--tail", "100", "-n", "fixtures", "--full"],
@@ -123,7 +141,16 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
         run(["pods", "logs", pod, "-n", "fixtures", "--previous", ...full], 0);
     const failedJobPod = spawnSync(
       "kubectl",
-      ["get", "pods", "-n", "fixtures", "-l", "job-name=failjob", "-o", "jsonpath={.items[0].metadata.name}"],
+      [
+        "get",
+        "pods",
+        "-n",
+        "fixtures",
+        "-l",
+        "job-name=failjob",
+        "-o",
+        "jsonpath={.items[0].metadata.name}",
+      ],
       { encoding: "utf8", env },
     );
     expect(failedJobPod.status).toBe(0);
