@@ -99,8 +99,16 @@ while ! docker inspect "$node" >/dev/null 2>&1; do
   sleep 0.5
 done
 # kind has no create-time CPU limit, so cap the node as soon as Docker exposes it.
-docker update --cpus=2 "$node" >/dev/null
-[ "$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$node")" = 2000000000 ] || { echo 'FAIL: could not apply 2 CPU cap to kind node' >&2; exit 1; }
+if ! docker update --cpus=2 "$node" >/dev/null; then
+  if wait "$create_pid"; then create_pid=; cluster_owned=1; fi
+  echo 'FAIL: could not apply 2 CPU cap to kind node' >&2
+  exit 1
+fi
+if [ "$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$node")" != 2000000000 ]; then
+  if wait "$create_pid"; then create_pid=; cluster_owned=1; fi
+  echo 'FAIL: could not verify 2 CPU cap on kind node' >&2
+  exit 1
+fi
 wait "$create_pid"
 create_pid=
 cluster_owned=1

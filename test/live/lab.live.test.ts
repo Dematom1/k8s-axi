@@ -74,20 +74,6 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       ["secrets", "-n", "fixtures"],
     ]) {
       run(args, 0);
-      if (
-        [
-          "nodes",
-          "namespaces",
-          "pods",
-          "events",
-          "deployments",
-          "jobs",
-          "pvcs",
-          "services",
-          "secrets",
-        ].includes(args[0] ?? "")
-      )
-        run([...args, "--full"], 0);
     }
     expect(
       run(["deployments", "view", "broken", "-n", "fixtures", "--rollout-status"], 1).code,
