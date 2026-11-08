@@ -67,6 +67,8 @@ test("bounded log cut and previous error are explicit", () => {
       expect(p.status).toBe(previous ? 1 : 0);
       if (previous) {
         expect(p.stdout).toContain("code: LOGS_UNAVAILABLE");
+        expect(p.stdout).toContain("pods view <pod>");
+        expect(p.stdout).toContain("events for the pod");
       } else {
         expect(object(p.data)["byte-limited"]).toBe(true);
         expect(p.stdout).toContain("--full");
