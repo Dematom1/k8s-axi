@@ -49,6 +49,7 @@ export async function logsCommand(p: Parsed): Promise<string> {
       pod: name,
       namespace: s.name,
       container,
+      tail: -1,
       sinceSeconds: p.since,
       previous: p.previous,
     },
