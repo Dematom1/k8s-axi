@@ -17,7 +17,7 @@ export function mapKubectlFailure(
 ): AxiError {
   if (
     operation === "logs" &&
-    /unable to retrieve container logs for|previous terminated container.*not found|previous.*not available/i.test(
+    /unable to retrieve container logs for|failed to get container logs?|previous terminated container.*not found|previous.*not available/i.test(
       stderr,
     )
   )
