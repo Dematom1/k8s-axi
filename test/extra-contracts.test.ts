@@ -54,7 +54,11 @@ test("bounded log cut and previous error are explicit", () => {
       {
         prefix: ["logs"],
         ...(previous
-          ? { stderr: "previous terminated container c not found", code: 1 }
+          ? {
+              stderr:
+                'Error from server: Get "https://127.0.0.1:10250/containerLogs/sandbox/p/c": unable to retrieve container logs for containerd://0123456789abcdef',
+              code: 1,
+            }
           : { stdout: "x".repeat(1048576) }),
       },
       ...targetRules(),
