@@ -73,6 +73,10 @@ spec:
     expect(web.redacted).toBe(2);
     expect(web.logs).toEqual(["password=[REDACTED]", "Authorization: Bearer [REDACTED]"]);
   } finally {
-    kubectl(["delete", "namespace", namespace, "--wait=false"]);
+    spawnSync(
+      "kubectl",
+      ["delete", "namespace", namespace, "--ignore-not-found=true", "--wait=false"],
+      { stdio: "ignore", env: process.env },
+    );
   }
 });
