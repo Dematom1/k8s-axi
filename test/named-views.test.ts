@@ -186,7 +186,7 @@ test("namespace view rejects dotted names before cluster access", () => {
   try {
     const result = cli(["namespaces", "view", "a.b"], environment.env);
     expect(result.status).toBe(2);
-    expect(result.stderr).toContain("namespace must be a DNS label");
+    expect(result.data).toMatchObject({ error: "namespace must be a DNS label" });
     expect(environment.calls()).toEqual([]);
   } finally {
     environment.clean();
