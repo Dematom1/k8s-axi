@@ -243,8 +243,8 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
         const encoded = Buffer.from(value).toString("base64");
         candidates.push(encoded);
         for (const representation of [value, encoded])
-          for (let i = 0; i <= representation.length - 8; i++)
-            candidates.push(representation.slice(i, i + 8));
+          for (let i = 0; i <= representation.length - 4; i++)
+            candidates.push(representation.slice(i, i + 4));
       }
       for (const candidate of candidates)
         if (candidate && output.includes(candidate))
