@@ -60,17 +60,7 @@ export async function logsCommand(p: Parsed): Promise<string> {
     cut = Buffer.byteLength(raw) >= 1048576;
   const lines = redacted.text.split(/\r?\n/);
   if (lines.at(-1) === "") lines.pop();
-  const shownLines: string[] = [];
-  let shownBytes = 0;
-  if (p.full) shownLines.push(...lines);
-  else {
-    for (const line of lines.slice(-1000).reverse()) {
-      const lineBytes = Buffer.byteLength(line) + (shownLines.length > 0 ? 1 : 0);
-      if (shownBytes + lineBytes > 10000 && shownLines.length > 0) break;
-      shownLines.unshift(line);
-      shownBytes += lineBytes;
-    }
-  }
+  const shownLines = p.full ? lines : lines.slice(-1000);
   const omitted = lines.length - shownLines.length;
   return encodeObject({
     context: t.context,

@@ -27,7 +27,7 @@ function run(args: string[]) {
   return result;
 }
 
-liveTest("log tails preserve newest whole lines and report errors safely", () => {
+liveTest("log tails preserve newest whole lines and report errors safely", async () => {
   try {
     kubectl(["create", "namespace", namespace]);
     kubectl(["-n", namespace, "apply", "-f", "-"], `apiVersion: v1
@@ -39,7 +39,7 @@ spec:
   containers:
     - name: app
       image: busybox:1.36
-      command: ["sh", "-c", "i=0; while [ $i -lt 3000 ]; do printf 'line %s\\n' $i; i=$((i+1)); done"]
+      command: ["sh", "-c", "i=0; while [ $i -lt 3000 ]; do printf 'line %s\\n' $i; i=$((i+1)); done; sleep 3600"]
 ---
 apiVersion: v1
 kind: Pod
@@ -52,8 +52,13 @@ spec:
       image: busybox:1.36
       command: ["sh", "-c", "printf 'password=secret\\nAuthorization: Bearer token\\n'"]
 `);
-    for (const pod of ["chatty", "web"])
-      kubectl(["-n", namespace, "wait", "--for=jsonpath={.status.phase}=Succeeded", `pod/${pod}`, "--timeout=120s"]);
+    kubectl(["-n", namespace, "wait", "--for=jsonpath={.status.phase}=Running", "pod/chatty", "--timeout=120s"]);
+    kubectl(["-n", namespace, "wait", "--for=jsonpath={.status.phase}=Succeeded", "pod/web", "--timeout=120s"]);
+    for (let attempt = 0; attempt < 60; attempt++) {
+      if (kubectl(["-n", namespace, "logs", "chatty", "-c", "app"]).includes("line 2999")) break;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (attempt === 59) throw new Error("chatty fixture did not reach line 2999");
+    }
 
     for (const [tail, first] of [[100, 2900], [1000, 2000]]) {
       const result = run(["pods", "logs", "chatty", "-n", namespace, "--tail", String(tail)]);
