@@ -74,7 +74,8 @@ spec:
       image: busybox:1.36
       command: ["sh", "-c", "printf 'password=secret\\nAuthorization: Bearer token\\n'; sleep 3600"]
 EOF
-kubectl --kubeconfig "$KUBECONFIG" -n fixtures wait --for=jsonpath='{.status.phase}'=Running pod/chatty pod/web --timeout=120s
+kubectl --kubeconfig "$KUBECONFIG" -n fixtures wait --for=jsonpath='{.status.phase}'=Running pod/chatty --timeout=120s
+kubectl --kubeconfig "$KUBECONFIG" -n fixtures wait --for=jsonpath='{.status.phase}'=Running pod/web --timeout=120s
 ready=0
 for _ in $(seq 1 60); do
   if kubectl --kubeconfig "$KUBECONFIG" -n fixtures logs chatty >"$lab/chatty.log" 2>/dev/null &&

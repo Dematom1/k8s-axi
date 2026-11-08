@@ -113,28 +113,36 @@ test("a full tail gives a runnable continuation hint", () => {
       l.env,
     );
     expect(p.status).toBe(0);
-    expect(p.stdout).toContain("--tail 1000");
-    expect(p.stdout).toContain("--since 900s");
-    expect(p.stdout).toContain("--previous");
-    expect(p.stdout).toContain("-c c");
-    expect(
-      cli(
-        [
-          "pods",
-          "logs",
-          "p",
-          "-c",
-          "c",
-          "--tail",
-          "1000",
-          "--since",
-          "900s",
-          "--previous",
-          "--full",
-        ],
-        l.env,
-      ).status,
-    ).toBe(0);
+    expect(p.data.help).toEqual([
+      'Run `k8s-axi pods logs p -n sandbox --context "default" -c c --tail 1000 --since 900s --previous --full` for the newest logs',
+    ]);
+    const continued = cli(
+      [
+        "pods",
+        "logs",
+        "p",
+        "-n",
+        "sandbox",
+        "--context",
+        "default",
+        "-c",
+        "c",
+        "--tail",
+        "1000",
+        "--since",
+        "900s",
+        "--previous",
+        "--full",
+      ],
+      l.env,
+    );
+    expect(continued.status).toBe(0);
+    const logCall = l.calls().filter((call) => call.args[0] === "logs").at(-1);
+    expect(logCall.args).toContain("--tail=1000");
+    expect(logCall.args).toContain("--since=900s");
+    expect(logCall.args).toContain("--previous");
+    expect(logCall.args).toContain("-c");
+    expect(logCall.args).toContain("c");
   } finally {
     l.clean();
   }
