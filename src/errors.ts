@@ -19,6 +19,16 @@ export const CODES = [
   "NAMESPACE_UNVERIFIED",
   "PARTIAL",
   "CONFIG_INVALID",
+  "SECRET_EXPOSURE",
+  "SCRUB_UNAVAILABLE",
+  "REMOTE_EXIT_NONZERO",
+  "AUDIT_UNAVAILABLE",
+  "AUDIT_INCOMPLETE",
+  "SESSION_LIMIT",
+  "SESSION_NOT_FOUND",
+  "PORT_IN_USE",
+  "SECRET_MANIFEST",
+  "INVALID_MANIFEST",
 ] as const;
 export type ErrorCode = (typeof CODES)[number];
 export function fail(

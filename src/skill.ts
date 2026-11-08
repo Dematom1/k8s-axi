@@ -1,6 +1,6 @@
 import { COMMAND_LINES, DESCRIPTION } from "./help.js";
 export const SKILL_DESCRIPTION =
-  "Inspect any Kubernetes cluster with k8s-axi: pods crashing, nodes not ready, why a deployment is stuck, recent cluster events, services without endpoints, and which Secrets exist. Strictly read-only diagnostics.";
+  "Inspect Kubernetes clusters with k8s-axi: diagnose workloads, nodes, events, services, and Secret metadata. Cluster actions remain disabled until their guarded implementation ships.";
 export function createSkillMarkdown(): string {
   return `---
 name: k8s-axi
@@ -25,7 +25,7 @@ Run \`npx -y k8s-axi <command> --help\` for flags and examples.
 
 ## Safety and results
 
-All cluster operations are fixed reads through kubectl. No write commands, raw passthrough, exec, auth reviews, streaming, or self-update exist.
+Enabled cluster operations are fixed reads through kubectl. Guarded exec, port-forward, apply preview, and diff are not enabled yet. When available, actions will default to preview, require explicit --execute for effects, show the target, and write an audit record. No raw passthrough, auth reviews, streaming, or self-update exists.
 Secrets enter this process only as metadata and key names projected by a fixed template. --full never adds fields or reveals values.
 This is an output restriction, not server-side access control: Secret list permission also grants values to a direct API client.
 Pods omit env, args, commands, and volumes. Object annotations are not output.

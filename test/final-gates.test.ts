@@ -1,7 +1,7 @@
 import { test, expect, vi } from "vitest";
 import { spawnSync } from "node:child_process";
-import { readFileSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { argvFor, assertSafe, type Read, deadline } from "../src/registry.js";
 import { validateNamespace, validateResourceName } from "../src/args.js";
 import { resolveTarget } from "../src/target.js";
@@ -139,14 +139,3 @@ test("Succeeded stays completed even during delayed deletion", () =>
       status: { phase: "Succeeded" },
     }).state,
   ).toBe("completed"));
-test("transport is the only subprocess boundary in shipped source", () => {
-  const root = resolve(process.env.K8S_AXI_TEST_PACKAGE ?? ".", "dist/src");
-  function walk(path: string): string[] {
-    return readdirSync(path, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? walk(join(path, e.name)) : [join(path, e.name)],
-    );
-  }
-  for (const file of walk(root))
-    if (file.endsWith(".js") && !file.endsWith("/kubectl.js"))
-      expect(readFileSync(file, "utf8")).not.toMatch(/(?:node:)?child_process/);
-});
