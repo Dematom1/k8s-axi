@@ -36,6 +36,7 @@ const COMMANDS = new Set([
   "ctx",
   "setup",
   "context",
+  "audit",
 ]);
 const CONTEXTS = COMMANDS;
 
