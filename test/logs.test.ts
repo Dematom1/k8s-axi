@@ -103,6 +103,28 @@ test("preserves a logged blank line but drops the final newline artifact", () =>
   }
 });
 
+test("applies the output byte budget to multibyte lines", () => {
+  const pod = {
+    metadata: { name: "p" },
+    spec: { containers: [{ name: "c" }] },
+  };
+  const older = "é".repeat(4000);
+  const newest = "界".repeat(3000);
+  const l = lab([
+    { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
+    { prefix: ["logs"], stdout: `${older}\n${older}\n${newest}\n` },
+    ...targetRules(),
+  ]);
+  try {
+    const p = cli(["pods", "logs", "p", "-c", "c"], l.env);
+    expect(p.status).toBe(0);
+    expect(p.data.logs).toEqual([newest]);
+    expect(p.data["omitted-lines"]).toBe(2);
+  } finally {
+    l.clean();
+  }
+});
+
 test("keeps a newest whole line larger than the output budget", () => {
   const pod = {
     metadata: { name: "p" },
@@ -119,6 +141,31 @@ test("keeps a newest whole line larger than the output budget", () => {
     expect(p.status).toBe(0);
     expect(p.data.logs).toEqual([newest]);
     expect(p.data["omitted-lines"]).toBe(1);
+  } finally {
+    l.clean();
+  }
+});
+
+test("continuation hints retain an inferred container", () => {
+  const pod = {
+    metadata: {
+      name: "p",
+      annotations: { "kubectl.kubernetes.io/default-container": "a" },
+    },
+    spec: { containers: [{ name: "a" }, { name: "b" }] },
+  };
+  const l = lab([
+    { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
+    {
+      prefix: ["logs"],
+      stdout: `${Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n")}\n`,
+    },
+    ...targetRules(),
+  ]);
+  try {
+    const p = cli(["pods", "logs", "p"], l.env);
+    expect(p.status).toBe(0);
+    expect(p.data.help[0]).toContain("-c a --tail 100");
   } finally {
     l.clean();
   }
