@@ -266,15 +266,14 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     for (const value of [...secrets, ...credentials]) {
       if (!value) continue;
       const candidates = [value, Buffer.from(value).toString("base64")];
-      if (credentials.includes(value)) {
-        const representations = [...candidates];
-        for (const representation of representations)
-          for (let start = 0; start <= representation.length - 12; start++)
-            candidates.push(representation.slice(start, start + 12));
-      }
-      for (const candidate of new Set(candidates))
+      for (const candidate of candidates)
         if (candidate && output.includes(candidate))
           throw new Error("Sensitive material appeared in CLI output");
+      if (credentials.includes(value))
+        for (const representation of candidates)
+          for (let start = 0; start <= representation.length - 4; start++)
+            if (output.includes(representation.slice(start, start + 4)))
+              throw new Error("Sensitive material appeared in CLI output");
     }
   },
   180_000,
