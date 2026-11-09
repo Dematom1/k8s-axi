@@ -1,5 +1,5 @@
 import { validateResourceName, type Parsed } from "../args.js";
-import { deadline } from "../registry.js";
+import { deadline, LOG_LIMIT_BYTES } from "../registry.js";
 import { resolveTarget, resolveScope, scoped, scopeLabel } from "../target.js";
 import { kubectl, parseObject, object, objects, text } from "../kubectl.js";
 import { usage } from "../errors.js";
@@ -57,7 +57,9 @@ export async function logsCommand(p: Parsed): Promise<string> {
     d,
   );
   const redacted = redactText(raw),
-    cut = Buffer.byteLength(raw) >= 1048576;
+    rawBytes = Buffer.byteLength(raw),
+    cut = rawBytes >= LOG_LIMIT_BYTES,
+    nearLimit = rawBytes >= LOG_LIMIT_BYTES - 1;
   const lines = redacted.text.split(/\r?\n/);
   if (lines.at(-1) === "") lines.pop();
   const tailLines = lines.slice(-p.tail);
@@ -69,7 +71,7 @@ export async function logsCommand(p: Parsed): Promise<string> {
     shownLines.unshift(line);
     previewChars += length;
   }
-  const moreLines = cut || lines.length > p.tail;
+  const moreLines = nearLimit || lines.length > p.tail;
   const omitted = moreLines ? null : lines.length - shownLines.length;
   const previewTruncated = !p.full && shownLines.length < tailLines.length;
   const nextTail = Math.min(1000, p.tail * 2);

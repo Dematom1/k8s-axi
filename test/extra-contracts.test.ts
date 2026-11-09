@@ -43,7 +43,7 @@ test("version uses the Node startup floor, without loading commands", () => {
     ]);
   expect(version).toBeLessThan(baseline * 3 + 40);
 });
-test("bounded log cut and previous error are explicit", () => {
+test("near-cap logs and unavailable previous logs are explicit", () => {
   const pod = {
     metadata: { name: "p" },
     spec: { containers: [{ name: "c" }] },
@@ -59,7 +59,7 @@ test("bounded log cut and previous error are explicit", () => {
                 'Error from server: Get "https://127.0.0.1:10250/containerLogs/sandbox/p/c": unable to retrieve container logs for containerd://0123456789abcdef',
               code: 1,
             }
-          : { stdout: "x".repeat(1048576) }),
+          : { stdout: "x".repeat(1048575) }),
       },
       ...targetRules(),
     ]);
@@ -74,7 +74,9 @@ test("bounded log cut and previous error are explicit", () => {
         expect(p.stdout).toContain("pods view <pod>");
         expect(p.stdout).toContain("events for the pod");
       } else {
-        expect(object(p.data)["byte-limited"]).toBe(true);
+        expect(object(p.data)["byte-limited"]).toBe(false);
+        expect(object(p.data)["more-lines"]).toBe(true);
+        expect(object(p.data)["omitted-lines"]).toBeNull();
         const help = (p.data as { help: string[] }).help;
         expect(help[0]).toContain("--full");
         expect(help[0]).toContain("to remove the character preview limit");

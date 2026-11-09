@@ -1,4 +1,5 @@
 import type { NamespaceName, ResourceName, Selector } from "./args.js";
+export const LOG_LIMIT_BYTES = 1048576;
 export const REFUSALS = [
   "apply",
   "create",
@@ -217,7 +218,7 @@ export function argvFor(
         "-c",
         read.container,
         `--tail=${read.tail}`,
-        "--limit-bytes=1048576",
+        `--limit-bytes=${LOG_LIMIT_BYTES}`,
         ...(read.sinceSeconds ? [`--since=${read.sinceSeconds}s`] : []),
         ...(read.previous ? ["--previous"] : []),
       ];
@@ -282,7 +283,7 @@ export function assertSafe(argv: readonly string[]): void {
       a[4] === "-c" &&
       dns(a[5]) &&
       /^--tail=(?:[1-9]\d{0,2}|1000|1001)$/.test(a[6] ?? "") &&
-      a[7] === "--limit-bytes=1048576" &&
+      a[7] === `--limit-bytes=${LOG_LIMIT_BYTES}` &&
       a
         .slice(8)
         .every(
