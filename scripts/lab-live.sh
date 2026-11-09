@@ -2,13 +2,13 @@
 set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 lab="$root/.lab-live"
-name="k8s-axi-lab"
+name="k8s-axi-lab-$$-$(date +%s)"
 config="$lab/kubeconfig"
 export KUBECONFIG="$config"
 lock="$lab/.lock"
 real_home=${HOME:-}
 owned=0
-cluster_owned=0
+cluster_started=0
 [ "${1:-}" = run ] || { echo 'usage: scripts/lab-live.sh run' >&2; exit 2; }
 command -v docker >/dev/null || { echo 'docker is required' >&2; exit 1; }
 command -v curl >/dev/null || { echo 'curl is required' >&2; exit 1; }
@@ -18,9 +18,10 @@ cleanup() {
   if [ -n "$create_pid" ]; then
     kill "$create_pid" 2>/dev/null || true
     wait "$create_pid" 2>/dev/null || true
+    create_pid=
   fi
   if [ "$owned" = 1 ]; then
-    if [ "$cluster_owned" = 1 ] && [ -x "$kind_bin" ]; then KUBECONFIG="$config" "$kind_bin" delete cluster --name "$name" >/dev/null 2>&1 || true; fi
+    if [ "$cluster_started" = 1 ] && [ -x "$kind_bin" ]; then KUBECONFIG="$config" "$kind_bin" delete cluster --name "$name" >/dev/null 2>&1 || true; fi
     if [ "$(cat "$lock/pid" 2>/dev/null || true)" = "$$" ]; then
       rm -rf "$lab/bin" "$lab/home" "$lab/tmp" "$lab/package" "$lab/kubeconfig" "$lab/live-results.json"
       rm -rf "$lock"
@@ -73,20 +74,7 @@ verify "$lab/bin/kubectl"
 chmod +x "$kind_bin" "$lab/bin/kubectl"
 PATH="$lab/bin:$PATH"
 export PATH
-cluster_wait_start=$(date +%s)
-while kind get clusters | grep -Fxq "$name"; do
-  node_container="${name}-control-plane"
-  if docker inspect "$node_container" >/dev/null 2>&1; then
-    started=$(docker inspect --format '{{.State.StartedAt}}' "$node_container")
-    age=$(node -e 'process.stdout.write(String(Math.floor((Date.now() - Date.parse(process.argv[1])) / 1000)))' "$started")
-    if [ "$age" -gt 2700 ]; then
-      echo 'FAIL: existing kind lab is stale but not owned by this run; remove it manually' >&2
-      exit 1
-    fi
-  fi
-  [ "$(( $(date +%s) - cluster_wait_start ))" -lt 1200 ] || { echo 'FAIL: existing kind lab is still active after 20 minutes' >&2; exit 1; }
-  sleep 15
-done
+cluster_started=1
 kind create cluster --name "$name" --kubeconfig "$config" --wait 300s &
 create_pid=$!
 node_container="${name}-control-plane"
@@ -113,7 +101,6 @@ if [ "$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$node_container")" !
 fi
 wait "$create_pid"
 create_pid=
-cluster_owned=1
 KUBECONFIG="$config" kubectl config set-context kind-k8sx-alt --cluster="kind-$name" --user="kind-$name" --namespace=fixtures >/dev/null
 KUBECONFIG="$config" kubectl config set-cluster ghost --server=https://127.0.0.1:1 >/dev/null
 KUBECONFIG="$config" kubectl config set-context ghost --cluster=ghost --user="kind-$name" --namespace=fixtures >/dev/null

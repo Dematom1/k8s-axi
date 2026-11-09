@@ -66,6 +66,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       ["get", "nodes", "-o", "jsonpath={.items[0].metadata.name}"],
       { encoding: "utf8", env },
     ).stdout;
+    expect(nodeName.trim()).not.toBe("");
     const inspect = spawnSync("docker", ["inspect", nodeName], {
       encoding: "utf8",
     });
@@ -131,6 +132,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       { encoding: "utf8", env },
     );
     expect(webPod.status).toBe(0);
+    expect(webPod.stdout.trim()).not.toBe("");
     run(["pods", "logs", webPod.stdout, "-n", "fixtures", "--tail", "20"], 0);
     run(
       [
@@ -168,6 +170,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       { encoding: "utf8", env },
     );
     expect(failedJobPod.status).toBe(0);
+    expect(failedJobPod.stdout.trim()).not.toBe("");
     for (const full of [[], ["--full"]])
       run(["pods", "logs", failedJobPod.stdout, "-n", "fixtures", ...full], 0);
 
