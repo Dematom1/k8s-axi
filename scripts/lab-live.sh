@@ -4,7 +4,9 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 lab="$root/.lab-live"
 name="k8s-axi-lab"
 config="$lab/kubeconfig"
+export KUBECONFIG="$config"
 lock="$lab/.lock"
+real_home=${HOME:-}
 owned=0
 cluster_owned=0
 [ "${1:-}" = run ] || { echo 'usage: scripts/lab-live.sh run' >&2; exit 2; }
@@ -118,7 +120,7 @@ KUBECONFIG="$config" kubectl config set-context ghost --cluster=ghost --user="ki
 KUBECONFIG="$config" kubectl config set-cluster blackhole --server=https://10.255.255.1:6443 >/dev/null
 KUBECONFIG="$config" kubectl config set-context blackhole --cluster=blackhole --user="kind-$name" --namespace=fixtures >/dev/null
 node=$(KUBECONFIG="$config" kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
-export KUBECONFIG="$config" HOME="$lab/home" TMPDIR="$lab/tmp" KUBERC=off K8S_AXI_LAB_LIVE=1 K8S_AXI_LIVE=1 K8S_AXI_KIND="$kind_bin"
+export KUBECONFIG="$config" HOME="$lab/home" TMPDIR="$lab/tmp" KUBERC=off K8S_AXI_LAB_LIVE=1 K8S_AXI_LIVE=1 K8S_AXI_KIND="$kind_bin" K8S_AXI_REAL_HOME="$real_home"
 kubectl apply -f "$root/test/live/fixtures.yaml"
 kubectl create serviceaccount limited -n fixtures
 kubectl create rolebinding "limited-$name" --clusterrole=view --serviceaccount=fixtures:limited -n fixtures
@@ -138,8 +140,8 @@ kubectl wait -n fixtures --for=jsonpath='{.status.containerStatuses[0].restartCo
 kubectl wait -n fixtures --for=jsonpath='{.status.conditions[?(@.type=="Progressing")].reason}'=ProgressDeadlineExceeded deployment/broken --timeout=300s
 cd "$root"
 npm run build
-archive=$(npm pack --silent --pack-destination "$lab")
-npm install --prefix "$lab/package" --ignore-scripts --no-audit --no-fund "$lab/$archive"
+archive=$(npm pack --silent --pack-destination "$lab/tmp")
+npm install --prefix "$lab/package" --ignore-scripts --no-audit --no-fund "$lab/tmp/$archive"
 export K8S_AXI_TEST_PACKAGE="$lab/package/node_modules/k8s-axi" K8S_AXI_LIMITED_TOKEN="$limited_token" K8S_AXI_NSONLY_TOKEN="$nsonly_token"
 npx vitest run test/live/*.live.test.ts --reporter=default --reporter=json --outputFile "$lab/live-results.json"
 node -e 'const r=require(process.argv[1]); if (!r.numTotalTests || r.numPendingTests || r.numFailedTests) { console.error("live tests did not all execute and pass", r); process.exit(1); }' "$lab/live-results.json"

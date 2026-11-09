@@ -68,7 +68,7 @@ export type Read =
     }
   | {
       op: "get";
-      resource: "node" | "pod" | "deployment.apps" | "namespace";
+      resource: "node" | "pod" | "deployment.apps" | "namespace" | "services";
       name: ResourceName | NamespaceName;
       namespace?: NamespaceName;
     }

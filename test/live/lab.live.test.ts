@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   unlinkSync,
@@ -27,10 +29,18 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     expect(home).toContain("/.lab-live/");
     const claudeConfig = resolve(home, ".claude");
     mkdirSync(claudeConfig, { recursive: true });
+    const realHome = process.env.K8S_AXI_REAL_HOME;
+    if (!realHome) throw new Error("real HOME is required for isolation check");
+    const realSettings = resolve(realHome, ".claude", "settings.json");
+    const realSettingsHash = () =>
+      existsSync(realSettings)
+        ? createHash("sha256").update(readFileSync(realSettings)).digest("hex")
+        : "absent";
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       CLAUDE_CONFIG_DIR: claudeConfig,
       XDG_CONFIG_HOME: resolve(home, ".config"),
+      XDG_DATA_HOME: resolve(home, ".local", "share"),
       XDG_STATE_HOME: resolve(home, ".local", "state"),
       KUBERC: "off",
     };
@@ -63,12 +73,16 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     expect(JSON.parse(inspect.stdout)[0].HostConfig.NanoCpus).toBe(
       2_000_000_000,
     );
+    for (const args of [[], ["ctx"]]) run(args, 0);
+    const settingsBeforeSetup = realSettingsHash();
     for (const args of [
-      [],
-      ["ctx"],
       ["setup", "status"],
       ["setup", "hooks"],
       ["setup", "uninstall"],
+    ])
+      run(args, 0);
+    expect(realSettingsHash()).toBe(settingsBeforeSetup);
+    for (const args of [
       ["context"],
       ["audit"],
       ["nodes"],
@@ -289,6 +303,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     }
     for (const value of [...secrets, ...credentials]) {
       if (!value) continue;
+      // An 8-character minimum is the justified floor: shorter windows of base64 or hex tokens collide with ordinary output and make the sweep flaky; 8 random characters is about 48 bits for base64.
       const candidates = [value, Buffer.from(value).toString("base64")];
       for (const candidate of candidates)
         if (candidate && output.includes(candidate))
