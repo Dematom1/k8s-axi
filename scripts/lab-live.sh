@@ -74,6 +74,11 @@ verify "$lab/bin/kubectl"
 chmod +x "$kind_bin" "$lab/bin/kubectl"
 PATH="$lab/bin:$PATH"
 export PATH
+clusters=$(kind get clusters)
+if printf '%s\n' "$clusters" | grep -Fxq "$name"; then
+  echo "FAIL: unique kind cluster name already exists: $name" >&2
+  exit 1
+fi
 cluster_started=1
 kind create cluster --name "$name" --kubeconfig "$config" --wait 300s &
 create_pid=$!

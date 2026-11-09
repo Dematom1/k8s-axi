@@ -19,6 +19,9 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     const kubeconfigPath = process.env.KUBECONFIG;
     if (!kubeconfigPath?.includes("/.lab-live/"))
       throw new Error("lab KUBECONFIG is required");
+    const tmpDir = process.env.TMPDIR;
+    if (!tmpDir?.includes("/.lab-live/"))
+      throw new Error("lab TMPDIR is required");
     const cli = resolve(
       process.env.K8S_AXI_TEST_PACKAGE ?? ".",
       "dist/bin/k8s-axi.js",
@@ -230,14 +233,13 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     );
     expect(
       run(["pods"], 1, {
-        KUBECONFIG: resolve(process.env.TMPDIR ?? "/tmp", "absent"),
+        KUBECONFIG: resolve(tmpDir, "absent"),
+        K8S_AXI_LIMITED_TOKEN: "",
+        K8S_AXI_NSONLY_TOKEN: "",
       }).code,
     ).toBe("NO_CONTEXT");
 
-    const unreadable = resolve(
-      process.env.TMPDIR ?? "/tmp",
-      `unreadable-${process.pid}`,
-    );
+    const unreadable = resolve(tmpDir, `unreadable-${process.pid}`);
     writeFileSync(unreadable, "apiVersion: v1\n");
     chmodSync(unreadable, 0);
     try {
@@ -248,9 +250,13 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
         canRead = false;
       }
       if (!canRead)
-        expect(run(["pods"], 1, { KUBECONFIG: unreadable }).code).toBe(
-          "UPSTREAM_ERROR",
-        );
+        expect(
+          run(["pods"], 1, {
+            KUBECONFIG: unreadable,
+            K8S_AXI_LIMITED_TOKEN: "",
+            K8S_AXI_NSONLY_TOKEN: "",
+          }).code,
+        ).toBe("UPSTREAM_ERROR");
     } finally {
       chmodSync(unreadable, 0o600);
       unlinkSync(unreadable);
