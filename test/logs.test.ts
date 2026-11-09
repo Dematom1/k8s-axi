@@ -5,7 +5,7 @@ import { lab, targetRules } from "./lab.js";
 type LogsOutput = {
   logs: string[];
   "omitted-lines": number;
-  shown: string;
+  shown: string[];
   help?: string[];
 };
 const logsOutput = (result: ReturnType<typeof cli>) =>
@@ -53,7 +53,7 @@ for (const annotation of [undefined, "a"])
         ).status,
       ).toBe(0);
       const calls = l.calls().filter((c) => c.args[0] === "logs");
-      expect(calls.at(-1).args).not.toContain("--tail");
+      expect(calls.at(-1).args).toContain("--tail=50");
       expect(calls.at(-1).args).toContain("--limit-bytes=1048576");
       expect(calls.at(-1).args).toContain("--since=900s");
       expect(calls.at(-1).args).toContain("--previous");
@@ -91,6 +91,9 @@ test.each([100, 1000])(
       expect(data.logs).toHaveLength(tail);
       expect(data.logs.at(-1)).toBe("2999");
       expect(data["omitted-lines"]).toBe(3000 - tail);
+      expect(
+        l.calls().find((call) => call.args[0] === "logs")?.args,
+      ).toContain(`--tail=${tail}`);
     } finally {
       l.clean();
     }
@@ -104,16 +107,16 @@ test("reports the exact newest tail, omitted count, and shown range", () => {
   };
   const l = lab([
     { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
-    { prefix: ["logs"], stdout: "older\nnewer-1\nnewer-2\n" },
+    { prefix: ["logs"], stdout: "older\nnewer..1\nnewer-2\n" },
     ...targetRules(),
   ]);
   try {
     const p = cli(["pods", "logs", "p", "-c", "c", "--tail", "2"], l.env);
     expect(p.status).toBe(0);
     const data = logsOutput(p);
-    expect(data.logs).toEqual(["newer-1", "newer-2"]);
+    expect(data.logs).toEqual(["newer..1", "newer-2"]);
     expect(data["omitted-lines"]).toBe(1);
-    expect(data.shown).toBe("newer-1..newer-2");
+    expect(data.shown).toEqual(["newer..1", "newer-2"]);
   } finally {
     l.clean();
   }
@@ -311,7 +314,7 @@ test("a full maximum tail recommends a wider since window", () => {
     );
     expect(p.status).toBe(0);
     expect(logsOutput(p).help).toEqual([
-      "The current CLI cannot page farther back: --tail is capped at 1000. --since filters by time but does not bypass that cap (currently --since 15m).",
+      "The current CLI cannot page farther back: --tail is capped at 1000. --since filters by time but does not bypass that cap (currently --since '15m').",
     ]);
   } finally {
     l.clean();

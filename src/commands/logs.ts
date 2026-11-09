@@ -94,7 +94,7 @@ export async function logsCommand(p: Parsed): Promise<string> {
     "byte-limited": cut,
     truncated: cut || omitted > 0,
     "omitted-lines": omitted,
-    shown: shownLines.length ? `${shownLines[0]}..${shownLines.at(-1)}` : "",
+    shown: shownLines.length ? [shownLines[0], shownLines.at(-1)] : [],
     logs: shownLines,
     ...(help ? { help: [help] } : {}),
   });
