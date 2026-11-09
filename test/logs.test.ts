@@ -53,7 +53,7 @@ for (const annotation of [undefined, "a"])
         ).status,
       ).toBe(0);
       const calls = l.calls().filter((c) => c.args[0] === "logs");
-      expect(calls.at(-1).args).toContain("--tail=50");
+      expect(calls.at(-1).args).toContain("--tail=-1");
       expect(calls.at(-1).args).toContain("--limit-bytes=1048576");
       expect(calls.at(-1).args).toContain("--since=900s");
       expect(calls.at(-1).args).toContain("--previous");
@@ -93,7 +93,7 @@ test.each([100, 1000])(
       expect(data["omitted-lines"]).toBe(3000 - tail);
       expect(
         l.calls().find((call) => call.args[0] === "logs")?.args,
-      ).toContain(`--tail=${tail}`);
+      ).toContain("--tail=-1");
     } finally {
       l.clean();
     }

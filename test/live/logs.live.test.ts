@@ -8,7 +8,7 @@ const namespace = `logs-${process.pid}-${Date.now()}`;
 type LogsOutput = {
   logs: string[];
   "omitted-lines": number;
-  shown: string;
+  shown: string[];
   help?: string[];
   redacted: number;
 };
@@ -119,7 +119,7 @@ spec:
           Array.from({ length: tail }, (_, i) => `line ${first + i}`),
         );
         expect(output["omitted-lines"]).toBe(3000 - tail);
-        expect(output.shown).toBe(`line ${first}..line 2999`);
+        expect(output.shown).toEqual([`line ${first}`, "line 2999"]);
         expect(output.help?.[0]).toBeDefined();
         if (tail === 100) expect(output.help?.[0]).toContain("--tail 200");
         if (tail === 1000)
