@@ -75,13 +75,13 @@ PATH="$lab/bin:$PATH"
 export PATH
 cluster_wait_start=$(date +%s)
 while kind get clusters | grep -Fxq "$name"; do
-  node="${name}-control-plane"
-  if docker inspect "$node" >/dev/null 2>&1; then
-    started=$(docker inspect --format '{{.State.StartedAt}}' "$node")
+  node_container="${name}-control-plane"
+  if docker inspect "$node_container" >/dev/null 2>&1; then
+    started=$(docker inspect --format '{{.State.StartedAt}}' "$node_container")
     age=$(node -e 'process.stdout.write(String(Math.floor((Date.now() - Date.parse(process.argv[1])) / 1000)))' "$started")
     if [ "$age" -gt 2700 ]; then
-      kind delete cluster --name "$name" --kubeconfig "$config"
-      break
+      echo 'FAIL: existing kind lab is stale but not owned by this run; remove it manually' >&2
+      exit 1
     fi
   fi
   [ "$(( $(date +%s) - cluster_wait_start ))" -lt 1200 ] || { echo 'FAIL: existing kind lab is still active after 20 minutes' >&2; exit 1; }
@@ -89,9 +89,9 @@ while kind get clusters | grep -Fxq "$name"; do
 done
 kind create cluster --name "$name" --kubeconfig "$config" --wait 300s &
 create_pid=$!
-node="${name}-control-plane"
+node_container="${name}-control-plane"
 cap_deadline=$(( $(date +%s) + 300 ))
-while ! docker inspect "$node" >/dev/null 2>&1; do
+while ! docker inspect "$node_container" >/dev/null 2>&1; do
   if [ "$(date +%s)" -ge "$cap_deadline" ]; then
     kill "$create_pid" 2>/dev/null || true
     wait "$create_pid" 2>/dev/null || true
@@ -101,12 +101,12 @@ while ! docker inspect "$node" >/dev/null 2>&1; do
   sleep 0.5
 done
 # kind has no create-time CPU limit, so cap the node as soon as Docker exposes it.
-if ! docker update --cpus=2 "$node" >/dev/null; then
+if ! docker update --cpus=2 "$node_container" >/dev/null; then
   if wait "$create_pid"; then create_pid=; cluster_owned=1; fi
   echo 'FAIL: could not apply 2 CPU cap to kind node' >&2
   exit 1
 fi
-if [ "$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$node")" != 2000000000 ]; then
+if [ "$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$node_container")" != 2000000000 ]; then
   if wait "$create_pid"; then create_pid=; cluster_owned=1; fi
   echo 'FAIL: could not verify 2 CPU cap on kind node' >&2
   exit 1
