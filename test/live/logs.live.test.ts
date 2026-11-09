@@ -7,7 +7,8 @@ const liveTest = test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1");
 const namespace = `logs-${process.pid}-${Date.now()}`;
 type LogsOutput = {
   logs: string[];
-  "omitted-lines": number;
+  "omitted-lines": number | null;
+  "more-lines": boolean;
   shown: string[];
   help?: string[];
   redacted: number;
@@ -118,7 +119,8 @@ spec:
         expect(output.logs).toEqual(
           Array.from({ length: tail }, (_, i) => `line ${first + i}`),
         );
-        expect(output["omitted-lines"]).toBe(3000 - tail);
+        expect(output["omitted-lines"]).toBeNull();
+        expect(output["more-lines"]).toBe(true);
         expect(output.shown).toEqual([`line ${first}`, "line 2999"]);
         expect(output.help?.[0]).toBeDefined();
         if (tail === 100) expect(output.help?.[0]).toContain("--tail 200");

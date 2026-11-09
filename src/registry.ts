@@ -281,7 +281,7 @@ export function assertSafe(argv: readonly string[]): void {
       dns(a[3]) &&
       a[4] === "-c" &&
       dns(a[5]) &&
-      /^--tail=(?:-1|[1-9]\d{0,2}|1000)$/.test(a[6] ?? "") &&
+      /^--tail=(?:[1-9]\d{0,2}|1000|1001)$/.test(a[6] ?? "") &&
       a[7] === "--limit-bytes=1048576" &&
       a
         .slice(8)

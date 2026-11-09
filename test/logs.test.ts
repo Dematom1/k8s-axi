@@ -4,7 +4,8 @@ import { lab, targetRules } from "./lab.js";
 
 type LogsOutput = {
   logs: string[];
-  "omitted-lines": number;
+  "omitted-lines": number | null;
+  "more-lines": boolean;
   shown: string[];
   help?: string[];
 };
@@ -53,7 +54,7 @@ for (const annotation of [undefined, "a"])
         ).status,
       ).toBe(0);
       const calls = l.calls().filter((c) => c.args[0] === "logs");
-      expect(calls.at(-1).args).toContain("--tail=-1");
+      expect(calls.at(-1).args).toContain("--tail=51");
       expect(calls.at(-1).args).toContain("--limit-bytes=1048576");
       expect(calls.at(-1).args).toContain("--since=900s");
       expect(calls.at(-1).args).toContain("--previous");
@@ -75,7 +76,7 @@ test.each([100, 1000])(
       metadata: { name: "p" },
       spec: { containers: [{ name: "c" }] },
     };
-    const output = `${Array.from({ length: 3000 }, (_, i) => String(i)).join("\n")}\n`;
+    const output = `${Array.from({ length: tail + 1 }, (_, i) => String(2999 - tail + i)).join("\n")}\n`;
     const l = lab([
       { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
       { prefix: ["logs"], stdout: output },
@@ -90,10 +91,11 @@ test.each([100, 1000])(
       const data = logsOutput(p);
       expect(data.logs).toHaveLength(tail);
       expect(data.logs.at(-1)).toBe("2999");
-      expect(data["omitted-lines"]).toBe(3000 - tail);
+      expect(data["omitted-lines"]).toBeNull();
+      expect(data["more-lines"]).toBe(true);
       expect(
         l.calls().find((call) => call.args[0] === "logs")?.args,
-      ).toContain("--tail=-1");
+      ).toContain(`--tail=${tail + 1}`);
     } finally {
       l.clean();
     }
@@ -115,7 +117,8 @@ test("reports the exact newest tail, omitted count, and shown range", () => {
     expect(p.status).toBe(0);
     const data = logsOutput(p);
     expect(data.logs).toEqual(["newer..1", "newer-2"]);
-    expect(data["omitted-lines"]).toBe(1);
+    expect(data["omitted-lines"]).toBeNull();
+    expect(data["more-lines"]).toBe(true);
     expect(data.shown).toEqual(["newer..1", "newer-2"]);
   } finally {
     l.clean();
@@ -138,6 +141,7 @@ test("preserves a logged blank line but drops the final newline artifact", () =>
     const data = logsOutput(p);
     expect(data.logs).toEqual(["foo", ""]);
     expect(data["omitted-lines"]).toBe(0);
+    expect(data["more-lines"]).toBe(false);
   } finally {
     l.clean();
   }
@@ -152,7 +156,7 @@ test("tail continuation increases the bound and preserves options", () => {
     { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
     {
       prefix: ["logs"],
-      stdout: `${Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n")}\n`,
+      stdout: `${Array.from({ length: 51 }, (_, i) => `line ${i}`).join("\n")}\n`,
     },
     ...targetRules(),
   ]);
@@ -223,10 +227,11 @@ test("character-preview hint keeps request options and --full semantics", () => 
     const data = logsOutput(p);
     expect(data.logs.length).toBeLessThan(100);
     expect(data["omitted-lines"]).toBe(100 - data.logs.length);
+    expect(data["more-lines"]).toBe(false);
     expect(data.help?.[0]).toContain(
       "k8s-axi pods logs 'p' -n 'sandbox' --context 'default' -c 'c' --tail 100 --since '15m' --previous --full",
     );
-    expect(data.help?.[0]).toContain("does not fetch lines beyond --tail");
+    expect(data.help?.[0]).toContain("does not show lines beyond --tail");
   } finally {
     l.clean();
   }
@@ -250,7 +255,8 @@ test("--full does not fetch older lines than the requested tail", () => {
     expect(p.status).toBe(0);
     const data = logsOutput(p);
     expect(data.logs).toEqual(["newer-1", "newer-2"]);
-    expect(data["omitted-lines"]).toBe(1);
+    expect(data["omitted-lines"]).toBeNull();
+    expect(data["more-lines"]).toBe(true);
     expect(data.help?.[0]).toContain("--tail 4");
     expect(data.help?.[0]).not.toContain("--full");
   } finally {
@@ -270,7 +276,7 @@ test("continuation hints retain an inferred container", () => {
     { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
     {
       prefix: ["logs"],
-      stdout: `${Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n")}\n`,
+      stdout: `${Array.from({ length: 101 }, (_, i) => `line ${i}`).join("\n")}\n`,
     },
     ...targetRules(),
   ]);
@@ -292,7 +298,7 @@ test("a full maximum tail recommends a wider since window", () => {
     { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
     {
       prefix: ["logs"],
-      stdout: `${Array.from({ length: 1000 }, (_, i) => String(i)).join("\n")}\n`,
+      stdout: `${Array.from({ length: 1001 }, (_, i) => String(i)).join("\n")}\n`,
     },
     ...targetRules(),
   ]);

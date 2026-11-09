@@ -49,7 +49,7 @@ export async function logsCommand(p: Parsed): Promise<string> {
       pod: name,
       namespace: s.name,
       container,
-      tail: -1,
+      tail: p.tail + 1,
       sinceSeconds: p.since,
       previous: p.previous,
     },
@@ -69,21 +69,20 @@ export async function logsCommand(p: Parsed): Promise<string> {
     shownLines.unshift(line);
     previewChars += length;
   }
-  const omitted = lines.length - shownLines.length;
+  const moreLines = cut || lines.length > p.tail;
+  const omitted = moreLines ? null : lines.length - shownLines.length;
   const previewTruncated = !p.full && shownLines.length < tailLines.length;
   const nextTail = Math.min(1000, p.tail * 2);
   const quote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
   const command = `k8s-axi pods logs ${quote(name)} -n ${quote(s.name)} --context ${quote(t.context)} -c ${quote(container)}`;
   const carried = `${p.sinceArg ? ` --since ${quote(p.sinceArg)}` : ""}${p.previous ? " --previous" : ""}`;
   const help = previewTruncated
-    ? `Run \`${command} --tail ${p.tail}${carried} --full\` to remove the character preview limit; --full does not fetch lines beyond --tail`
-    : omitted > 0 && p.tail < 1000
+    ? `Run \`${command} --tail ${p.tail}${carried} --full\` to remove the character preview limit; --full does not show lines beyond --tail`
+    : moreLines && p.tail < 1000
       ? `Run \`${command} --tail ${nextTail}${carried}\` for more logs`
-      : omitted > 0
+      : moreLines
         ? `The current CLI cannot page farther back: --tail is capped at 1000. --since filters by time but does not bypass that cap${p.sinceArg ? ` (currently --since ${quote(p.sinceArg)})` : ""}.`
-        : cut
-          ? `The log response reached kubectl's 1 MiB limit; try a smaller --tail or --since window. Request: \`${command} --tail ${p.tail}${carried}\``
-          : undefined;
+        : undefined;
   return encodeObject({
     context: t.context,
     scope: scopeLabel(s),
@@ -92,8 +91,9 @@ export async function logsCommand(p: Parsed): Promise<string> {
     redaction: "best effort",
     redacted: redacted.count,
     "byte-limited": cut,
-    truncated: cut || omitted > 0,
+    truncated: cut || moreLines || (omitted !== null && omitted > 0),
     "omitted-lines": omitted,
+    "more-lines": moreLines,
     shown: shownLines.length ? [shownLines[0], shownLines.at(-1)] : [],
     logs: shownLines,
     ...(help ? { help: [help] } : {}),
