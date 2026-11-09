@@ -1,93 +1,139 @@
 #!/bin/sh
 set -eu
-
-root=$(realpath "$(dirname -- "$0")/..")
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 lab="$root/.lab-live"
-name=k8s-axi-lab
-created=0
-locked=0
+name="k8s-axi-lab-$$-$(date +%s)"
+config="$lab/kubeconfig"
+export KUBECONFIG="$config"
 lock="$lab/.lock"
-kind_bin="$lab/kind"
-deadline=$(($(date +%s) + 1200))
-mkdir -p "$lab"
-while ! mkdir "$lock" 2>/dev/null; do
-  [ "$(date +%s)" -lt "$deadline" ] || { echo "timed out waiting for lab lock" >&2; exit 1; }
-  sleep 5
-done
-locked=1
-printf '%s\n' "$$" > "$lock/pid"
-mkdir -p "$lab/home" "$lab/tmp" "$lab/state"
-export HOME="$lab/home"
-export TMPDIR="$lab/tmp"
-export KUBECONFIG="$lab/kubeconfig"
-export K8S_AXI_KIND="$kind_bin"
-export K8S_AXI_LIVE=1
-export XDG_STATE_HOME="$lab/state"
-
+real_home=${HOME:-}
+owned=0
+cluster_started=0
+[ "${1:-}" = run ] || { echo 'usage: scripts/lab-live.sh run' >&2; exit 2; }
+command -v docker >/dev/null || { echo 'docker is required' >&2; exit 1; }
+command -v curl >/dev/null || { echo 'curl is required' >&2; exit 1; }
+kind_bin="$lab/bin/kind"
+create_pid=
 cleanup() {
-  if [ "$locked" -eq 1 ] && [ -f "$lock/pid" ] && [ "$(cat "$lock/pid")" = "$$" ]; then
-    if [ "$created" -eq 1 ]; then
-      "$kind_bin" delete cluster --name "$name" --kubeconfig "$KUBECONFIG" >/dev/null 2>&1 || true
-    fi
-    rm -rf "$lab/home" "$lab/tmp" "$lab/state" "$lab/kubeconfig" "$lab/kind" "$lab/create.log"
-    rm -f "$lock/pid"
-    rmdir "$lock"
+  if [ -n "$create_pid" ]; then
+    kill "$create_pid" 2>/dev/null || true
+    wait "$create_pid" 2>/dev/null || true
+    create_pid=
   fi
-}
-trap cleanup EXIT INT TERM
-
-case "$(uname -s):$(uname -m)" in
-  Darwin:arm64) checksum=0c8c7dbe5e23594a198b786c4bc13dacc101fa6196b0cb0b23a1ca44e61f4b4f; asset=kind-darwin-arm64 ;;
-  *) echo "unsupported host for pinned kind binary: $(uname -s):$(uname -m)" >&2; exit 1 ;;
-esac
-curl -fsSL "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/$asset" -o "$kind_bin"
-printf '%s  %s\n' "$checksum" "$kind_bin" | shasum -a 256 -c -
-chmod 700 "$kind_bin"
-
-cluster_exists() {
-  "$kind_bin" get clusters 2>/dev/null | grep -Fx "$name" >/dev/null
-}
-
-cluster_is_stale() {
-  created_at=$(docker inspect -f '{{.Created}}' "$name-control-plane" 2>/dev/null) || return 1
-  created_epoch=$(python3 -c 'from datetime import datetime; import sys; print(int(datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00")).timestamp()))' "$created_at" 2>/dev/null) || return 1
-  now=$(date +%s)
-  [ "$((now - created_epoch))" -gt 2700 ]
-}
-
-while :; do
-  if cluster_exists; then
-    if cluster_is_stale; then
-      "$kind_bin" delete cluster --name "$name" --kubeconfig "$KUBECONFIG" >/dev/null
-    else
-      [ "$(date +%s)" -lt "$deadline" ] || { echo "timed out waiting for kind cluster: $name" >&2; exit 1; }
-      sleep 5
-      continue
+  if [ "$owned" = 1 ]; then
+    if [ "$cluster_started" = 1 ] && [ -x "$kind_bin" ]; then KUBECONFIG="$config" "$kind_bin" delete cluster --name "$name" >/dev/null 2>&1 || true; fi
+    if [ "$(cat "$lock/pid" 2>/dev/null || true)" = "$$" ]; then
+      rm -rf "$lab/bin" "$lab/home" "$lab/tmp" "$lab/package" "$lab/kubeconfig" "$lab/live-results.json"
+      rm -rf "$lock"
+      rmdir "$lab" 2>/dev/null || true
     fi
   fi
-
-  "$kind_bin" create cluster --name "$name" --kubeconfig "$KUBECONFIG" --image kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0 --wait 120s >"$lab/create.log" 2>&1 &
-  create_pid=$!
-  while kill -0 "$create_pid" 2>/dev/null; do
-    if docker inspect "$name-control-plane" >/dev/null 2>&1; then
-      docker update --cpus=2 "$name-control-plane" >/dev/null
-      break
+}
+mkdir -p "$lab"
+start=$(date +%s)
+while ! mkdir "$lock" 2>/dev/null; do
+  owner=$(cat "$lock/pid" 2>/dev/null || true)
+  if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
+    stale="$lab/.stale-lock-$$"
+    if mv "$lock" "$stale" 2>/dev/null; then
+      if [ "$(cat "$stale/pid" 2>/dev/null || true)" = "$owner" ]; then
+        rm -rf "$stale"
+        continue
+      fi
+      mv "$stale" "$lock" 2>/dev/null || true
     fi
-    sleep 1
-  done
-  if wait "$create_pid"; then
-    created=1
-    break
   fi
-  if cluster_exists && cluster_is_stale; then
-    "$kind_bin" delete cluster --name "$name" --kubeconfig "$KUBECONFIG" >/dev/null
-    continue
-  fi
-  [ "$(date +%s)" -lt "$deadline" ] || { echo "timed out acquiring kind cluster: $name" >&2; exit 1; }
-  sleep 5
+  [ "$(( $(date +%s) - start ))" -lt 1200 ] || { echo 'FAIL: timed out waiting 20 minutes for the shared kind lab lock' >&2; exit 1; }
+  sleep 10
 done
-
-"$kind_bin" export kubeconfig --name "$name" --kubeconfig "$KUBECONFIG"
-kubectl --context "kind-$name" apply -f "$root/test/live/fixtures.yaml"
-"$kind_bin" get clusters | grep -Fx "$name"
-npm --prefix "$root" run test:live
+owned=1
+trap cleanup EXIT HUP INT TERM
+printf '%s\n' "$$" > "$lock/pid"
+mkdir -p "$lab/bin" "$lab/home" "$lab/tmp"
+case "$(uname -s)/$(uname -m)" in
+  Darwin/arm64) platform=darwin-arm64; kubectl_platform=darwin/arm64 ;;
+  Darwin/x86_64) platform=darwin-amd64; kubectl_platform=darwin/amd64 ;;
+  Linux/x86_64) platform=linux-amd64; kubectl_platform=linux/amd64 ;;
+  Linux/aarch64|Linux/arm64) platform=linux-arm64; kubectl_platform=linux/arm64 ;;
+  *) echo "unsupported lab platform: $(uname -s)/$(uname -m)" >&2; exit 1 ;;
+esac
+verify() {
+  file=$1
+  expected=$(awk '{print $1}' "$file.sha256")
+  case "$expected" in *[!0-9a-fA-F]*|'') echo "invalid SHA-256 file: $file.sha256" >&2; exit 1 ;; esac
+  if command -v sha256sum >/dev/null; then actual=$(sha256sum "$file" | awk '{print $1}')
+  else actual=$(shasum -a 256 "$file" | awk '{print $1}'); fi
+  [ "$actual" = "$expected" ] || { echo "SHA-256 mismatch: $file" >&2; exit 1; }
+}
+curl -fsSL "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-$platform" -o "$kind_bin"
+curl -fsSL "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-$platform.sha256sum" -o "$kind_bin.sha256"
+verify "$kind_bin"
+curl -fsSL "https://dl.k8s.io/release/v1.36.2/bin/$kubectl_platform/kubectl" -o "$lab/bin/kubectl"
+curl -fsSL "https://dl.k8s.io/release/v1.36.2/bin/$kubectl_platform/kubectl.sha256" -o "$lab/bin/kubectl.sha256"
+verify "$lab/bin/kubectl"
+chmod +x "$kind_bin" "$lab/bin/kubectl"
+PATH="$lab/bin:$PATH"
+export PATH
+clusters=$(kind get clusters)
+if printf '%s\n' "$clusters" | grep -Fxq "$name"; then
+  echo "FAIL: unique kind cluster name already exists: $name" >&2
+  exit 1
+fi
+cluster_started=1
+kind create cluster --name "$name" --kubeconfig "$config" --wait 300s &
+create_pid=$!
+node_container="${name}-control-plane"
+cap_deadline=$(( $(date +%s) + 300 ))
+while ! docker inspect "$node_container" >/dev/null 2>&1; do
+  if [ "$(date +%s)" -ge "$cap_deadline" ]; then
+    kill "$create_pid" 2>/dev/null || true
+    wait "$create_pid" 2>/dev/null || true
+    echo 'FAIL: kind node did not appear within 300 seconds' >&2
+    exit 1
+  fi
+  sleep 0.5
+done
+# kind has no create-time CPU limit, so cap the node as soon as Docker exposes it.
+if ! docker update --cpus=2 "$node_container" >/dev/null; then
+  if wait "$create_pid"; then create_pid=; fi
+  echo 'FAIL: could not apply 2 CPU cap to kind node' >&2
+  exit 1
+fi
+if [ "$(docker inspect --format '{{.HostConfig.NanoCpus}}' "$node_container")" != 2000000000 ]; then
+  if wait "$create_pid"; then create_pid=; fi
+  echo 'FAIL: could not verify 2 CPU cap on kind node' >&2
+  exit 1
+fi
+wait "$create_pid"
+create_pid=
+KUBECONFIG="$config" kubectl config set-context kind-k8sx-alt --cluster="kind-$name" --user="kind-$name" --namespace=fixtures >/dev/null
+KUBECONFIG="$config" kubectl config set-cluster ghost --server=https://127.0.0.1:1 >/dev/null
+KUBECONFIG="$config" kubectl config set-context ghost --cluster=ghost --user="kind-$name" --namespace=fixtures >/dev/null
+KUBECONFIG="$config" kubectl config set-cluster blackhole --server=https://10.255.255.1:6443 >/dev/null
+KUBECONFIG="$config" kubectl config set-context blackhole --cluster=blackhole --user="kind-$name" --namespace=fixtures >/dev/null
+node=$(KUBECONFIG="$config" kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+export KUBECONFIG="$config" HOME="$lab/home" TMPDIR="$lab/tmp" KUBERC=off K8S_AXI_LAB_LIVE=1 K8S_AXI_LIVE=1 K8S_AXI_KIND="$kind_bin" K8S_AXI_REAL_HOME="$real_home"
+kubectl apply -f "$root/test/live/fixtures.yaml"
+kubectl create serviceaccount limited -n fixtures
+kubectl create rolebinding "limited-$name" --clusterrole=view --serviceaccount=fixtures:limited -n fixtures
+limited_token=$(kubectl create token limited -n fixtures --duration=1h)
+kubectl config set-credentials limited --token="$limited_token" >/dev/null
+kubectl config set-context limited --cluster="kind-$name" --user=limited --namespace=fixtures >/dev/null
+kubectl create serviceaccount nsonly -n fixtures
+kubectl create role nsonly --verb=get,list,watch --resource=pods,events -n fixtures
+kubectl create rolebinding nsonly --role=nsonly --serviceaccount=fixtures:nsonly -n fixtures
+nsonly_token=$(kubectl create token nsonly -n fixtures --duration=1h)
+kubectl config set-credentials nsonly --token="$nsonly_token" >/dev/null
+kubectl config set-context nsonly --cluster="kind-$name" --user=nsonly --namespace=fixtures >/dev/null
+kubectl wait -n fixtures --for=condition=Available deployment/web --timeout=120s
+kubectl wait -n fixtures --for=condition=Ready pod/chatty --timeout=300s
+kubectl wait -n fixtures --for=condition=Failed job/failjob --timeout=300s
+kubectl wait -n fixtures --for=jsonpath='{.status.containerStatuses[0].restartCount}'=1 pod/crashy pod/crashy2 --timeout=300s
+kubectl wait -n fixtures --for=jsonpath='{.status.conditions[?(@.type=="Progressing")].reason}'=ProgressDeadlineExceeded deployment/broken --timeout=300s
+cd "$root"
+npm run build
+archive=$(npm pack --silent --pack-destination "$lab/tmp")
+npm install --prefix "$lab/package" --ignore-scripts --no-audit --no-fund "$lab/tmp/$archive"
+export K8S_AXI_TEST_PACKAGE="$lab/package/node_modules/k8s-axi" K8S_AXI_LIMITED_TOKEN="$limited_token" K8S_AXI_NSONLY_TOKEN="$nsonly_token"
+npx vitest run test/live/*.live.test.ts --reporter=default --reporter=json --outputFile "$lab/live-results.json"
+node -e 'const r=require(process.argv[1]); if (!r.numTotalTests || r.numPendingTests || r.numFailedTests) { console.error("live tests did not all execute and pass", r); process.exit(1); }' "$lab/live-results.json"

@@ -12,12 +12,15 @@ live("disposable kind lab is up and audit reads an empty local state", () => {
   expect(
     execFileSync(kind, ["get", "clusters"], { encoding: "utf8" }),
   ).toContain("k8s-axi-lab");
+  const context = execFileSync("kubectl", ["config", "current-context"], {
+    encoding: "utf8",
+  }).trim();
   expect(
     execFileSync(
       "kubectl",
       [
         "--context",
-        "kind-k8s-axi-lab",
+        context,
         "-n",
         "fixtures",
         "get",
