@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.2](https://github.com/Dematom1/k8s-axi/compare/k8s-axi-v0.1.1...k8s-axi-v0.1.2) (2026-11-08)
+
+
+### Features
+
+* **actions:** add guarded Kubernetes action foundation ([#10](https://github.com/Dematom1/k8s-axi/issues/10)) ([1faf2a3](https://github.com/Dematom1/k8s-axi/commit/1faf2a34ba3e4a0df43cb46d2df6340e9ef653c2))
+* **cli:** add named views for Kubernetes resources ([#15](https://github.com/Dematom1/k8s-axi/issues/15)) ([6112884](https://github.com/Dematom1/k8s-axi/commit/6112884d0b33fdb281ba14756e7aaeb8c2ef3ae1))
+* **cli:** support common kubectl read commands ([#7](https://github.com/Dematom1/k8s-axi/issues/7)) ([55b4b83](https://github.com/Dematom1/k8s-axi/commit/55b4b83ced891fba6b2c0e8c4d238b3d902e1728))
+
+
+### Bug Fixes
+
+* **claude:** honor CLAUDE_CONFIG_DIR for hooks ([#9](https://github.com/Dematom1/k8s-axi/issues/9)) ([b9c4f39](https://github.com/Dematom1/k8s-axi/commit/b9c4f395e47aba71e1868fb6e5d62ad6dd90f6ae))
+* **pods:** surface crash-looping pods immediately ([#6](https://github.com/Dematom1/k8s-axi/issues/6)) ([8343794](https://github.com/Dematom1/k8s-axi/commit/83437944d1e65904d1aedb4861b178d5a2a7c8fc))
+
 ## [0.1.1](https://github.com/Dematom1/k8s-axi/compare/k8s-axi-v0.1.0...k8s-axi-v0.1.1) (2026-11-04)
 
 
