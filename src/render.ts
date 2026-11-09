@@ -31,9 +31,17 @@ export function renderList(
   const shown = filtered.slice(0, p.limit);
   const fields = p.fields ?? [...spec.defaults];
   const identity = ` --context ${JSON.stringify(context)}${scope.startsWith("namespace ") ? " -n " + scope.slice(10) : p.all ? " -A" : ""}`;
-  const detail = ["nodes", "pods", "deployments", "secrets"].includes(
-    spec.noun,
-  );
+  const detail = [
+    "nodes",
+    "pods",
+    "deployments",
+    "secrets",
+    "namespaces",
+    "jobs",
+    "pvcs",
+    "services",
+    "events",
+  ].includes(spec.noun);
   const detailFlags = identity.replace(" -A", " -n <namespace>");
   const help = [
     shown.length

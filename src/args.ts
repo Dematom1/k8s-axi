@@ -179,7 +179,16 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     const actions =
       command === "pods"
         ? ["view", "logs"]
-        : ["nodes", "deployments", "secrets"].includes(command)
+        : [
+              "nodes",
+              "namespaces",
+              "deployments",
+              "jobs",
+              "pvcs",
+              "services",
+              "events",
+              "secrets",
+            ].includes(command)
           ? ["view"]
           : command === "setup"
             ? ["hooks", "status", "uninstall"]
@@ -209,6 +218,12 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     ["namespace", "all-namespaces", "selector"].some((x) => flags.has(x))
   )
     usage("cluster-scoped command does not accept scope flags", command);
+  if (
+    command === "events" &&
+    action === "view" &&
+    ["warnings", "since", "for"].some((f) => flags.has(f))
+  )
+    usage("event filters require a list command", command);
   if (command === "pods" && flags.has("since") && action !== "logs")
     usage("--since requires pods logs", command);
   if (

@@ -15,11 +15,11 @@ import {
   workloadRow,
   workloadSpecs,
   deploymentDetail,
+  claimOrJobDetail,
 } from "../model/workloads.js";
 import { renderList, validateFields } from "../render.js";
 import { encodeObject } from "../toon.js";
 import { recentEvents } from "./events.js";
-import { usage } from "../errors.js";
 export async function workloadsCommand(p: Parsed): Promise<string> {
   if (
     p.command !== "deployments" &&
@@ -30,8 +30,6 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
   const noun = p.command,
     spec = workloadSpecs[noun];
   validateFields(spec, p);
-  if (p.action === "view" && noun !== "deployments")
-    usage(`${noun} does not support object views`, noun);
   const d = deadline(p.timeout);
   if (p.rolloutStatus) d.end = Date.now() + p.timeout * 1000;
   const t = await resolveTarget(p.context, d),
@@ -47,7 +45,12 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
         await kubectl(
           {
             op: "get",
-            resource: "deployment.apps",
+            resource:
+              noun === "deployments"
+                ? "deployment.apps"
+                : noun === "jobs"
+                  ? "job.batch"
+                  : "persistentvolumeclaim",
             name,
             ...(s.kind === "namespace" ? { namespace: s.name } : {}),
           },
@@ -103,8 +106,21 @@ export async function workloadsCommand(p: Parsed): Promise<string> {
     }
     return encodeObject({
       context: t.context,
-      ...deploymentDetail(rows[0] ?? {}, p.full),
-      events: await recentEvents(t, s, d, "Deployment", name, p.full),
+      ...(noun === "deployments"
+        ? deploymentDetail(rows[0] ?? {}, p.full)
+        : claimOrJobDetail(rows[0] ?? {}, noun, p.full)),
+      events: await recentEvents(
+        t,
+        s,
+        d,
+        noun === "deployments"
+          ? "Deployment"
+          : noun === "jobs"
+            ? "Job"
+            : "PersistentVolumeClaim",
+        name,
+        p.full,
+      ),
     });
   }
   const resources: Record<typeof noun, ListResource> = {

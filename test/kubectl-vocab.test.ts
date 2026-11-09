@@ -57,9 +57,29 @@ const routes: [string[], string[] | undefined, string[]?, number?][] = [
     ["get", "secrets"],
   ],
   [["get", "nodes"], ["nodes"], ["get", "nodes"]],
-  [["get", "namespace", "fixtures"], undefined, undefined, 2],
-  [["get", "ns", "fixtures"], undefined, undefined, 2],
-  [["get", "namespaces", "fixtures"], undefined, undefined, 2],
+  ...["namespace", "ns", "namespaces"].map(
+    (noun): [string[], string[], string[], number] => [
+      ["get", noun, "fixtures"],
+      ["namespaces", "view", "fixtures"],
+      ["get", "namespace", "fixtures"],
+      0,
+    ],
+  ),
+  ...[
+    ["job", "jobs", "job.batch"],
+    ["jobs", "jobs", "job.batch"],
+    ["pvc", "pvcs", "persistentvolumeclaim"],
+    ["pvcs", "pvcs", "persistentvolumeclaim"],
+    ["service", "services", "service"],
+    ["services", "services", "service"],
+    ["event", "events", "event"],
+    ["events", "events", "event"],
+  ].map(([alias, noun, resource]): [string[], string[], string[], number] => [
+    ["get", alias!, "sample", "-n", "fixtures"],
+    [noun!, "view", "sample", "-n", "fixtures"],
+    ["get", resource!, "sample"],
+    0,
+  ]),
   [["rollout", "status", "statefulset/web"], undefined, undefined, 2],
   [
     ["get", "events", "-n", "fixtures"],
@@ -77,7 +97,10 @@ test.each(routes)(
     const environment = lab([
       {
         prefix: ["get", "namespace", "fixtures"],
-        stdout: "namespace/fixtures",
+        stdout: JSON.stringify({
+          metadata: { name: "fixtures" },
+          status: { phase: "Active" },
+        }),
       },
       {
         prefix: ["get", "deployment.apps", "healthy"],
@@ -121,6 +144,14 @@ test.each(routes)(
           },
         }),
       },
+      ...["job.batch", "persistentvolumeclaim", "service", "event"].map(
+        (resource) => ({
+          prefix: ["get", resource, "sample"],
+          stdout: JSON.stringify({
+            metadata: { name: "sample", namespace: "fixtures" },
+          }),
+        }),
+      ),
       { prefix: ["get", "secrets"], stdout: "" },
       {
         prefix: ["get", "deployment.apps", "broken"],
@@ -169,7 +200,17 @@ test.each(routes)(
               ? "pod"
               : equivalent[0] === "deployments"
                 ? "deployment"
-                : "secret";
+                : equivalent[0] === "namespaces"
+                  ? "namespace"
+                  : equivalent[0] === "jobs"
+                    ? "job"
+                    : equivalent[0] === "pvcs"
+                      ? "pvc"
+                      : equivalent[0] === "services"
+                        ? "service"
+                        : equivalent[0] === "events"
+                          ? "event"
+                          : "secret";
           if (typed[0] === "rollout" && typed[2]?.endsWith("broken")) {
             expect(result.stdout).toContain("ProgressDeadlineExceeded");
           } else {
@@ -191,6 +232,14 @@ test.each(routes)(
             cli(["pods", "-n", "fixtures"], environment.env).stdout,
           );
         }
+        if (_expectedCall)
+          expect(
+            environment
+              .calls()
+              .some((call) =>
+                _expectedCall.every((arg, i) => call.args[i] === arg),
+              ),
+          ).toBe(true);
       } else {
         expect(result.status).toBe(expectedStatus);
         expect(result.stdout).toContain(
