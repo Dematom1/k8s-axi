@@ -137,9 +137,9 @@ spec:
       expect(previous.status).toBe(1);
       expect(previous.stdout).toContain("LOGS_UNAVAILABLE");
 
-      const web = decode(
-        run(["pods", "logs", "web", "-n", namespace]).stdout,
-      ) as LogsOutput;
+      const webResult = run(["pods", "logs", "web", "-n", namespace]);
+      expect(webResult.status).toBe(0);
+      const web = decode(webResult.stdout) as LogsOutput;
       expect(web.redacted).toBe(2);
       expect(web.logs).toEqual([
         "password=[REDACTED]",
