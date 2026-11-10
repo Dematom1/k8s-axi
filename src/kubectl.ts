@@ -117,6 +117,13 @@ export async function kubectl(
     );
   if (result.exit !== 0)
     throw mapKubectlFailure(redactText(result.stderr).text, read.op);
+  if (
+    read.op === "logs" &&
+    /^Error from server: Get "https?:\/\/[^\"]+\/containerLogs\/[^\"]+": (?:unable to retrieve container logs for|failed to get container logs?)/im.test(
+      result.stdout,
+    )
+  )
+    throw mapKubectlFailure(redactText(result.stdout).text, read.op);
   return result.stdout;
 }
 export type Obj = Record<string, unknown>;

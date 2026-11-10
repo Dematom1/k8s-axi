@@ -106,7 +106,7 @@ for (const [stderr, code] of [
 ])
   test(`map ${code}`, () =>
     expect(mapKubectlFailure(stderr ?? "").code).toBe(code));
-test("preserves application logs that resemble kubelet errors", async () => {
+test("classifies successful kubectl output containing a kubelet retrieval failure", async () => {
   const stdout =
     'Error from server: Get "https://127.0.0.1:10250/containerLogs/sandbox/p/c": unable to retrieve container logs for containerd://0123456789abcdef';
   const l = lab([
@@ -129,7 +129,7 @@ test("preserves application logs that resemble kubelet errors", async () => {
         await resolveTarget("default", deadline()),
         deadline(),
       ),
-    ).resolves.toBe(stdout);
+    ).rejects.toMatchObject({ code: "LOGS_UNAVAILABLE" });
   } finally {
     process.env = before;
     l.clean();
