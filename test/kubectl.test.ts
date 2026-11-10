@@ -132,6 +132,32 @@ test("classifies successful kubectl output containing a kubelet retrieval failur
     l.clean();
   }
 });
+test("keeps retrieval-like text inside multiline application logs", async () => {
+  const stdout =
+    "startup complete\nunable to retrieve container logs for containerd://app\nready";
+  const l = lab([...targetRules(), { prefix: ["logs"], stdout }]);
+  const before = { ...process.env };
+  Object.assign(process.env, l.env);
+  try {
+    await expect(
+      kubectl(
+        {
+          op: "logs",
+          pod: validateResourceName("p"),
+          namespace: validateNamespace("sandbox"),
+          container: validateResourceName("c"),
+          tail: 11,
+          previous: false,
+        },
+        await resolveTarget("default", deadline()),
+        deadline(),
+      ),
+    ).resolves.toBe(stdout);
+  } finally {
+    process.env = before;
+    l.clean();
+  }
+});
 test("classifies kubelet missing-log-file output as unavailable", async () => {
   const stdout =
     'failed to try resolving symlinks in path "/var/log/pods/sandbox_p_abc/c/0.log": lstat /var/log/pods/sandbox_p_abc/c/0.log: no such file or directory';

@@ -119,10 +119,10 @@ export async function kubectl(
     throw mapKubectlFailure(redactText(result.stderr).text, read.op);
   if (
     read.op === "logs" &&
-    (/unable to retrieve container logs for containerd:\/\/|^Error from server: Get "https?:\/\/[^"]+\/containerLogs\/[^"]+": failed to get container logs?/im.test(
+    (/^(?:unable to retrieve container logs for containerd:\/\/\S+|Error from server: Get "https?:\/\/[^"]+\/containerLogs\/[^"]+": failed to get container logs?)\s*$/i.test(
       result.stdout,
     ) ||
-      /failed to try resolving symlinks in path .*lstat .*: no such file or directory/im.test(
+      /^failed to try resolving symlinks in path .*lstat .*: no such file or directory\s*$/i.test(
         result.stdout,
       ))
   )
