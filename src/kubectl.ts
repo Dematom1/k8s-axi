@@ -60,7 +60,7 @@ export function mapKubectlFailure(
   if (
     !found &&
     operation === "logs" &&
-    /unable to retrieve container logs for|failed to get container logs?|previous terminated container.*not found|previous.*not available/i.test(
+    /unable to retrieve container logs for|failed to get container logs?|previous terminated container.*not found|previous.*not available|failed to try resolving symlinks in path .*lstat .*: no such file or directory/i.test(
       stderr,
     )
   )
@@ -119,9 +119,12 @@ export async function kubectl(
     throw mapKubectlFailure(redactText(result.stderr).text, read.op);
   if (
     read.op === "logs" &&
-    /^Error from server: Get "https?:\/\/[^\"]+\/containerLogs\/[^\"]+": (?:unable to retrieve container logs for|failed to get container logs?)/im.test(
+    (/^Error from server: Get "https?:\/\/[^\"]+\/containerLogs\/[^\"]+": (?:unable to retrieve container logs for|failed to get container logs?)/im.test(
       result.stdout,
-    )
+    ) ||
+      /failed to try resolving symlinks in path .*lstat .*: no such file or directory/im.test(
+        result.stdout,
+      ))
   )
     throw mapKubectlFailure(redactText(result.stdout).text, read.op);
   return result.stdout;

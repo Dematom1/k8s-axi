@@ -135,6 +135,35 @@ test("classifies successful kubectl output containing a kubelet retrieval failur
     l.clean();
   }
 });
+test("classifies kubelet missing-log-file output as unavailable", async () => {
+  const stdout =
+    'failed to try resolving symlinks in path "/var/log/pods/sandbox_p_abc/c/0.log": lstat /var/log/pods/sandbox_p_abc/c/0.log: no such file or directory';
+  const l = lab([
+    ...targetRules(),
+    { prefix: ["logs"], stdout },
+  ]);
+  const before = { ...process.env };
+  Object.assign(process.env, l.env);
+  try {
+    await expect(
+      kubectl(
+        {
+          op: "logs",
+          pod: validateResourceName("p"),
+          namespace: validateNamespace("sandbox"),
+          container: validateResourceName("c"),
+          tail: 11,
+          previous: true,
+        },
+        await resolveTarget("default", deadline()),
+        deadline(),
+      ),
+    ).rejects.toMatchObject({ code: "LOGS_UNAVAILABLE" });
+  } finally {
+    process.env = before;
+    l.clean();
+  }
+});
 test("classifies kubelet log retrieval failures without hiding transport errors", () => {
   const retrieval =
     'Error from server: Get "https://127.0.0.1:10250/containerLogs/sandbox/p/c": unable to retrieve container logs for containerd://0123456789abcdef';
