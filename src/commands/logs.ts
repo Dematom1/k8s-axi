@@ -76,11 +76,12 @@ export async function logsCommand(p: Parsed): Promise<string> {
   }
   const moreLines = nearLimit || rawLines.length > p.tail;
   const previewTruncated = !p.full && shownLines.length < tailLines.length;
+  const redactionCollapsedLines = rawLines.length !== lines.length;
   const omitted = moreLines
     ? null
-    : previewTruncated
-      ? rawLines.length - shownLines.length
-      : 0;
+    : previewTruncated && redactionCollapsedLines
+      ? null
+      : lines.length - shownLines.length;
   const nextTail = Math.min(1000, p.tail * 2);
   const quote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
   const command = `k8s-axi pods logs ${quote(name)} -n ${quote(s.name)} --context ${quote(t.context)} -c ${quote(container)}`;

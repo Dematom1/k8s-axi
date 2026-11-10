@@ -239,14 +239,16 @@ test("character-preview hint keeps request options and --full semantics", () => 
   }
 });
 
-test("counts source lines hidden when redaction collapses a preview", () => {
+test("uses unknown omitted count when redaction collapses a preview", () => {
   const pod = {
     metadata: { name: "p" },
     spec: { containers: [{ name: "c" }] },
   };
   const pem =
     "-----BEGIN PRIVATE KEY-----\nprivate material\n-----END PRIVATE KEY-----";
-  const output = `${pem}\n${Array.from({ length: 80 }, (_, i) => `${i}:${"x".repeat(100)}`).join("\n")}\n`;
+  const before = Array.from({ length: 40 }, (_, i) => `${i}:${"x".repeat(100)}`);
+  const after = Array.from({ length: 40 }, (_, i) => `${i + 40}:${"x".repeat(100)}`);
+  const output = `${before.join("\n")}\n${pem}\n${after.join("\n")}\n`;
   const l = lab([
     { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
     { prefix: ["logs"], stdout: output },
@@ -256,9 +258,9 @@ test("counts source lines hidden when redaction collapses a preview", () => {
     const p = cli(["pods", "logs", "p", "-c", "c", "--tail", "100"], l.env);
     expect(p.status).toBe(0);
     const data = logsOutput(p);
-    expect(data.logs).not.toContain("[REDACTED PEM]");
+    expect(data.logs).toContain("[REDACTED PEM]");
     expect(data["more-lines"]).toBe(false);
-    expect(data["omitted-lines"]).toBe(83 - data.logs.length);
+    expect(data["omitted-lines"]).toBeNull();
   } finally {
     l.clean();
   }
