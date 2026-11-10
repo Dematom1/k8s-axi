@@ -41,7 +41,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && chmod +x dist/bin/*.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
-    "lint": "eslint .",
+    "lint": "oxlint $(git ls-files -co --exclude-standard -- '*.ts' '*.mts' '*.mjs' '*.js' '*.cjs')",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "pretest": "npm run build",
@@ -58,15 +58,12 @@
     "axi-sdk-js": "0.1.13"
   },
   "devDependencies": {
-    "@eslint/js": "10.0.1",
     "@types/js-yaml": "4.0.9",
     "@types/node": "22.20.5",
-    "eslint": "10.13.0",
-    "globals": "17.13.0",
     "js-yaml": "4.1.1",
+    "oxlint": "1.92.0",
     "prettier": "3.9.10",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.72.1",
     "vitest": "^5.0.5"
   }
 }
