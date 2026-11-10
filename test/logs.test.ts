@@ -1,9 +1,11 @@
 import { test, expect } from "vitest";
 import { cli } from "./helpers.js";
 import { lab, targetRules } from "./lab.js";
+import { LOG_LIMIT_BYTES } from "../src/registry.js";
 
 type LogsOutput = {
   logs: string[];
+  "byte-limited": boolean;
   "omitted-lines": number | null;
   "more-lines": boolean;
   shown: string[];
@@ -257,8 +259,7 @@ test("--full does not fetch older lines than the requested tail", () => {
     expect(data.logs).toEqual(["newer-1", "newer-2"]);
     expect(data["omitted-lines"]).toBeNull();
     expect(data["more-lines"]).toBe(true);
-    expect(data.help?.[0]).toContain("--tail 4");
-    expect(data.help?.[0]).not.toContain("--full");
+    expect(data.help?.[0]).toContain("--tail 4 --full");
   } finally {
     l.clean();
   }
@@ -326,6 +327,30 @@ test("a full maximum tail explains the since filter", () => {
     l.clean();
   }
 });
+test("byte-capped logs omit an incomplete final record", () => {
+  const pod = {
+    metadata: { name: "p" },
+    spec: { containers: [{ name: "c" }] },
+  };
+  const output = `older\nnewest\npartial${"x".repeat(LOG_LIMIT_BYTES - 20)}`;
+  expect(Buffer.byteLength(output)).toBe(LOG_LIMIT_BYTES);
+  const l = lab([
+    { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
+    { prefix: ["logs"], stdout: output },
+    ...targetRules(),
+  ]);
+  try {
+    const p = cli(["pods", "logs", "p", "-c", "c", "--tail", "2"], l.env);
+    expect(p.status).toBe(0);
+    const data = logsOutput(p);
+    expect(data.logs).toEqual(["older", "newest"]);
+    expect(data["byte-limited"]).toBe(true);
+    expect(data["more-lines"]).toBe(true);
+  } finally {
+    l.clean();
+  }
+});
+
 for (const missing of ["namespace", "pod"])
   test(`missing ${missing} logs`, () => {
     const l = lab([

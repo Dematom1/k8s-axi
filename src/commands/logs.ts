@@ -62,6 +62,7 @@ export async function logsCommand(p: Parsed): Promise<string> {
     nearLimit = rawBytes >= LOG_LIMIT_BYTES - 1;
   const lines = redacted.text.split(/\r?\n/);
   if (lines.at(-1) === "") lines.pop();
+  else if (cut) lines.pop();
   const tailLines = lines.slice(-p.tail);
   const shownLines: string[] = [];
   let previewChars = 0;
@@ -77,7 +78,7 @@ export async function logsCommand(p: Parsed): Promise<string> {
   const nextTail = Math.min(1000, p.tail * 2);
   const quote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
   const command = `k8s-axi pods logs ${quote(name)} -n ${quote(s.name)} --context ${quote(t.context)} -c ${quote(container)}`;
-  const carried = `${p.sinceArg ? ` --since ${quote(p.sinceArg)}` : ""}${p.previous ? " --previous" : ""}`;
+  const carried = `${p.sinceArg ? ` --since ${quote(p.sinceArg)}` : ""}${p.previous ? " --previous" : ""}${p.full ? " --full" : ""}`;
   const help = previewTruncated
     ? `Run \`${command} --tail ${p.tail}${carried} --full\` to remove the character preview limit; --full does not show lines beyond --tail`
     : moreLines && p.tail < 1000

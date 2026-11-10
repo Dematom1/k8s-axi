@@ -9,7 +9,9 @@ import {
   type Read,
 } from "../src/registry.js";
 import { redactText } from "../src/redact.js";
-import { lab } from "./lab.js";
+import { lab, targetRules } from "./lab.js";
+import { resolveTarget } from "../src/target.js";
+import { validateNamespace, validateResourceName } from "../src/args.js";
 const local: Read = { op: "local", query: "contexts" };
 test("secret cannot use JSON list operation", () => {
   // @ts-expect-error secrets have a distinct projected operation
@@ -104,6 +106,37 @@ for (const [stderr, code] of [
 ])
   test(`map ${code}`, () =>
     expect(mapKubectlFailure(stderr ?? "").code).toBe(code));
+test("turns a zero-exit kubelet log retrieval response into an error", async () => {
+  const l = lab([
+    ...targetRules(),
+    {
+      prefix: ["logs"],
+      stdout:
+        'Error from server: Get "https://127.0.0.1:10250/containerLogs/sandbox/p/c": unable to retrieve container logs for containerd://0123456789abcdef',
+    },
+  ]);
+  const before = { ...process.env };
+  Object.assign(process.env, l.env);
+  try {
+    await expect(
+      kubectl(
+        {
+          op: "logs",
+          pod: validateResourceName("p"),
+          namespace: validateNamespace("sandbox"),
+          container: validateResourceName("c"),
+          tail: 11,
+          previous: false,
+        },
+        await resolveTarget("default", deadline()),
+        deadline(),
+      ),
+    ).rejects.toMatchObject({ code: "LOGS_UNAVAILABLE" });
+  } finally {
+    process.env = before;
+    l.clean();
+  }
+});
 test("classifies kubelet log retrieval failures without hiding transport errors", () => {
   const retrieval =
     'Error from server: Get "https://127.0.0.1:10250/containerLogs/sandbox/p/c": unable to retrieve container logs for containerd://0123456789abcdef';
