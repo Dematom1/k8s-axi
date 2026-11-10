@@ -9,7 +9,9 @@ import {
   type Read,
 } from "../src/registry.js";
 import { redactText } from "../src/redact.js";
-import { lab } from "./lab.js";
+import { lab, targetRules } from "./lab.js";
+import { resolveTarget } from "../src/target.js";
+import { validateNamespace, validateResourceName } from "../src/args.js";
 const local: Read = { op: "local", query: "contexts" };
 test("secret cannot use JSON list operation", () => {
   // @ts-expect-error secrets have a distinct projected operation
@@ -104,6 +106,102 @@ for (const [stderr, code] of [
 ])
   test(`map ${code}`, () =>
     expect(mapKubectlFailure(stderr ?? "").code).toBe(code));
+test("classifies successful kubectl output containing a kubelet retrieval failure", async () => {
+  const stdout =
+    "unable to retrieve container logs for containerd://0123456789abcdef";
+  const l = lab([...targetRules(), { prefix: ["logs"], stdout }]);
+  const before = { ...process.env };
+  Object.assign(process.env, l.env);
+  try {
+    await expect(
+      kubectl(
+        {
+          op: "logs",
+          pod: validateResourceName("p"),
+          namespace: validateNamespace("sandbox"),
+          container: validateResourceName("c"),
+          tail: 11,
+          previous: false,
+        },
+        await resolveTarget("default", deadline()),
+        deadline(),
+      ),
+    ).rejects.toMatchObject({ code: "LOGS_UNAVAILABLE" });
+  } finally {
+    process.env = before;
+    l.clean();
+  }
+});
+test("keeps retrieval-like text inside multiline application logs", async () => {
+  const stdout =
+    "startup complete\nunable to retrieve container logs for containerd://app\nready";
+  const l = lab([...targetRules(), { prefix: ["logs"], stdout }]);
+  const before = { ...process.env };
+  Object.assign(process.env, l.env);
+  try {
+    await expect(
+      kubectl(
+        {
+          op: "logs",
+          pod: validateResourceName("p"),
+          namespace: validateNamespace("sandbox"),
+          container: validateResourceName("c"),
+          tail: 11,
+          previous: false,
+        },
+        await resolveTarget("default", deadline()),
+        deadline(),
+      ),
+    ).resolves.toBe(stdout);
+  } finally {
+    process.env = before;
+    l.clean();
+  }
+});
+test("classifies kubelet missing-log-file output as unavailable", async () => {
+  const stdout =
+    'failed to try resolving symlinks in path "/var/log/pods/sandbox_p_abc/c/0.log": lstat /var/log/pods/sandbox_p_abc/c/0.log: no such file or directory';
+  const l = lab([...targetRules(), { prefix: ["logs"], stdout }]);
+  const before = { ...process.env };
+  Object.assign(process.env, l.env);
+  try {
+    await expect(
+      kubectl(
+        {
+          op: "logs",
+          pod: validateResourceName("p"),
+          namespace: validateNamespace("sandbox"),
+          container: validateResourceName("c"),
+          tail: 11,
+          previous: true,
+        },
+        await resolveTarget("default", deadline()),
+        deadline(),
+      ),
+    ).rejects.toMatchObject({ code: "LOGS_UNAVAILABLE" });
+  } finally {
+    process.env = before;
+    l.clean();
+  }
+});
+test("classifies kubelet log retrieval failures without hiding transport errors", () => {
+  const retrieval =
+    'Error from server: Get "https://127.0.0.1:10250/containerLogs/sandbox/p/c": unable to retrieve container logs for containerd://0123456789abcdef';
+  expect(mapKubectlFailure(retrieval, "logs").code).toBe("LOGS_UNAVAILABLE");
+  expect(mapKubectlFailure(retrieval, "get").code).toBe("UPSTREAM_ERROR");
+  expect(
+    mapKubectlFailure(
+      "failed to get container logs for pod/app: dial tcp 10.0.0.1:10250: connection refused",
+      "logs",
+    ).code,
+  ).toBe("SERVER_UNREACHABLE");
+  expect(
+    mapKubectlFailure(
+      "failed to get container logs for pod/app: Unauthorized",
+      "logs",
+    ).code,
+  ).toBe("AUTH_REQUIRED");
+});
 for (const value of [
   "password=CANARY",
   '{"password":"CANARY"}',

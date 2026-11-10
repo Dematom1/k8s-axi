@@ -1,11 +1,10 @@
 import { validateResourceName, type Parsed } from "../args.js";
-import { deadline } from "../registry.js";
+import { deadline, LOG_LIMIT_BYTES } from "../registry.js";
 import { resolveTarget, resolveScope, scoped, scopeLabel } from "../target.js";
 import { kubectl, parseObject, object, objects, text } from "../kubectl.js";
 import { usage } from "../errors.js";
 import { redactText } from "../redact.js";
 import { encodeObject } from "../toon.js";
-import { preview } from "./common.js";
 export async function logsCommand(p: Parsed): Promise<string> {
   const name = p.name;
   if (!name) usage("pods logs requires a pod", "pods");
@@ -50,7 +49,7 @@ export async function logsCommand(p: Parsed): Promise<string> {
       pod: name,
       namespace: s.name,
       container,
-      tail: p.tail,
+      tail: p.tail + 1,
       sinceSeconds: p.since,
       previous: p.previous,
     },
@@ -58,8 +57,44 @@ export async function logsCommand(p: Parsed): Promise<string> {
     d,
   );
   const redacted = redactText(raw),
-    cut = Buffer.byteLength(raw) >= 1048576;
-  const shown = preview(redacted.text, p.full, 8000);
+    rawBytes = Buffer.byteLength(raw),
+    cut = rawBytes >= LOG_LIMIT_BYTES,
+    nearLimit = rawBytes >= LOG_LIMIT_BYTES - 1;
+  const rawLines = raw.split(/\r?\n/);
+  if (rawLines.at(-1) === "" || cut) rawLines.pop();
+  const lines = redacted.text.split(/\r?\n/);
+  if (lines.at(-1) === "") lines.pop();
+  else if (cut) lines.pop();
+  const tailLines = lines.slice(-p.tail);
+  const shownLines: string[] = [];
+  let previewChars = 0;
+  for (const line of tailLines.slice().reverse()) {
+    const length = line.length + (shownLines.length ? 1 : 0);
+    if (!p.full && previewChars + length > 8000) break;
+    shownLines.unshift(line);
+    previewChars += length;
+  }
+  const moreLines = nearLimit || rawLines.length > p.tail;
+  const previewTruncated = !p.full && shownLines.length < tailLines.length;
+  const redactionCollapsedLines = rawLines.length !== lines.length;
+  const omitted = moreLines
+    ? null
+    : previewTruncated && redactionCollapsedLines
+      ? null
+      : lines.length - shownLines.length;
+  const nextTail = Math.min(1000, p.tail * 2);
+  const quote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
+  const command = `k8s-axi pods logs ${quote(name)} -n ${quote(s.name)} --context ${quote(t.context)} -c ${quote(container)}`;
+  const carried = `${p.sinceArg ? ` --since ${quote(p.sinceArg)}` : ""}${p.previous ? " --previous" : ""}${p.full ? " --full" : ""}`;
+  const help = cut
+    ? `The 1 MiB fetch limit was reached. Retry with \`${command} --tail ${Math.max(1, Math.floor(p.tail / 2))}${carried}\` or narrow the --since window${p.sinceArg ? ` (currently --since ${quote(p.sinceArg)})` : ""}.`
+    : previewTruncated
+      ? `Run \`${command} --tail ${p.tail}${carried} --full\` to remove the character preview limit; --full does not show lines beyond --tail`
+      : moreLines && p.tail < 1000
+        ? `Run \`${command} --tail ${nextTail}${carried}\` for more logs${p.sinceArg ? " within the --since window" : ""}`
+        : moreLines
+          ? `The current CLI cannot page farther back: --tail is capped at 1000. Use --since to narrow the time window and inspect a different range${p.sinceArg ? ` (currently --since ${quote(p.sinceArg)})` : ""}.`
+          : undefined;
   return encodeObject({
     context: t.context,
     scope: scopeLabel(s),
@@ -68,13 +103,11 @@ export async function logsCommand(p: Parsed): Promise<string> {
     redaction: "best effort",
     redacted: redacted.count,
     "byte-limited": cut,
-    truncated: cut || shown.length < redacted.text.length,
-    logs: shown.split(/\r?\n/),
-    help:
-      shown !== redacted.text
-        ? [
-            `Run \`k8s-axi pods logs ${name} -n ${s.name} --context ${JSON.stringify(t.context)} -c ${container} --full\` for the untruncated allowlisted text`,
-          ]
-        : [],
+    truncated: cut || moreLines || (omitted !== null && omitted > 0),
+    "omitted-lines": omitted,
+    "more-lines": moreLines,
+    shown: shownLines.length ? [shownLines[0], shownLines.at(-1)] : [],
+    logs: shownLines,
+    ...(help ? { help: [help] } : {}),
   });
 }

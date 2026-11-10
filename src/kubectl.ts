@@ -11,13 +11,11 @@ import {
 import { redactText } from "./redact.js";
 import { OUTPUT_CAP, runProcess } from "./process.js";
 export { OUTPUT_CAP } from "./process.js";
-export function mapKubectlFailure(stderr: string): AxiError {
+export function mapKubectlFailure(
+  stderr: string,
+  operation?: Read["op"],
+): AxiError {
   const cases: [RegExp, ErrorCode, string][] = [
-    [
-      /previous terminated container.*not found|previous.*not available/i,
-      "NOT_FOUND",
-      "no previous terminated container logs are available",
-    ],
     [
       /context.*(?:was not found|not found)/i,
       "CONTEXT_NOT_FOUND",
@@ -59,6 +57,16 @@ export function mapKubectlFailure(stderr: string): AxiError {
     [/unable to parse requirement/i, "VALIDATION_ERROR", "invalid selector"],
   ];
   const found = cases.find(([re]) => re.test(stderr));
+  if (
+    !found &&
+    operation === "logs" &&
+    /unable to retrieve container logs for|failed to get container logs?|previous terminated container.*not found|previous.*not available|failed to try resolving symlinks in path .*lstat .*: no such file or directory/i.test(
+      stderr,
+    )
+  )
+    return new AxiError("container logs are unavailable", "LOGS_UNAVAILABLE", [
+      "Run `k8s-axi pods view <pod>` or check events for the pod",
+    ]);
   // Raw stderr is untrusted and can contain credentials or Secret values. Classify only.
   return new AxiError(
     found?.[2] ?? "the cluster read failed",
@@ -108,7 +116,17 @@ export async function kubectl(
       "OUTPUT_TOO_LARGE",
     );
   if (result.exit !== 0)
-    throw mapKubectlFailure(redactText(result.stderr).text);
+    throw mapKubectlFailure(redactText(result.stderr).text, read.op);
+  if (
+    read.op === "logs" &&
+    (/^(?:unable to retrieve container logs for containerd:\/\/\S+|Error from server: Get "https?:\/\/[^"]+\/containerLogs\/[^"]+": failed to get container logs?)\s*$/i.test(
+      result.stdout,
+    ) ||
+      /^failed to try resolving symlinks in path .*lstat .*: no such file or directory\s*$/i.test(
+        result.stdout,
+      ))
+  )
+    throw mapKubectlFailure(redactText(result.stdout).text, read.op);
   return result.stdout;
 }
 export type Obj = Record<string, unknown>;
