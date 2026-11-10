@@ -153,6 +153,7 @@ npm run check
 npm run test:real
 npm run test:live
 sh scripts/lab-live.sh run
+sh scripts/lab-live.sh crashloop
 sh scripts/real-kubectl.sh
 npm run build:skill
 ```
@@ -161,6 +162,7 @@ Tests use a fake kubectl and a loopback API server. The real kubectl lane requir
 `npm run test:live` runs the disposable kind-cluster suite against the packed tarball. Docker and Go 1.26+ are required.
 The lab installs `github.com/Dematom1/berth@v0.2.0` and leases a kind cluster with the script PID as owner, a one-hour TTL, and `project=k8s-axi` and `task=lab-live` labels.
 It uses the lease's private kubeconfig, caps the node at two CPUs during creation, and releases the lease on exit. Failed cleanup retains the lease and fails the run.
+The `crashloop` mode runs the 120-second restart regression through the same lease lifecycle. The legacy `test/live/crashloop.sh` entry point delegates to this mode.
 
 Berth has no background sweeper. On persistent hosts, schedule `berth sweep --confirm` with cron or a host timer to reclaim leases after owner death or expiry.
 Use the same absolute `BERTH_STATE` (default `${XDG_STATE_HOME:-$HOME/.local/state}/berth`), Docker context, and user as the lab, with berth v0.2.0 and kind on the timer's PATH.

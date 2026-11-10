@@ -10,7 +10,10 @@ case "$BERTH_STATE" in /*) ;; *) echo 'BERTH_STATE must be absolute' >&2; exit 1
 export BERTH_STATE
 owned=0
 berth_ready=0
-[ "${1:-}" = run ] || { echo 'usage: scripts/lab-live.sh run' >&2; exit 2; }
+case "${1:-}" in
+  run|crashloop) mode=$1 ;;
+  *) echo 'usage: scripts/lab-live.sh run|crashloop' >&2; exit 2 ;;
+esac
 command -v docker >/dev/null || { echo 'docker is required' >&2; exit 1; }
 command -v curl >/dev/null || { echo 'curl is required' >&2; exit 1; }
 command -v go >/dev/null || { echo 'Go 1.26+ is required for berth v0.2.0' >&2; exit 1; }
@@ -122,6 +125,10 @@ KUBECONFIG="$config" kubectl config set-cluster blackhole --server=https://10.25
 KUBECONFIG="$config" kubectl config set-context blackhole --cluster=blackhole --user="kind-$name" --namespace=fixtures >/dev/null
 node=$(KUBECONFIG="$config" kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
 export KUBECONFIG="$config" HOME="$lab/home" TMPDIR="$lab/tmp" KUBERC=off K8S_AXI_LAB_LIVE=1 K8S_AXI_LIVE=1 K8S_AXI_KIND="$kind_bin" K8S_AXI_REAL_HOME="$real_home"
+if [ "$mode" = crashloop ]; then
+  (cd "$root" && bash "$root/test/live/crashloop.sh" --leased)
+  exit
+fi
 kubectl apply -f "$root/test/live/fixtures.yaml"
 kubectl create serviceaccount limited -n fixtures
 kubectl create rolebinding "limited-$name" --clusterrole=view --serviceaccount=fixtures:limited -n fixtures
