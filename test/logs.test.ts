@@ -269,8 +269,14 @@ test("uses unknown omitted count when redaction collapses a preview", () => {
   };
   const pem =
     "-----BEGIN PRIVATE KEY-----\nprivate material\n-----END PRIVATE KEY-----";
-  const before = Array.from({ length: 40 }, (_, i) => `${i}:${"x".repeat(100)}`);
-  const after = Array.from({ length: 40 }, (_, i) => `${i + 40}:${"x".repeat(100)}`);
+  const before = Array.from(
+    { length: 40 },
+    (_, i) => `${i}:${"x".repeat(100)}`,
+  );
+  const after = Array.from(
+    { length: 40 },
+    (_, i) => `${i + 40}:${"x".repeat(100)}`,
+  );
   const output = `${before.join("\n")}\n${pem}\n${after.join("\n")}\n`;
   const l = lab([
     { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
@@ -412,8 +418,13 @@ test("byte-capped logs omit an incomplete final record", () => {
     expect(data["more-lines"]).toBe(true);
     const continuation = executeHint(data.help?.[0] ?? "", l.env);
     expect(continuation.status).toBe(0);
-    const continuedCall = l.calls().filter((call) => call.args[0] === "logs").at(-1);
-    expect(continuedCall?.args, JSON.stringify(continuedCall?.args)).toContain("--tail=2");
+    const continuedCall = l
+      .calls()
+      .filter((call) => call.args[0] === "logs")
+      .at(-1);
+    expect(continuedCall?.args, JSON.stringify(continuedCall?.args)).toContain(
+      "--tail=2",
+    );
     expect(continuedCall?.args).toContain("--since=900s");
     expect(continuedCall?.args).toContain("--previous");
   } finally {

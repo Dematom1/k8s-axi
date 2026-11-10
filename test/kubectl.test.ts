@@ -108,11 +108,8 @@ for (const [stderr, code] of [
     expect(mapKubectlFailure(stderr ?? "").code).toBe(code));
 test("classifies successful kubectl output containing a kubelet retrieval failure", async () => {
   const stdout =
-    'unable to retrieve container logs for containerd://0123456789abcdef';
-  const l = lab([
-    ...targetRules(),
-    { prefix: ["logs"], stdout },
-  ]);
+    "unable to retrieve container logs for containerd://0123456789abcdef";
+  const l = lab([...targetRules(), { prefix: ["logs"], stdout }]);
   const before = { ...process.env };
   Object.assign(process.env, l.env);
   try {
@@ -138,10 +135,7 @@ test("classifies successful kubectl output containing a kubelet retrieval failur
 test("classifies kubelet missing-log-file output as unavailable", async () => {
   const stdout =
     'failed to try resolving symlinks in path "/var/log/pods/sandbox_p_abc/c/0.log": lstat /var/log/pods/sandbox_p_abc/c/0.log: no such file or directory';
-  const l = lab([
-    ...targetRules(),
-    { prefix: ["logs"], stdout },
-  ]);
+  const l = lab([...targetRules(), { prefix: ["logs"], stdout }]);
   const before = { ...process.env };
   Object.assign(process.env, l.env);
   try {
