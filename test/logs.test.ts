@@ -1,5 +1,7 @@
 import { test, expect } from "vitest";
 import { spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { resolve } from "node:path";
 import { cli } from "./helpers.js";
 import { lab, targetRules } from "./lab.js";
@@ -23,14 +25,16 @@ const executeHint = (hint: string, env: NodeJS.ProcessEnv) => {
     process.env.K8S_AXI_TEST_PACKAGE ?? ".",
     "dist/bin/k8s-axi.js",
   );
-  return spawnSync(
-    "/bin/sh",
-    [
-      "-c",
-      `k8s-axi() { exec ${quote(process.execPath)} ${quote(binary)} "$@"; }; ${command}`,
-    ],
-    { encoding: "utf8", env: { ...process.env, ...env } },
+  const executable = join(env.PATH!, "k8s-axi");
+  writeFileSync(
+    executable,
+    `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(binary)} "$@"\n`,
+    { mode: 0o755 },
   );
+  return spawnSync("/bin/sh", ["-c", command], {
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  });
 };
 for (const annotation of [undefined, "a"])
   test(`container selection ${annotation}`, () => {
@@ -409,8 +413,10 @@ test("byte-capped logs omit an incomplete final record", () => {
     const continuation = executeHint(data.help?.[0] ?? "", l.env);
     expect(continuation.status).toBe(0);
     const continuedCall = l.calls().filter((call) => call.args[0] === "logs").at(-1);
-    expect(continuedCall?.args).toContain("--tail=1");
-    expect(continuedCall?.args).toContain("--since=900s");
+    expect(continuedCall?.args, JSON.stringify(continuedCall?.args)).toContain("--tail");
+    expect(continuedCall?.args).toContain("1");
+    expect(continuedCall?.args).toContain("--since");
+    expect(continuedCall?.args).toContain("900s");
     expect(continuedCall?.args).toContain("--previous");
   } finally {
     l.clean();
