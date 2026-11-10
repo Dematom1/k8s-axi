@@ -163,7 +163,12 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     );
     for (const pod of ["crashy", "crashy2"])
       for (const full of [[], ["--full"]])
-        run(["pods", "logs", pod, "-n", "fixtures", "--previous", ...full], 0);
+        expect(
+          run(
+            ["pods", "logs", pod, "-n", "fixtures", "--previous", ...full],
+            1,
+          ).code,
+        ).toBe("LOGS_UNAVAILABLE");
     const failedJobPod = spawnSync(
       "kubectl",
       [
