@@ -93,9 +93,9 @@ test.each([100, 1000])(
       expect(data.logs.at(-1)).toBe("2999");
       expect(data["omitted-lines"]).toBeNull();
       expect(data["more-lines"]).toBe(true);
-      expect(
-        l.calls().find((call) => call.args[0] === "logs")?.args,
-      ).toContain(`--tail=${tail + 1}`);
+      expect(l.calls().find((call) => call.args[0] === "logs")?.args).toContain(
+        `--tail=${tail + 1}`,
+      );
     } finally {
       l.clean();
     }
