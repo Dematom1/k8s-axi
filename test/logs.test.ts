@@ -1,4 +1,6 @@
 import { test, expect } from "vitest";
+import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
 import { cli } from "./helpers.js";
 import { lab, targetRules } from "./lab.js";
 import { LOG_LIMIT_BYTES } from "../src/registry.js";
@@ -13,6 +15,23 @@ type LogsOutput = {
 };
 const logsOutput = (result: ReturnType<typeof cli>) =>
   result.data as LogsOutput;
+const executeHint = (hint: string, env: NodeJS.ProcessEnv) => {
+  const command = hint.match(/`([^`]+)`/)?.[1];
+  if (!command) throw new Error("continuation command missing");
+  const quote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
+  const binary = resolve(
+    process.env.K8S_AXI_TEST_PACKAGE ?? ".",
+    "dist/bin/k8s-axi.js",
+  );
+  return spawnSync(
+    "/bin/sh",
+    [
+      "-c",
+      `k8s-axi() { exec ${quote(process.execPath)} ${quote(binary)} "$@"; }; ${command}`,
+    ],
+    { encoding: "utf8", env: { ...process.env, ...env } },
+  );
+};
 for (const annotation of [undefined, "a"])
   test(`container selection ${annotation}`, () => {
     const pod = {
@@ -368,7 +387,18 @@ test("byte-capped logs omit an incomplete final record", () => {
   ]);
   try {
     const p = cli(
-      ["pods", "logs", "p", "-c", "c", "--tail", "2", "--since", "15m"],
+      [
+        "pods",
+        "logs",
+        "p",
+        "-c",
+        "c",
+        "--tail",
+        "2",
+        "--since",
+        "15m",
+        "--previous",
+      ],
       l.env,
     );
     expect(p.status).toBe(0);
@@ -376,9 +406,12 @@ test("byte-capped logs omit an incomplete final record", () => {
     expect(data.logs).toEqual(["older", "newest"]);
     expect(data["byte-limited"]).toBe(true);
     expect(data["more-lines"]).toBe(true);
-    expect(data.help?.[0]).toContain("--tail 1 --since '15m'");
-    expect(data.help?.[0]).toContain("narrow the --since window");
-    expect(data.help?.[0]).not.toContain("--tail 4");
+    const continuation = executeHint(data.help?.[0] ?? "", l.env);
+    expect(continuation.status).toBe(0);
+    const continuedCall = l.calls().filter((call) => call.args[0] === "logs").at(-1);
+    expect(continuedCall?.args).toContain("--tail=1");
+    expect(continuedCall?.args).toContain("--since=900s");
+    expect(continuedCall?.args).toContain("--previous");
   } finally {
     l.clean();
   }
