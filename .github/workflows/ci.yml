@@ -35,8 +35,25 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: "1.26.4"
+          cache: false
+      - run: go install github.com/Dematom1/berth@v0.2.0
       - run: npm ci
       - run: npm run test:live
+      - name: Reclaim abandoned lab leases
+        if: always()
+        run: |
+          set -eu
+          export PATH="$GITHUB_WORKSPACE/.lab-live/bin:$PATH"
+          berth sweep --confirm
+          berth list --json | node -e '
+            let input = "";
+            process.stdin.on("data", chunk => input += chunk);
+            process.stdin.on("end", () => {
+              if (JSON.parse(input).leases.some(l => l.labels.project === "k8s-axi" && l.labels.task === "lab-live")) process.exit(1);
+            });'
 
   real-kubectl:
     runs-on: ${{ matrix.os }}

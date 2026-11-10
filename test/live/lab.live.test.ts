@@ -17,8 +17,14 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
   () => {
     expect(process.env.K8S_AXI_LAB_LIVE).toBe("1");
     const kubeconfigPath = process.env.KUBECONFIG;
-    if (!kubeconfigPath?.includes("/.lab-live/"))
-      throw new Error("lab KUBECONFIG is required");
+    const leaseId = process.env.K8S_AXI_LAB_LEASE;
+    const berthState = process.env.BERTH_STATE;
+    if (!leaseId || !berthState)
+      throw new Error("lab berth lease and state are required");
+    expect(kubeconfigPath).toBe(
+      resolve(berthState, "resources", leaseId, "kubeconfig"),
+    );
+    if (!kubeconfigPath) throw new Error("lab KUBECONFIG is required");
     const tmpDir = process.env.TMPDIR;
     if (!tmpDir?.includes("/.lab-live/"))
       throw new Error("lab TMPDIR is required");
