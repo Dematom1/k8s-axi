@@ -183,7 +183,7 @@ test("tail continuation increases the bound and preserves options", () => {
     expect(p.status).toBe(0);
     const data = logsOutput(p);
     expect(data.help?.[0]).toBe(
-      "Run `k8s-axi pods logs 'p' -n 'sandbox' --context 'ctx:/@' -c 'c' --tail 100 --since '15m' --previous` for more logs",
+      "Run `k8s-axi pods logs 'p' -n 'sandbox' --context 'ctx:/@' -c 'c' --tail 100 --since '15m' --previous` for more logs within the --since window",
     );
   } finally {
     l.clean();

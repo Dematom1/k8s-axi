@@ -81,7 +81,7 @@ export async function logsCommand(p: Parsed): Promise<string> {
   const help = previewTruncated
     ? `Run \`${command} --tail ${p.tail}${carried} --full\` to remove the character preview limit; --full does not show lines beyond --tail`
     : moreLines && p.tail < 1000
-      ? `Run \`${command} --tail ${nextTail}${carried}\` for more logs`
+      ? `Run \`${command} --tail ${nextTail}${carried}\` for more logs${p.sinceArg ? " within the --since window" : ""}`
       : moreLines
         ? `The current CLI cannot page farther back: --tail is capped at 1000. Use --since to narrow the time window and inspect a different range${p.sinceArg ? ` (currently --since ${quote(p.sinceArg)})` : ""}.`
         : undefined;
