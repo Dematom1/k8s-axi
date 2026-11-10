@@ -413,10 +413,8 @@ test("byte-capped logs omit an incomplete final record", () => {
     const continuation = executeHint(data.help?.[0] ?? "", l.env);
     expect(continuation.status).toBe(0);
     const continuedCall = l.calls().filter((call) => call.args[0] === "logs").at(-1);
-    expect(continuedCall?.args, JSON.stringify(continuedCall?.args)).toContain("--tail");
-    expect(continuedCall?.args).toContain("1");
-    expect(continuedCall?.args).toContain("--since");
-    expect(continuedCall?.args).toContain("900s");
+    expect(continuedCall?.args, JSON.stringify(continuedCall?.args)).toContain("--tail=2");
+    expect(continuedCall?.args).toContain("--since=900s");
     expect(continuedCall?.args).toContain("--previous");
   } finally {
     l.clean();
