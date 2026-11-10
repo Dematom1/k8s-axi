@@ -83,7 +83,7 @@ export async function logsCommand(p: Parsed): Promise<string> {
     : moreLines && p.tail < 1000
       ? `Run \`${command} --tail ${nextTail}${carried}\` for more logs`
       : moreLines
-        ? `The current CLI cannot page farther back: --tail is capped at 1000. --since filters by time but does not bypass that cap${p.sinceArg ? ` (currently --since ${quote(p.sinceArg)})` : ""}.`
+        ? `The current CLI cannot page farther back: --tail is capped at 1000. Use --since to narrow the time window and inspect a different range${p.sinceArg ? ` (currently --since ${quote(p.sinceArg)})` : ""}.`
         : undefined;
   return encodeObject({
     context: t.context,

@@ -289,7 +289,7 @@ test("continuation hints retain an inferred container", () => {
   }
 });
 
-test("a full maximum tail recommends a wider since window", () => {
+test("a full maximum tail explains the since filter", () => {
   const pod = {
     metadata: { name: "p" },
     spec: { containers: [{ name: "c" }] },
@@ -320,7 +320,7 @@ test("a full maximum tail recommends a wider since window", () => {
     );
     expect(p.status).toBe(0);
     expect(logsOutput(p).help).toEqual([
-      "The current CLI cannot page farther back: --tail is capped at 1000. --since filters by time but does not bypass that cap (currently --since '15m').",
+      "The current CLI cannot page farther back: --tail is capped at 1000. Use --since to narrow the time window and inspect a different range (currently --since '15m').",
     ]);
   } finally {
     l.clean();
