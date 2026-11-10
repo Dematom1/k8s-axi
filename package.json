@@ -41,7 +41,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && chmod +x dist/bin/*.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
-    "lint": "oxlint $(git ls-files -co --exclude-standard -- '*.ts' '*.mts' '*.mjs' '*.js' '*.cjs')",
+    "lint": "oxlint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "pretest": "npm run build",
