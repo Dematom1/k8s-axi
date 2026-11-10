@@ -340,12 +340,44 @@ test("byte-capped logs omit an incomplete final record", () => {
     ...targetRules(),
   ]);
   try {
-    const p = cli(["pods", "logs", "p", "-c", "c", "--tail", "2"], l.env);
+    const p = cli(
+      ["pods", "logs", "p", "-c", "c", "--tail", "2", "--since", "15m"],
+      l.env,
+    );
     expect(p.status).toBe(0);
     const data = logsOutput(p);
     expect(data.logs).toEqual(["older", "newest"]);
     expect(data["byte-limited"]).toBe(true);
     expect(data["more-lines"]).toBe(true);
+    expect(data.help?.[0]).toContain("--tail 1 --since '15m'");
+    expect(data.help?.[0]).toContain("narrow the --since window");
+    expect(data.help?.[0]).not.toContain("--tail 4");
+  } finally {
+    l.clean();
+  }
+});
+
+test("uses raw line count for availability when redaction collapses PEM lines", () => {
+  const pod = {
+    metadata: { name: "p" },
+    spec: { containers: [{ name: "c" }] },
+  };
+  const l = lab([
+    { prefix: ["get", "pod"], stdout: JSON.stringify(pod) },
+    {
+      prefix: ["logs"],
+      stdout:
+        "-----BEGIN PRIVATE KEY-----\nprivate material\n-----END PRIVATE KEY-----\n",
+    },
+    ...targetRules(),
+  ]);
+  try {
+    const p = cli(["pods", "logs", "p", "-c", "c", "--tail", "2"], l.env);
+    expect(p.status).toBe(0);
+    const data = logsOutput(p);
+    expect(data.logs).toEqual(["[REDACTED PEM]"]);
+    expect(data["more-lines"]).toBe(true);
+    expect(data["omitted-lines"]).toBeNull();
   } finally {
     l.clean();
   }

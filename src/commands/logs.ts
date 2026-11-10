@@ -60,6 +60,8 @@ export async function logsCommand(p: Parsed): Promise<string> {
     rawBytes = Buffer.byteLength(raw),
     cut = rawBytes >= LOG_LIMIT_BYTES,
     nearLimit = rawBytes >= LOG_LIMIT_BYTES - 1;
+  const rawLines = raw.split(/\r?\n/);
+  if (rawLines.at(-1) === "" || cut) rawLines.pop();
   const lines = redacted.text.split(/\r?\n/);
   if (lines.at(-1) === "") lines.pop();
   else if (cut) lines.pop();
@@ -72,20 +74,22 @@ export async function logsCommand(p: Parsed): Promise<string> {
     shownLines.unshift(line);
     previewChars += length;
   }
-  const moreLines = nearLimit || lines.length > p.tail;
+  const moreLines = nearLimit || rawLines.length > p.tail;
   const omitted = moreLines ? null : lines.length - shownLines.length;
   const previewTruncated = !p.full && shownLines.length < tailLines.length;
   const nextTail = Math.min(1000, p.tail * 2);
   const quote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
   const command = `k8s-axi pods logs ${quote(name)} -n ${quote(s.name)} --context ${quote(t.context)} -c ${quote(container)}`;
   const carried = `${p.sinceArg ? ` --since ${quote(p.sinceArg)}` : ""}${p.previous ? " --previous" : ""}${p.full ? " --full" : ""}`;
-  const help = previewTruncated
-    ? `Run \`${command} --tail ${p.tail}${carried} --full\` to remove the character preview limit; --full does not show lines beyond --tail`
-    : moreLines && p.tail < 1000
-      ? `Run \`${command} --tail ${nextTail}${carried}\` for more logs${p.sinceArg ? " within the --since window" : ""}`
-      : moreLines
-        ? `The current CLI cannot page farther back: --tail is capped at 1000. Use --since to narrow the time window and inspect a different range${p.sinceArg ? ` (currently --since ${quote(p.sinceArg)})` : ""}.`
-        : undefined;
+  const help = cut
+    ? `The 1 MiB fetch limit was reached. Retry with \`${command} --tail ${Math.max(1, Math.floor(p.tail / 2))}${carried}\` or narrow the --since window${p.sinceArg ? ` (currently --since ${quote(p.sinceArg)})` : ""}.`
+    : previewTruncated
+      ? `Run \`${command} --tail ${p.tail}${carried} --full\` to remove the character preview limit; --full does not show lines beyond --tail`
+      : moreLines && p.tail < 1000
+        ? `Run \`${command} --tail ${nextTail}${carried}\` for more logs${p.sinceArg ? " within the --since window" : ""}`
+        : moreLines
+          ? `The current CLI cannot page farther back: --tail is capped at 1000. Use --since to narrow the time window and inspect a different range${p.sinceArg ? ` (currently --since ${quote(p.sinceArg)})` : ""}.`
+          : undefined;
   return encodeObject({
     context: t.context,
     scope: scopeLabel(s),
