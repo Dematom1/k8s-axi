@@ -1,10 +1,13 @@
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { decode } from "@toon-format/toon";
 import { expect, test } from "vitest";
 
 const liveTest = test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1");
 const namespace = `logs-${process.pid}-${Date.now()}`;
+const ownerLabel = "k8s-axi-run";
+const owner = randomUUID();
 type LogsOutput = {
   logs: string[];
   "omitted-lines": number | null;
@@ -38,8 +41,17 @@ function run(args: string[]) {
 liveTest(
   "log tails preserve newest whole lines and report errors safely",
   async () => {
+    let created = false;
     try {
       kubectl(["create", "namespace", namespace]);
+      created = true;
+      kubectl([
+        "label",
+        "namespace",
+        namespace,
+        `${ownerLabel}=${owner}`,
+        "--overwrite=false",
+      ]);
       kubectl(
         ["-n", namespace, "apply", "-f", "-"],
         `apiVersion: v1
@@ -148,17 +160,24 @@ spec:
         "Authorization: Bearer [REDACTED]",
       ]);
     } finally {
-      spawnSync(
-        "kubectl",
-        [
-          "delete",
-          "namespace",
-          namespace,
-          "--ignore-not-found=true",
-          "--wait=false",
-        ],
-        { stdio: "ignore", env: process.env },
-      );
+      if (created) {
+        const currentOwner = spawnSync(
+          "kubectl",
+          [
+            "get",
+            "namespace",
+            namespace,
+            "-o=jsonpath={.metadata.labels.k8s-axi-run}",
+          ],
+          { encoding: "utf8", env: process.env, timeout: 30_000 },
+        );
+        if (currentOwner.status === 0 && currentOwner.stdout === owner)
+          spawnSync(
+            "kubectl",
+            ["delete", "namespace", namespace, "--wait=false"],
+            { stdio: "ignore", env: process.env },
+          );
+      }
     }
   },
   120_000,
