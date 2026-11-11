@@ -149,6 +149,44 @@ export function actionsFor(command: Parsed["command"]): string[] {
           : [];
 }
 
+// Help is resolved in one pass over the tokens: the route is the first positional
+// that is a valid action, skipping unknown flags (which never take a value) and the
+// values of known flags. Invalid input never gets validated when help is asked for.
+function helpRoute(
+  command: Parsed["command"],
+  args: string[],
+  allowed: string[],
+): Parsed {
+  let action = "list";
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? "";
+    if (arg.startsWith("-")) {
+      const [raw = "", ...rest] = arg.replace(/^--?/, "").split("=");
+      const key = aliases[raw] ?? raw;
+      if (allowed.includes(key) && !booleans.has(key) && !rest.length) i++;
+      continue;
+    }
+    if (actionsFor(command).includes(arg)) {
+      action = arg;
+      break;
+    }
+  }
+  return {
+    command,
+    action,
+    all: false,
+    limit: 100,
+    problems: false,
+    full: false,
+    timeout: 20,
+    help: true,
+    warnings: false,
+    tail: 100,
+    previous: false,
+    rolloutStatus: false,
+  };
+}
+
 export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
   const pos: string[] = [];
   const flags = new Map<string, string | true>();
@@ -166,6 +204,8 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     ...(command === "events" ? ["warnings", "since", "for"] : []),
     ...(command === "pods" ? ["container", "tail", "since", "previous"] : []),
   ];
+  if (args.some((x) => x === "--help" || x === "-h"))
+    return helpRoute(command, args, allowed);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? "";
     if (!arg.startsWith("-")) {
@@ -174,14 +214,11 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     }
     const [raw = "", ...rest] = arg.replace(/^--?/, "").split("=");
     const key = aliases[raw] ?? raw;
-    // --help wins: dispatch reports help when this parse fails, see dispatch.
-    if (!allowed.includes(key)) {
-      if (args.some((x) => x === "--help" || x === "-h")) continue;
+    if (!allowed.includes(key))
       usage(
         `${hints[raw] ?? `Unknown flag ${arg}`}; valid flags: ${allowed.map((x) => "--" + x).join(", ")}`,
         command,
       );
-    }
     if (flags.has(key)) usage(`Repeated --${key}`, command);
     if (booleans.has(key)) {
       if (rest.length) usage(`--${key} takes no value`, command);

@@ -1,6 +1,6 @@
 import { encodeObject } from "../toon.js";
 import { fail } from "../errors.js";
-import { actionsFor, parseArgs, type Parsed } from "../args.js";
+import { parseArgs, type Parsed } from "../args.js";
 import { COMMAND_LINES } from "../help.js";
 export function refuse(command: string): never {
   return fail(
@@ -96,18 +96,7 @@ export async function dispatch(
   rolloutStatus = false,
 ): Promise<string> {
   if (command === "ctx" && args[0] === "use") refuse("ctx use");
-  let p: Parsed;
-  try {
-    p = { ...parseArgs(command, args), rolloutStatus };
-  } catch (error) {
-    // --help wins over invalid input: answer for the route named by the first word.
-    const first = args.find((x) => !x.startsWith("-"));
-    if (!args.some((x) => x === "--help" || x === "-h")) throw error;
-    return helpFor(
-      command,
-      first && actionsFor(command).includes(first) ? first : "list",
-    );
-  }
+  const p = { ...parseArgs(command, args), rolloutStatus };
   if (p.help) return helpFor(command, p.action);
   return run(p);
 }
