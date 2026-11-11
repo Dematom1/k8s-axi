@@ -128,6 +128,65 @@ export interface Parsed {
   rolloutStatus: boolean;
   auditAction?: "exec" | "port-forward" | "apply";
 }
+export function actionsFor(command: Parsed["command"]): string[] {
+  return command === "pods"
+    ? ["view", "logs"]
+    : [
+          "nodes",
+          "namespaces",
+          "deployments",
+          "jobs",
+          "pvcs",
+          "services",
+          "events",
+          "secrets",
+        ].includes(command)
+      ? ["view"]
+      : command === "setup"
+        ? ["hooks", "status", "uninstall"]
+        : command === "context"
+          ? ["end"]
+          : [];
+}
+
+// Help is resolved in one pass over the tokens: the route is the first positional
+// that is a valid action, skipping unknown flags (which never take a value) and the
+// values of known flags. Invalid input never gets validated when help is asked for.
+function helpRoute(
+  command: Parsed["command"],
+  args: string[],
+  allowed: string[],
+): Parsed {
+  let action = "list";
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? "";
+    if (arg.startsWith("-")) {
+      const [raw = "", ...rest] = arg.replace(/^--?/, "").split("=");
+      const key = aliases[raw] ?? raw;
+      if (allowed.includes(key) && !booleans.has(key) && !rest.length) i++;
+      continue;
+    }
+    if (actionsFor(command).includes(arg)) {
+      action = arg;
+      break;
+    }
+  }
+  return {
+    command,
+    action,
+    all: false,
+    limit: 100,
+    problems: false,
+    full: false,
+    timeout: 20,
+    help: true,
+    warnings: false,
+    tail: 100,
+    previous: false,
+    rolloutStatus: false,
+  };
+}
+
 export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
   const pos: string[] = [];
   const flags = new Map<string, string | true>();
@@ -145,6 +204,8 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     ...(command === "events" ? ["warnings", "since", "for"] : []),
     ...(command === "pods" ? ["container", "tail", "since", "previous"] : []),
   ];
+  if (args.some((x) => x === "--help" || x === "-h"))
+    return helpRoute(command, args, allowed);
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? "";
     if (!arg.startsWith("-")) {
@@ -177,25 +238,7 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
   let name: ResourceName | undefined;
   if (pos.length) {
     action = pos[0] ?? "";
-    const actions =
-      command === "pods"
-        ? ["view", "logs"]
-        : [
-              "nodes",
-              "namespaces",
-              "deployments",
-              "jobs",
-              "pvcs",
-              "services",
-              "events",
-              "secrets",
-            ].includes(command)
-          ? ["view"]
-          : command === "setup"
-            ? ["hooks", "status", "uninstall"]
-            : command === "context"
-              ? ["end"]
-              : [];
+    const actions = actionsFor(command);
     if (!actions.includes(action))
       usage(`Unknown subcommand ${action}`, command);
     if (["view", "logs"].includes(action)) {
