@@ -60,6 +60,7 @@ for (const [flag, hint] of [
 for (const args of [
   ["pods", "--bogus", "--help"],
   ["nodes", "--bogus=1", "-h"],
+  ["pods", "--bogus", "value", "--help"],
   ["--bogus", "--help"],
 ])
   test(`help wins over invalid flag: ${args.join(" ")}`, () => {

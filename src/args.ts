@@ -155,7 +155,10 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     const key = aliases[raw] ?? raw;
     // --help wins: an unknown flag next to --help must not hide the help asked for.
     if (!allowed.includes(key)) {
-      if (args.some((x) => x === "--help" || x === "-h")) continue;
+      if (args.some((x) => x === "--help" || x === "-h")) {
+        if (!rest.length && args[i + 1] && !args[i + 1]?.startsWith("-")) i++;
+        continue;
+      }
       usage(
         `${hints[raw] ?? `Unknown flag ${arg}`}; valid flags: ${allowed.map((x) => "--" + x).join(", ")}`,
         command,
