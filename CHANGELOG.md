@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/Dematom1/k8s-axi/compare/k8s-axi-v0.1.3...k8s-axi-v0.1.4) (2026-11-11)
+
+
+### Bug Fixes
+
+* **cli:** prioritize help and add structured list totals ([#20](https://github.com/Dematom1/k8s-axi/issues/20)) ([717c0a9](https://github.com/Dematom1/k8s-axi/commit/717c0a964660f2ef8b551a237ddbd5173f0f948c))
+
 ## [0.1.3](https://github.com/Dematom1/k8s-axi/compare/k8s-axi-v0.1.2...k8s-axi-v0.1.3) (2026-11-10)
 
 
