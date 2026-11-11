@@ -153,11 +153,14 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     }
     const [raw = "", ...rest] = arg.replace(/^--?/, "").split("=");
     const key = aliases[raw] ?? raw;
-    if (!allowed.includes(key))
+    // --help wins: an unknown flag next to --help must not hide the help asked for.
+    if (!allowed.includes(key)) {
+      if (args.some((x) => x === "--help" || x === "-h")) continue;
       usage(
         `${hints[raw] ?? `Unknown flag ${arg}`}; valid flags: ${allowed.map((x) => "--" + x).join(", ")}`,
         command,
       );
+    }
     if (flags.has(key)) usage(`Repeated --${key}`, command);
     if (booleans.has(key)) {
       if (rest.length) usage(`--${key} takes no value`, command);

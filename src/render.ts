@@ -56,6 +56,7 @@ export function renderList(
     context,
     scope,
     count: `${shown.length} of ${rows.length} total`,
+    total: rows.length,
     matching: filtered.length,
     truncated: shown.length < filtered.length,
     [spec.noun]: shown.length

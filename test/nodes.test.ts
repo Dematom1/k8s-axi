@@ -55,6 +55,7 @@ test("list limits fields and detail", () => {
     const p = cli(["nodes", "--limit", "100"], l.env);
     expect(p.status).toBe(0);
     expect(p.stdout).toContain("100 of 1500 total");
+    expect(p.data).toMatchObject({ total: 1500 });
     expect(p.stdout).toContain("truncated: true");
     expect(p.stdout).toContain("{node,status,role,version}");
     expect(cli(["nodes", "view", "missing"], l.env).stdout).toContain(

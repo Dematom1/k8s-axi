@@ -57,3 +57,14 @@ for (const [flag, hint] of [
 ])
   test(`hint ${flag}`, () =>
     expect(cli(["pods", flag ?? ""]).stdout).toContain(hint));
+for (const args of [
+  ["pods", "--bogus", "--help"],
+  ["nodes", "--bogus=1", "-h"],
+  ["--bogus", "--help"],
+])
+  test(`help wins over invalid flag: ${args.join(" ")}`, () => {
+    const p = cli(args);
+    expect(p.status).toBe(0);
+    expect(p.stdout).not.toContain("VALIDATION_ERROR");
+    expect(p.data).toHaveProperty("flags");
+  });
