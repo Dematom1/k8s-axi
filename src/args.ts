@@ -128,6 +128,27 @@ export interface Parsed {
   rolloutStatus: boolean;
   auditAction?: "exec" | "port-forward" | "apply";
 }
+export function actionsFor(command: Parsed["command"]): string[] {
+  return command === "pods"
+    ? ["view", "logs"]
+    : [
+          "nodes",
+          "namespaces",
+          "deployments",
+          "jobs",
+          "pvcs",
+          "services",
+          "events",
+          "secrets",
+        ].includes(command)
+      ? ["view"]
+      : command === "setup"
+        ? ["hooks", "status", "uninstall"]
+        : command === "context"
+          ? ["end"]
+          : [];
+}
+
 export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
   const pos: string[] = [];
   const flags = new Map<string, string | true>();
@@ -153,12 +174,9 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     }
     const [raw = "", ...rest] = arg.replace(/^--?/, "").split("=");
     const key = aliases[raw] ?? raw;
-    // --help wins: an unknown flag next to --help must not hide the help asked for.
+    // --help wins: dispatch reports help when this parse fails, see dispatch.
     if (!allowed.includes(key)) {
-      if (args.some((x) => x === "--help" || x === "-h")) {
-        if (!rest.length && args[i + 1] && !args[i + 1]?.startsWith("-")) i++;
-        continue;
-      }
+      if (args.some((x) => x === "--help" || x === "-h")) continue;
       usage(
         `${hints[raw] ?? `Unknown flag ${arg}`}; valid flags: ${allowed.map((x) => "--" + x).join(", ")}`,
         command,
@@ -183,25 +201,7 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
   let name: ResourceName | undefined;
   if (pos.length) {
     action = pos[0] ?? "";
-    const actions =
-      command === "pods"
-        ? ["view", "logs"]
-        : [
-              "nodes",
-              "namespaces",
-              "deployments",
-              "jobs",
-              "pvcs",
-              "services",
-              "events",
-              "secrets",
-            ].includes(command)
-          ? ["view"]
-          : command === "setup"
-            ? ["hooks", "status", "uninstall"]
-            : command === "context"
-              ? ["end"]
-              : [];
+    const actions = actionsFor(command);
     if (!actions.includes(action))
       usage(`Unknown subcommand ${action}`, command);
     if (["view", "logs"].includes(action)) {

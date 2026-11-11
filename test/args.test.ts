@@ -61,11 +61,21 @@ for (const args of [
   ["pods", "--bogus", "--help"],
   ["nodes", "--bogus=1", "-h"],
   ["pods", "--bogus", "value", "--help"],
+  ["pods", "--bogus", "view", "nginx", "--help"],
+  ["pods", "view", "--bogus", "nginx", "--help"],
+  ["pods", "view", "nginx", "--bogus", "--help"],
+  ["pods", "--bogus", "nginx", "--help"],
   ["--bogus", "--help"],
 ])
-  test(`help wins over invalid flag: ${args.join(" ")}`, () => {
+  test(`help wins over invalid input: ${args.join(" ")}`, () => {
     const p = cli(args);
     expect(p.status).toBe(0);
     expect(p.stdout).not.toContain("VALIDATION_ERROR");
     expect(p.data).toHaveProperty("flags");
   });
+test("help for a named route wins over a stray name after an unknown flag", () =>
+  expect(
+    cli(["pods", "--bogus", "view", "nginx", "--help"]).data,
+  ).toMatchObject({
+    command: "k8s-axi pods view",
+  }));
