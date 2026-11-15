@@ -1,6 +1,6 @@
 ---
 name: k8s-axi
-description: "Inspect Kubernetes clusters with k8s-axi: diagnose workloads, nodes, events, services, and Secret metadata. Cluster actions remain disabled until their guarded implementation ships."
+description: "Strictly read-only Kubernetes diagnostics for agents: triage pods, nodes, workloads, events, logs, and Secret metadata never changes the cluster and redacts secrets best effort."
 user-invocable: false
 ---
 

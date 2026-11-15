@@ -18,7 +18,13 @@
     "cli",
     "agent",
     "axi",
-    "toon"
+    "toon",
+    "k8s",
+    "kubectl",
+    "k8s-axi",
+    "claude-code",
+    "codex",
+    "skills"
   ],
   "bin": {
     "k8s-axi": "./dist/bin/k8s-axi.js",

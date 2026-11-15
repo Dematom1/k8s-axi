@@ -5,12 +5,31 @@ Strictly read-only Kubernetes diagnostics for agents. Output is TOON, including 
 ## Install
 
 ```sh
+npx skills add Dematom1/k8s-axi --skill k8s-axi -g
+```
+
+This installs the skill for Claude Code, Codex, Cursor, OpenCode, and other skills-aware agents. The skill runs `npx -y k8s-axi`, so no global k8s-axi install is needed. Diagnosis still needs kubectl and a named kubeconfig context (see [Requirements](#requirements)).
+
+Zero setup: tell your agent "Execute `npx -y k8s-axi` to diagnose Kubernetes pods, nodes, workloads, events, and logs read-only."
+
+### Optional
+
+A global install enables `k8s-axi setup hooks` (see [Agent integration](#agent-integration)):
+
+```sh
 npm install -g k8s-axi
 k8s-axi triage
 ```
 
-For one-off reads, use `npx -y k8s-axi pods -A`.
-This source is a local pre-release. Publication and trusted publishing require separate approval.
+## Dematom1 platform AXIs
+
+| tool                   | skill install                                                              |
+| ---------------------- | -------------------------------------------------------------------------- |
+| terraform-axi          | `npx skills add Dematom1/terraform-axi --skill terraform-axi -g`           |
+| k8s-axi                | `npx skills add Dematom1/k8s-axi --skill k8s-axi -g`                       |
+| argocd-axi             | `npx skills add Dematom1/argocd-axi --skill argocd-axi -g`                 |
+| argo-workflows-axi     | `npx skills add Dematom1/argo-workflows-axi --skill argo-workflows-axi -g` |
+| datadog-axi (optional) | `npx skills add Dematom1/datadog-axi --skill datadog-axi -g`               |
 
 ## Requirements
 
@@ -102,7 +121,7 @@ Free text is redacted before truncation, including `--full`. Log redaction is **
 
 Either integration path is sufficient. Neither is installed automatically.
 
-- **Skill:** use `skills/k8s-axi/SKILL.md` in your agent's skills directory. Examples use `npx -y k8s-axi`.
+- **Skill:** `npx skills add Dematom1/k8s-axi --skill k8s-axi -g`, or copy `skills/k8s-axi/SKILL.md` into your agent's skills directory. Examples use `npx -y k8s-axi`.
 - **Hooks:** after a persistent install, run `k8s-axi setup hooks`. Claude Code and Codex get SessionStart context. OpenCode gets a managed ambient plugin. Claude Code SessionEnd records command names, counts, and the most-used context, not command arguments or output.
 
 The dedicated `k8s-axi-ctx` hook is local only and does not make a health claim. Setup refuses ephemeral npx installations.
