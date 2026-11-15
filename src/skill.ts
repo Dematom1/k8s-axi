@@ -1,6 +1,6 @@
 import { COMMAND_LINES, DESCRIPTION } from "./help.js";
 export const SKILL_DESCRIPTION =
-  "Inspect Kubernetes clusters with k8s-axi: diagnose workloads, nodes, events, services, and Secret metadata. Cluster actions remain disabled until their guarded implementation ships.";
+  "Strictly read-only Kubernetes diagnostics for agents: triage pods, nodes, workloads, events, logs, and Secret metadata never changes the cluster and redacts secrets best effort.";
 export function createSkillMarkdown(): string {
   return `---
 name: k8s-axi
