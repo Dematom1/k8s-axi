@@ -23,14 +23,13 @@ k8s-axi triage
 
 ## Dematom1 platform AXIs
 
-| tool               | skill install                                                              |
-| ------------------ | -------------------------------------------------------------------------- |
-| terraform-axi      | `npx skills add Dematom1/terraform-axi --skill terraform-axi -g`           |
-| argocd-axi         | `npx skills add Dematom1/argocd-axi --skill argocd-axi -g`                 |
-| datadog-axi        | `npx skills add Dematom1/datadog-axi --skill datadog-axi -g`               |
-| argo-workflows-axi | `npx skills add Dematom1/argo-workflows-axi --skill argo-workflows-axi -g` |
-| search-console-axi | `npx skills add Dematom1/search-console-axi --skill search-console-axi -g` |
-| k8s-axi            | `npx skills add Dematom1/k8s-axi --skill k8s-axi -g`                       |
+| tool                   | skill install                                                              |
+| ---------------------- | -------------------------------------------------------------------------- |
+| terraform-axi          | `npx skills add Dematom1/terraform-axi --skill terraform-axi -g`           |
+| k8s-axi                | `npx skills add Dematom1/k8s-axi --skill k8s-axi -g`                       |
+| argocd-axi             | `npx skills add Dematom1/argocd-axi --skill argocd-axi -g`                 |
+| argo-workflows-axi     | `npx skills add Dematom1/argo-workflows-axi --skill argo-workflows-axi -g` |
+| datadog-axi (optional) | `npx skills add Dematom1/datadog-axi --skill datadog-axi -g`               |
 
 ## Requirements
 
