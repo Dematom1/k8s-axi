@@ -8,7 +8,7 @@ Strictly read-only Kubernetes diagnostics for agents. Output is TOON, including 
 npx skills add Dematom1/k8s-axi --skill k8s-axi -g
 ```
 
-This installs the skill for Claude Code, Codex, Cursor, OpenCode, and other skills-aware agents. The skill runs `npx -y k8s-axi`, so nothing else is needed.
+This installs the skill for Claude Code, Codex, Cursor, OpenCode, and other skills-aware agents. The skill runs `npx -y k8s-axi`, so no global k8s-axi install is needed. Diagnosis still needs kubectl and a named kubeconfig context (see [Requirements](#requirements)).
 
 Zero setup: tell your agent "Execute `npx -y k8s-axi` to diagnose Kubernetes pods, nodes, workloads, events, and logs read-only."
 
