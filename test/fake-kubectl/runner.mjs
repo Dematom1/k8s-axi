@@ -1,4 +1,9 @@
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  chmodSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { SECRET_TEMPLATE } from "../../dist/src/registry.js";
@@ -80,6 +85,19 @@ else if (r.mode === "ignore-term") {
   if (process.env.K8S_AXI_PID)
     writeFileSync(process.env.K8S_AXI_PID, String(p.pid));
   setInterval(() => {}, 1000);
+} else if (r.mode === "audit-end-fail") {
+  chmodSync(`${process.env.XDG_STATE_HOME}/k8s-axi`, 0o555);
+  process.stdout.write("action ran");
+} else if (r.mode === "require-audit") {
+  const record = readFileSync(
+    `${process.env.XDG_STATE_HOME}/k8s-axi/audit.jsonl`,
+    "utf8",
+  )
+    .trim()
+    .split("\n")
+    .at(-1);
+  if (JSON.parse(record).phase !== "start") process.exitCode = 55;
+  else process.stdout.write("audit precedes effect");
 } else if (r.mode === "huge") process.stdout.write("x".repeat(100000));
 else
   setTimeout(() => {

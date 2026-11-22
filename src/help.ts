@@ -1,5 +1,5 @@
 export const DESCRIPTION =
-  "k8s-axi: Kubernetes diagnostics and guarded port forwarding for agents";
+  "k8s-axi: Kubernetes diagnostics and guarded exec and port forwarding for agents";
 export const COMMAND_LINES = [
   "triage: cluster checks and problems, all namespaces by default",
   "ctx: context, server, namespace and client version, local only",
@@ -31,6 +31,7 @@ export const COMMAND_LINES = [
   "port-forward <target> [local:]remote: preview loopback forwarding; --execute -n <ns> --context <ctx> starts an owned session (--ttl 15m, range 10s..60m)",
   "port-forward list: owned forwarding sessions, at most 5 per user",
   "port-forward stop <id> | --all: stop owned sessions",
+  "exec <pod|deployment/name> -- <argv...>: guarded preview; --execute requires --context and -n",
 ];
 export const TOP_HELP = [
   DESCRIPTION,
@@ -39,7 +40,8 @@ export const TOP_HELP = [
   "Global: --context <name>, --timeout <seconds> (20, range 1..120), --help, --version (-v, -V)",
   "Lists: -n <namespace> or -A, --limit <n> (100, max 1000), --fields <a,b>, --problems",
   "Output is TOON. Exit 0: completed reads, including problems. Exit 1: failed or partial reads. Exit 2: usage.",
-  "Secret values never enter this process. --full only untruncates allowlisted text.",
-  "Reads are default. Port-forward previews by default; --execute requires explicit --context and -n. Sessions bind loopback only and expire.",
-  "Secret values are never shown. Executed port-forward sessions are recorded in a local audit log.",
+  "Secret inventory never reads values. Exec reads referenced Secret values only into memory to scrub output; short-value limits apply.",
+  "Exec previews by default; --execute requires explicit --context and -n and writes a local audit record before running. No interactive sessions.",
+  "Exec: --timeout <1..300> (30), --full; 1 MiB per stream. Local timeout may leave the remote command running.",
+  "Port-forward previews by default; --execute requires explicit --context and -n. Sessions bind loopback only, expire, and are recorded in the local audit log.",
 ];

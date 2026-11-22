@@ -130,6 +130,9 @@ if [ "$mode" = crashloop ]; then
   exit
 fi
 kubectl apply -f "$root/test/live/fixtures.yaml"
+operator_token=$(kubectl create token operator -n fixtures --duration=1h)
+kubectl config set-credentials operator --token="$operator_token" >/dev/null
+kubectl config set-context operator --cluster="kind-$name" --user=operator --namespace=fixtures >/dev/null
 kubectl create serviceaccount limited -n fixtures
 kubectl create rolebinding "limited-$name" --clusterrole=view --serviceaccount=fixtures:limited -n fixtures
 limited_token=$(kubectl create token limited -n fixtures --duration=1h)
@@ -150,6 +153,6 @@ cd "$root"
 npm run build
 archive=$(npm pack --silent --pack-destination "$lab/tmp")
 npm install --prefix "$lab/package" --ignore-scripts --no-audit --no-fund "$lab/tmp/$archive"
-export K8S_AXI_TEST_PACKAGE="$lab/package/node_modules/k8s-axi" K8S_AXI_LIMITED_TOKEN="$limited_token" K8S_AXI_NSONLY_TOKEN="$nsonly_token"
+export K8S_AXI_TEST_PACKAGE="$lab/package/node_modules/k8s-axi" K8S_AXI_LIMITED_TOKEN="$limited_token" K8S_AXI_NSONLY_TOKEN="$nsonly_token" K8S_AXI_OPERATOR_TOKEN="$operator_token"
 npx vitest run test/live/*.live.test.ts --reporter=default --reporter=json --outputFile "$lab/live-results.json"
 node -e 'const r=require(process.argv[1]); if (!r.numTotalTests || r.numPendingTests || r.numFailedTests) { console.error("live tests did not all execute and pass", r); process.exit(1); }' "$lab/live-results.json"

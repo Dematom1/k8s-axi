@@ -1,7 +1,7 @@
 {
   "name": "k8s-axi",
   "version": "0.1.4",
-  "description": "Kubernetes diagnostics and guarded port forwarding for agents",
+  "description": "Kubernetes diagnostics and guarded exec and port forwarding for agents",
   "type": "module",
   "license": "MIT",
   "author": "Laszlo Horanszky",

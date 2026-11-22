@@ -1,3 +1,6 @@
+export const CREDENTIAL_NAME =
+  /(?:password|passwd|secret|token|api[_-]?key|private[_-]?key|_(?:PASS|PWD|KEY)$)/i;
+
 export function redactText(input: string): { text: string; count: number } {
   let count = 0;
   const replace = (
@@ -12,6 +15,10 @@ export function redactText(input: string): { text: string; count: number } {
   replace(
     /-----BEGIN [^-\n]*(?:PRIVATE KEY|CERTIFICATE)-----[\s\S]*?-----END [^-\n]+-----/g,
     "[REDACTED PEM]",
+  );
+  replace(
+    /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
+    "[REDACTED JWT]",
   );
   replace(/\bAKIA[A-Z0-9]{16}\b/g, "[REDACTED]");
   replace(

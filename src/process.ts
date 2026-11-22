@@ -26,7 +26,6 @@ export async function runProcess(
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
-    let bytes = 0;
     let timedOut = false;
     let capped = false;
     let terminating = false;
@@ -84,7 +83,8 @@ export async function runProcess(
     for (const [stream, chunks] of [
       [child.stdout, stdout],
       [child.stderr, stderr],
-    ] as const)
+    ] as const) {
+      let bytes = 0;
       stream?.on("data", (chunk: Buffer) => {
         if (terminating) return;
         bytes += chunk.length;
@@ -93,6 +93,7 @@ export async function runProcess(
           terminate();
         } else chunks.push(chunk);
       });
+    }
     child.once("error", (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
       if (escalationTimer) clearTimeout(escalationTimer);

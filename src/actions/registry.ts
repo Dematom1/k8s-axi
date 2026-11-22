@@ -12,7 +12,8 @@ export type Action =
     }
   | { kind: "port-forward"; target: string; ports: readonly string[] }
   | { kind: "apply"; manifest: string }
-  | { kind: "can-i"; resource: "pods/portforward" };
+  | { kind: "secret-values"; name: string }
+  | { kind: "can-i"; resource: "pods/exec" | "pods/portforward" };
 
 function validResourceName(value: string): boolean {
   try {
@@ -44,7 +45,13 @@ export function argvForAction(action: Action, target: Target): string[] {
       if (
         !validResourceName(action.target) ||
         !validResourceName(action.container) ||
-        !action.command.length
+        !action.command.length ||
+        action.command.length > 64 ||
+        action.command.some(
+          (arg) => Buffer.byteLength(arg) > 4096 || arg.includes("\0"),
+        ) ||
+        !action.command[0] ||
+        action.command[0].startsWith("-")
       )
         throw new Error("invalid exec action");
       return [
@@ -57,6 +64,19 @@ export function argvForAction(action: Action, target: Target): string[] {
         ...base,
         "--",
         ...action.command,
+      ];
+    case "secret-values":
+      if (!validResourceName(action.name))
+        throw new Error("invalid Secret reference");
+      return [
+        "get",
+        "secret",
+        action.name,
+        "-n",
+        target.defaultNamespace,
+        "-o",
+        "json",
+        ...base,
       ];
     case "port-forward":
       if (
@@ -74,7 +94,7 @@ export function argvForAction(action: Action, target: Target): string[] {
         ...base,
       ];
     case "can-i":
-      if (action.resource !== "pods/portforward")
+      if (action.resource !== "pods/exec" && action.resource !== "pods/portforward")
         throw new Error("invalid permission action");
       return [
         "auth",

@@ -4,6 +4,7 @@ import {
   writeFileSync,
   readFileSync,
   rmSync,
+  realpathSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -39,6 +40,7 @@ export function lab(
     HOME: join(dir, "home"),
     XDG_CONFIG_HOME: join(dir, "home/.config"),
     XDG_CACHE_HOME: join(dir, "home/.cache"),
+    XDG_STATE_HOME: join(realpathSync(dir), "home/.local/state"),
     K8S_AXI_SCENARIO: join(dir, "scenario"),
     K8S_AXI_CALLS: join(dir, "calls"),
     K8S_AXI_PID: join(dir, "pid"),

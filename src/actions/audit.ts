@@ -117,8 +117,9 @@ export function appendAudit(
       constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
     );
     try {
-      if (!fstatSync(dirFd).isDirectory())
-        throw new Error("invalid audit directory");
+      const info = fstatSync(dirFd);
+      if (!info.isDirectory() || !(info.mode & 0o200))
+        throw new Error("invalid or read-only audit directory");
       fchmodSync(dirFd, 0o700);
     } finally {
       closeSync(dirFd);

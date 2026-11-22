@@ -19,6 +19,7 @@ import { setupCommand } from "./commands/setup.js";
 import { contextCommand } from "./commands/context.js";
 import { auditCommand } from "./commands/audit.js";
 import { portForwardCommand } from "./commands/port-forward.js";
+import { execCommand } from "./commands/exec.js";
 const kubectlNouns = new Set<Noun>([
   "nodes",
   "namespaces",
@@ -42,6 +43,7 @@ const implementations = {
   setup: setupCommand,
   context: contextCommand,
   audit: auditCommand,
+  exec: execCommand,
   triage: triageCommand,
   home: triageCommand,
   ctx: ctxCommand,

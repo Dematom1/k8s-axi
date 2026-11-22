@@ -15,7 +15,6 @@ export const REFUSALS = [
   "cordon",
   "uncordon",
   "drain",
-  "exec",
   "attach",
   "proxy",
   "cp",
