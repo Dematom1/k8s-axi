@@ -142,7 +142,7 @@ nsonly_token=$(kubectl create token nsonly -n fixtures --duration=1h)
 kubectl config set-credentials nsonly --token="$nsonly_token" >/dev/null
 kubectl config set-context nsonly --cluster="kind-$name" --user=nsonly --namespace=fixtures >/dev/null
 kubectl create serviceaccount previewer-patch -n fixtures
-kubectl create role previewer-patch --verb=get,list,patch --resource=deployments.apps,configmaps -n fixtures
+kubectl create role previewer-patch --verb=get,patch --resource=deployments.apps,configmaps -n fixtures
 kubectl create rolebinding previewer-patch --role=previewer-patch --serviceaccount=fixtures:previewer-patch -n fixtures
 previewer_token=$(kubectl create token previewer-patch -n fixtures --duration=1h)
 kubectl config set-credentials previewer-patch --token="$previewer_token" >/dev/null
