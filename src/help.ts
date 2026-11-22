@@ -28,6 +28,8 @@ export const COMMAND_LINES = [
   "context: last session summary for this directory",
   "context end: record command counts and most-used context from stdin hook payload",
   "audit: show the local log of executed guarded actions",
+  "apply -f <path | ->: server dry-run with redacted structural changes; never applies Secrets",
+  "diff -f <path | ->: identical to apply preview; no real writes",
 ];
 export const TOP_HELP = [
   DESCRIPTION,
@@ -36,7 +38,7 @@ export const TOP_HELP = [
   "Global: --context <name>, --timeout <seconds> (20, range 1..120), --help, --version (-v, -V)",
   "Lists: -n <namespace> or -A, --limit <n> (100, max 1000), --fields <a,b>, --problems",
   "Output is TOON. Exit 0: completed reads, including problems. Exit 1: failed or partial reads. Exit 2: usage.",
-  "Secret values never enter this process. --full only untruncates allowlisted text.",
-  "Reads are the only enabled cluster operations. Guarded actions will be preview-only by default and require an explicit --execute to run.",
+  "Cluster Secret values are never read. Secret manifest values must be <redacted>; --full does not reveal them.",
+  "Reads and apply/diff server dry-run previews are enabled. apply --execute is not available.",
   "Secret values are never shown. Executed guarded actions will be recorded in a local audit log.",
 ];

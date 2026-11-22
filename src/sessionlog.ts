@@ -37,6 +37,8 @@ const COMMANDS = new Set([
   "setup",
   "context",
   "audit",
+  "apply",
+  "diff",
 ]);
 const CONTEXTS = COMMANDS;
 

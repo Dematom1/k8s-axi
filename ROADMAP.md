@@ -7,4 +7,4 @@
 - Published-artifact verification after the first approved npm stage.
 - First GitHub workflow execution after repository creation and import.
 
-Guarded exec, port-forward, and apply preview are planned. Cluster writes and Secret value output remain unsupported.
+Guarded exec and port-forward are planned. Apply preview and diff use server dry-run only. Real apply execution, cluster writes, and Secret value output remain unsupported.

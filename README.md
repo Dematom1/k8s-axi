@@ -1,6 +1,6 @@
 # k8s-axi
 
-Strictly read-only Kubernetes diagnostics for agents. Output is TOON, including errors.
+Kubernetes diagnostics and server dry-run manifest previews for agents. No cluster changes. Output is TOON, including errors.
 
 ## Install
 
@@ -56,6 +56,11 @@ Run `k8s-axi` for an all-namespace overview or `k8s-axi <command> --help` for fl
 - `setup hooks`, `setup status`, `setup uninstall`: opt-in local agent integration.
 - `context`, `context end`: directory-scoped session summary.
 - `audit [--limit <n>] [--action exec|port-forward|apply]`: newest local guarded-action records; no network access.
+- `apply -f <path | -> [--context <name>] [-n <namespace>] [--full]`, `diff` with the same flags: identical server dry-run previews with per-object create/configure/unchanged outcomes and structural path changes. Requires real create/patch permissions. No `--execute`, URLs, directories, `-k`, or `--recursive`.
+
+Apply/diff read YAML multi-document or JSON input, flatten `kind: List`, and accept at most 1 MiB and 50 objects. Each object needs `apiVersion`, `kind`, and `metadata.name`. Namespace comes from the manifest, then `-n`, then the context default; conflicting manifest and flag namespaces are rejected. kubectl receives one JSON object at a time through stdin, never the user's path.
+Any Secret `data` or `stringData` value other than the literal `"<redacted>"` refuses the entire preview before any kubectl call. Placeholder Secrets compare only key sets and type through the existing key-only projection; values are never read or compared, and Secret documents are never sent to apply. Manage values with the Secret tool or your deployment pipeline.
+Diffs omit status, server-managed metadata, and last-applied annotations. Credential-named env literals and recognized text patterns are redacted before truncation to 120 characters per string; `--full` lifts truncation, not redaction. Exit 1 includes per-object failures; mixed results use `PARTIAL`.
 
 Global flags: `--context <name>`, `--timeout <seconds>` (default 20, range 1 to 120), `--help`, and `--version` (`-v`, `-V`).
 Namespaced lists default to the kubeconfig namespace, falling back to `default`. Home and triage default to all namespaces.
@@ -107,12 +112,12 @@ A missing context or namespace is an error. An empty namespace that cannot be ve
 
 ## Safety model
 
-Cluster access is read-only by default. The shared safety foundation for guarded `exec`, `port-forward`, apply preview, and diff is in place; those action commands are not enabled until their implementation lanes ship. When enabled, execution will require an explicit `--execute`, echo the target context, namespace, and target, and be recorded in a local audit log. `k8s-axi audit` reads that log without contacting the cluster. There is no arbitrary kubectl argument path, attach, proxy, raw output, auth review, or self-update.
+Cluster access is read-only by default. Apply preview and diff use client-side apply semantics with `--dry-run=server`; they never persist objects and never submit Secrets. They echo the target context, sanitized server, namespace and each object. Previews are not audited. `apply --execute`, `exec`, and `port-forward` are not enabled. The shared safety foundation for future guarded execution requires explicit `--execute` and a local audit record before effects. `k8s-axi audit` reads that log without contacting the cluster. There is no arbitrary kubectl argument path, attach, proxy, raw output, auth review, or self-update.
 Every network call pins the resolved context. Namespace preflight distinguishes a missing namespace from an empty list.
-Subprocesses have closed stdin, a shared overall deadline, per-call timeouts, process-group cleanup, and a 128 MiB combined output cap. The audit log is stored at `${XDG_STATE_HOME:-$HOME/.local/state}/k8s-axi/audit.jsonl`, with private directory and file permissions.
+Subprocesses have closed stdin (except the manifest pipe for dry-run apply), a shared overall deadline, per-call timeouts, process-group cleanup, and a 128 MiB combined output cap. The audit log is stored at `${XDG_STATE_HOME:-$HOME/.local/state}/k8s-axi/audit.jsonl`, with private directory and file permissions.
 KUBERC is disabled so user defaults cannot silently rewrite a read. kubectl can write its own discovery cache, but k8s-axi never modifies kubeconfig or cluster resources.
 
-Secrets are read only through a fixed go-template. Only namespace, name, type, creation time, and key names reach this process. Secret data, stringData, annotations, and labels do not.
+Secrets are read only through a fixed go-template. Only namespace, name, type, creation time, and key names reach this process. Cluster Secret data, stringData, annotations, and labels do not. User manifest values are read locally only to enforce the placeholder guard and are never printed.
 This is an output guarantee, not access control: API permission to list Secrets also permits values through other clients.
 Pods omit env, args, command, volumes, and all annotations. The default-container annotation is used internally for log selection only.
 Free text is redacted before truncation, including `--full`. Log redaction is **best effort**. Unknown credential formats can remain in arbitrary log text.

@@ -25,10 +25,11 @@ Run \`npx -y k8s-axi <command> --help\` for flags and examples.
 
 ## Safety and results
 
-Enabled cluster operations are fixed reads through kubectl. Guarded exec, port-forward, apply preview, and diff are not enabled yet. When available, actions will default to preview, require explicit --execute for effects, show the target, and write an audit record. No raw passthrough, auth reviews, streaming, or self-update exists.
-Secrets enter this process only as metadata and key names projected by a fixed template. --full never adds fields or reveals values.
+Enabled cluster operations are fixed reads and apply/diff server dry-run previews through kubectl. Use \`npx -y k8s-axi apply -f <path> --context <name>\` or diff with the same flags. No real apply --execute, exec, port-forward, raw passthrough, auth reviews, streaming, or self-update exists.
+Apply/diff accept up to 1 MiB and 50 YAML/JSON objects, including List. Secret manifests with non-placeholder values are refused before any cluster call. Use the literal "<redacted>" for every data/stringData value to compare only keys and type; Secrets are never submitted to the server. Previews require real create/patch permissions and do not write audit records.
+Cluster Secrets enter this process only as metadata and key names projected by a fixed template. --full never reveals Secret values. Apply/diff redact credential env literals and known text patterns, remove server-only fields and last-applied annotations, and truncate string changes to 120 characters unless --full.
 This is an output restriction, not server-side access control: Secret list permission also grants values to a direct API client.
-Pods omit env, args, commands, and volumes. Object annotations are not output.
+Diagnostic pod views omit env, args, commands, volumes, and object annotations. Apply/diff may show non-sensitive fields in structural changes.
 Log and event text is redacted before truncation, including with --full. Log redaction is best effort, not a guarantee for arbitrary credentials.
 Exit 0 means all required reads completed, even if problems exist. Exit 1 means a read failed or health is partial or unknown. Exit 2 means usage error.
 A missing namespace or context is an error, not an empty result. Partial checks never produce a healthy headline.

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { AxiError } from "axi-sdk-js";
 import { validateResourceName } from "../args.js";
 import type { Target } from "../registry.js";
+import { object, text } from "../kubectl.js";
 
 export type Action =
   | {
@@ -11,7 +12,8 @@ export type Action =
       command: readonly string[];
     }
   | { kind: "port-forward"; target: string; ports: readonly string[] }
-  | { kind: "apply"; manifest: string };
+  | { kind: "apply"; manifest: string }
+  | { kind: "apply-get"; resource: string; name: string };
 
 function validResourceName(value: string): boolean {
   try {
@@ -69,16 +71,40 @@ export function argvForAction(action: Action, target: Target): string[] {
         target.defaultNamespace,
         ...base,
       ];
-    case "apply":
+    case "apply-get":
+      if (
+        !/^[A-Za-z][A-Za-z0-9]*(?:\.[a-z0-9.-]+)?$/.test(action.resource) ||
+        /^(?:secrets?|list)(?:\.|$)/i.test(action.resource) ||
+        !validResourceName(action.name)
+      )
+        throw new Error("invalid preview get action");
+      return [
+        "get",
+        `${action.resource}/${action.name}`,
+        "-n",
+        target.defaultNamespace,
+        "-o",
+        "json",
+        "--ignore-not-found",
+        ...base,
+      ];
+    case "apply": {
+      const manifest: unknown = JSON.parse(action.manifest);
+      const kind = text(object(manifest).kind);
+      if (!kind || /^(?:secrets?|list)$/i.test(kind))
+        throw new Error("invalid preview apply action");
       return [
         "apply",
         "--dry-run=server",
+        "-o",
+        "json",
         "-n",
         target.defaultNamespace,
         "-f",
         "-",
         ...base,
       ];
+    }
     default: {
       const exhaustive: never = action;
       throw new Error(String(exhaustive));
