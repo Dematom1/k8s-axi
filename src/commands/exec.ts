@@ -447,8 +447,10 @@ export async function execCommand(p: Parsed): Promise<string> {
       outcome = "error";
     } else if (result.exit !== 0) {
       const lastLine = result.stderr.trimEnd().split(/\r?\n/).at(-1) ?? "";
+      // kubectl appends its diagnostic directly, so remote stderr without a
+      // final newline joins it onto the same line.
       const remote =
-        /^command terminated with (?:non-zero exit code: Error executing in Docker Container: )?exit code (\d+)$/.exec(
+        /command terminated with (?:non-zero exit code: Error executing in Docker Container: )?exit code (\d+)$/.exec(
           lastLine,
         );
       if (remote && Number(remote[1]) === result.exit) {

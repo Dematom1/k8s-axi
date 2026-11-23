@@ -1582,3 +1582,55 @@ test("paths embedded in key=value and attached short-option tokens are protected
   ] as const)
     expect(execPolicy([...argv], s, "app").ok, argv.join(" ")).toBe(true);
 });
+
+test("remote exit survives remote stderr without a final newline; API denials stay upstream errors", () => {
+  const joined = fixture([
+    {
+      prefix: ["exec"],
+      code: 2,
+      stderr:
+        "grep: /app/missing: No such filecommand terminated with exit code 2\n",
+    },
+  ]);
+  try {
+    const result = cli(
+      [
+        "exec",
+        "web-1",
+        ...flags,
+        "--execute",
+        "--",
+        "grep",
+        "x",
+        "/app/missing",
+      ],
+      joined.env,
+    );
+    expect(result.status).toBe(1);
+    expect(object(result.data)).toMatchObject({
+      code: "REMOTE_EXIT_NONZERO",
+      remote_exit: 2,
+    });
+    expect(result.stdout).toContain("No such file");
+  } finally {
+    joined.clean();
+  }
+  const denied = fixture([
+    {
+      prefix: ["exec"],
+      code: 1,
+      stderr:
+        'Error from server (Forbidden): pods "web-1" is forbidden: cannot create resource "pods/exec"\n',
+    },
+  ]);
+  try {
+    const result = cli(
+      ["exec", "web-1", ...flags, "--execute", "--", "/scripts/exit7"],
+      denied.env,
+    );
+    expect(object(result.data)).toMatchObject({ code: "FORBIDDEN" });
+    expect(object(result.data).remote_exit).toBeNull();
+  } finally {
+    denied.clean();
+  }
+});
