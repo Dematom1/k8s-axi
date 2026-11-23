@@ -105,6 +105,7 @@ A missing context or namespace is an error. An empty namespace that cannot be ve
 | CONFIG_INVALID        | Local configuration or integration could not be read, written, or verified.                           |
 | SECRET_EXPOSURE       | Action input could expose Secret material.                                                            |
 | SCRUB_UNAVAILABLE     | Secret values could not be loaded for safe output scrubbing.                                          |
+| TARGET_CHANGED        | Pod UID or resourceVersion changed before exec; repeat the preview.                                   |
 | REMOTE_EXIT_NONZERO   | The remote command returned a nonzero exit status.                                                    |
 | AUDIT_UNAVAILABLE     | The action audit log could not be written or read.                                                    |
 | AUDIT_INCOMPLETE      | Completion record missing; inspect whether exec reports a known launch failure or possible execution. |
