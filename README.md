@@ -1,6 +1,6 @@
 # k8s-axi
 
-Kubernetes diagnostics and bounded, opt-in port forwarding for agents. Output is TOON, including errors.
+Kubernetes diagnostics, server dry-run manifest previews, and bounded, opt-in port forwarding for agents. Output is TOON, including errors.
 
 ## Install
 
@@ -58,6 +58,11 @@ Run `k8s-axi` for an all-namespace overview or `k8s-axi <command> --help` for fl
 - `audit [--limit <n>] [--action exec|port-forward|apply]`: newest local guarded-action records; no network access.
 - `port-forward <pod|pod/name|service/name|deployment/name> [local:]remote`: previews one loopback-only forwarding session. `--execute` requires explicit `--context` and `-n`. The local port defaults to random; explicit local ports must be 1024–65535. `--ttl` defaults to 15m, with a range of 10s–60m. Deployments resolve to the newest Ready pod. Services resolve their TCP port to the selected pod's target port.
 - `port-forward list`, `port-forward stop <id>`, `port-forward stop --all`: manage up to five sessions per user. These commands make no cluster calls. `--address` is refused. Linux and macOS are supported.
+- `apply -f <path | -> [--context <name>] [-n <namespace>] [--full]`, `diff` with the same flags: identical server dry-run previews with per-object create/configure/unchanged outcomes and structural path changes. Requires real create/patch/get permissions; Secret manifests also require `list` on secrets. No `--execute`, URLs, directories, `-k`, or `--recursive`.
+
+Apply/diff read YAML multi-document or JSON input, flatten `kind: List` and typed List wrappers such as `SecretList`, and accept at most 1 MiB and 50 objects. Each object needs `apiVersion`, `kind`, and `metadata.name`. Namespace comes from the manifest, then `-n`, then the context default; conflicting manifest and flag namespaces are rejected. kubectl receives one JSON object at a time through stdin, never the user's path.
+Any Secret `data` or `stringData` value other than the literal `"<redacted>"` refuses the entire preview before any kubectl call. Placeholder Secrets compare only key sets and type through the existing key-only projection; values are never read or compared, and Secret documents are never sent to apply. Manage values with the Secret tool or your deployment pipeline.
+Diffs omit status, server-managed metadata, and last-applied annotations. Values under credential-named fields, credential-named env literals, adjacent credential flag arguments, and recognized text patterns are redacted before truncation to 120 characters per string; `--full` lifts truncation, not redaction. Non-Secret live field values may appear in output after pattern-based redaction; credentials in fields whose names do not look sensitive (such as an env var named `LICENSE`) can remain visible. Store credentials in Secrets. Exit 1 includes per-object failures; mixed results use `PARTIAL`.
 
 Global flags: `--context <name>`, `--timeout <seconds>` (default 20, range 1 to 120), `--help`, and `--version` (`-v`, `-V`).
 Namespaced lists default to the kubeconfig namespace, falling back to `default`. Home and triage default to all namespaces.
@@ -110,16 +115,16 @@ A missing context or namespace is an error. An empty namespace that cannot be ve
 
 ## Safety model
 
-Cluster access is read-only by default. Port forwarding previews the resolved context, server, namespace, pod, ports, permission, and expiry. Only `--execute` starts a forwarding session, after its start record is written to the local audit log. `exec`, apply, and diff remain unavailable. `k8s-axi audit` reads the log without contacting the cluster. There is no arbitrary kubectl argument path, attach, proxy, raw output, public auth review, or self-update.
+Cluster access is read-only by default. Apply preview and diff use client-side apply semantics with `--dry-run=server`; they never persist objects and never submit Secrets. They echo the target context, sanitized server, namespace and each object. Previews are not audited. `apply --execute` and `exec` are not enabled. Port forwarding previews the resolved context, server, namespace, pod, ports, permission, and expiry. Only `--execute` starts a forwarding session, after its start record is written to the local audit log. `k8s-axi audit` reads the log without contacting the cluster. There is no arbitrary kubectl argument path, attach, proxy, raw output, public auth review, or self-update.
 
 Port-forward sessions live under `${XDG_STATE_HOME:-$HOME/.local/state}/k8s-axi/sessions/`, with 0700 directories and 0600 records. A detached supervisor owns each process group, waits up to 15 seconds for loopback readiness, and expires the session without reconnecting. Explicit stop, expiry, SessionEnd, and opportunistic reaping clean up sessions. SessionEnd stops sessions owned by the payload's real cwd and uid; agents in the same directory share ownership.
 
 Before signalling a live supervisor's process group, cleanup verifies its token in the process command. After supervisor death, cleanup requires the surviving child's pid, process group, exact start time, and exact command to match the saved identity. A mismatch or unreadable identity drops the record without signalling and audits `dropped`; it cannot safely promise cleanup of that unverified process.
 Every network call pins the resolved context. Namespace preflight distinguishes a missing namespace from an empty list.
-Read subprocesses have closed stdin, a shared overall deadline, per-call timeouts, process-group cleanup, and a 128 MiB combined output cap. Port-forward supervisors close stdin and cap each captured stream at 1 MiB; their lifetime is bounded by the session TTL. The audit log is stored at `${XDG_STATE_HOME:-$HOME/.local/state}/k8s-axi/audit.jsonl`, with private directory and file permissions.
+Read and preview subprocesses have closed stdin (except the manifest pipe for dry-run apply), a shared overall deadline, per-call timeouts, process-group cleanup, and a 128 MiB combined output cap. Port-forward supervisors close stdin and cap each captured stream at 1 MiB; their lifetime is bounded by the session TTL. The audit log is stored at `${XDG_STATE_HOME:-$HOME/.local/state}/k8s-axi/audit.jsonl`, with private directory and file permissions.
 KUBERC is disabled so user defaults cannot silently rewrite a read. kubectl can write its own discovery cache, but k8s-axi never modifies kubeconfig or cluster resources.
 
-Secrets are read only through a fixed go-template. Only namespace, name, type, creation time, and key names reach this process. Secret data, stringData, annotations, and labels do not.
+Secrets are read only through a fixed go-template. Only namespace, name, type, creation time, and key names reach this process. Cluster Secret data, stringData, annotations, and labels do not. Secret manifest values are read locally only to enforce the placeholder guard and are never printed.
 This is an output guarantee, not access control: API permission to list Secrets also permits values through other clients.
 Pods omit env, args, command, volumes, and all annotations. The default-container annotation is used internally for log selection only.
 Free text is redacted before truncation, including `--full`. Log redaction is **best effort**. Unknown credential formats can remain in arbitrary log text.

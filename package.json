@@ -1,7 +1,7 @@
 {
   "name": "k8s-axi",
   "version": "0.1.4",
-  "description": "Kubernetes diagnostics and guarded port forwarding for agents",
+  "description": "Kubernetes diagnostics, guarded port forwarding, and server dry-run previews for agents",
   "type": "module",
   "license": "MIT",
   "author": "Laszlo Horanszky",
@@ -61,7 +61,8 @@
   },
   "dependencies": {
     "@toon-format/toon": "2.3.1",
-    "axi-sdk-js": "0.1.13"
+    "axi-sdk-js": "0.1.13",
+    "yaml": "2.8.2"
   },
   "devDependencies": {
     "@types/js-yaml": "4.0.9",
