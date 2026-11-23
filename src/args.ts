@@ -1,6 +1,15 @@
 import { usage } from "./errors.js";
 export type NamespaceName = string & { readonly __brand: "NamespaceName" };
 export type ResourceName = string & { readonly __brand: "ResourceName" };
+export type PodUid = string & { readonly __brand: "PodUid" };
+export function isPodUid(value: string): value is PodUid {
+  return /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(value);
+}
+function validatePodUid(value: string): PodUid {
+  if (!isPodUid(value))
+    usage("--pod-uid requires a bounded Pod UID token", "exec");
+  return value;
+}
 export type Selector = string & { readonly __brand: "Selector" };
 function isNamespace(x: string): x is NamespaceName {
   return x.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(x);
@@ -135,6 +144,7 @@ export interface Parsed {
   execute?: boolean;
   remoteArgv?: string[];
   execDeployment?: boolean;
+  podUid?: PodUid;
   filename?: string;
 }
 export function actionsFor(command: Parsed["command"]): string[] {
@@ -205,7 +215,7 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
   const allowed = [
     ...globalFlags,
     ...(command === "exec"
-      ? ["namespace", "container", "full", "execute"]
+      ? ["namespace", "container", "full", "execute", "pod-uid"]
       : ["apply", "diff"].includes(command)
         ? ["filename", "namespace", "full"]
         : command === "audit"
@@ -275,7 +285,7 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     name = validateResourceName(
       execDeployment
         ? (pos[0] ?? "").slice("deployment/".length)
-        : (pos[0] ?? ""),
+        : (pos[0] ?? "").replace(/^pod\//, ""),
     );
   } else if (pos.length) {
     action = pos[0] ?? "";
@@ -362,6 +372,7 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     execute: flags.has("execute"),
     remoteArgv: command === "exec" ? remoteArgv : undefined,
     execDeployment,
+    podUid: str("pod-uid") ? validatePodUid(str("pod-uid") ?? "") : undefined,
     auditAction:
       auditAction === "exec" ||
       auditAction === "port-forward" ||

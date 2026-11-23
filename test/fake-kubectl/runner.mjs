@@ -105,9 +105,12 @@ else if (r.mode === "ignore-term") {
   if (process.env.K8S_AXI_PID)
     writeFileSync(process.env.K8S_AXI_PID, String(p.pid));
   setInterval(() => {}, 1000);
-} else if (r.mode === "audit-end-fail") {
+} else if (["audit-end-fail", "audit-end-fail-forbidden"].includes(r.mode)) {
   chmodSync(`${process.env.XDG_STATE_HOME}/k8s-axi`, 0o555);
-  process.stdout.write("action ran");
+  if (r.mode === "audit-end-fail-forbidden") {
+    process.stderr.write("Error from server (Forbidden): exec denied\n");
+    process.exitCode = 1;
+  } else process.stdout.write("action ran");
 } else if (r.mode === "require-audit") {
   const record = readFileSync(
     `${process.env.XDG_STATE_HOME}/k8s-axi/audit.jsonl`,

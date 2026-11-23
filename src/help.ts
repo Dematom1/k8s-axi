@@ -33,7 +33,7 @@ export const COMMAND_LINES = [
   "port-forward <target> [local:]remote: preview loopback forwarding; --execute -n <ns> --context <ctx> starts an owned session (--ttl 15m, range 10s..60m)",
   "port-forward list: owned forwarding sessions, at most 5 per user",
   "port-forward stop <id> | --all: stop owned sessions",
-  "exec <pod|deployment/name> -- <argv...>: guarded preview; --execute requires --context and -n",
+  "exec <pod|pod/name|deployment/name> -- <argv...>: guarded preview; --execute requires --context and -n",
 ];
 export const TOP_HELP = [
   DESCRIPTION,
@@ -46,6 +46,6 @@ export const TOP_HELP = [
   "Reads and apply/diff server dry-run previews are enabled. apply --execute is not available.",
   "Exec reads referenced Secret values only into memory to scrub output; short-value limits apply.",
   "Exec previews by default; --execute requires explicit --context and -n and writes a local audit record before running. No interactive sessions.",
-  "Exec: --timeout <1..300> (30), --full; 1 MiB per stream. Local timeout may leave the remote command running.",
+  "Exec: --timeout <1..300> (30), --full; 1 MiB per stream. Preview replay pins pod/<name> and --pod-uid <uid>. Local timeout may leave the remote command running.",
   "Port-forward previews by default; --execute requires explicit --context and -n. Sessions bind loopback only, expire, and are recorded in the local audit log.",
 ];

@@ -384,6 +384,163 @@ test("grep pattern-option values are literal patterns, including paths and empty
   expect(execPolicy(["grep", "--file"], cwdSpec, "app").ok).toBe(false);
 });
 
+for (const option of [
+  "-m",
+  "--max-count",
+  "-A",
+  "-B",
+  "-C",
+  "--after-context",
+  "--before-context",
+  "--context",
+  "-d",
+  "--directories",
+  "-D",
+  "--devices",
+  "--include",
+  "--exclude",
+  "--exclude-dir",
+  "--label",
+  "--binary-files",
+  "--group-separator",
+])
+  test(`grep value-option ${option} is consumed before positional pattern and files`, () => {
+    const value = ["-d", "--directories", "-D", "--devices"].includes(option)
+      ? "skip"
+      : "1";
+    expect(
+      execPolicy(["grep", option, value, "needle", "/app/log"], spec, "app").ok,
+    ).toBe(true);
+    expect(execPolicy(["grep", option], spec, "app").ok).toBe(false);
+    expect(
+      execPolicy(
+        ["grep", option, value, "needle", "/etc/app-conn/conn"],
+        spec,
+        "app",
+      ).ok,
+    ).toBe(false);
+  });
+test("recursion flags use command semantics instead of arbitrary short-option letters", () => {
+  for (const argv of [
+    ["ls", "-a", "/"],
+    ["ls", "-r", "/"],
+    ["grep", "-a", "needle", "/"],
+    ["grep", "-econtainsR", "/"],
+    ["echo", "-R", "/"],
+  ])
+    expect(execPolicy(argv, spec, "app").ok).toBe(true);
+  for (const argv of [
+    ["ls", "-R", "/"],
+    ["ls", "--recursive", "/"],
+    ["grep", "-r", "needle", "/"],
+    ["grep", "-R", "needle", "/"],
+    ["grep", "-d", "recurse", "needle", "/"],
+    ["cp", "-a", "/", "/tmp/x"],
+    ["cp", "--archive", "/", "/tmp/x"],
+  ])
+    expect(execPolicy(argv, spec, "app").ok).toBe(false);
+});
+
+test("Pod UID replay flag is bounded, exec-only, and accepts pod/name targets", () => {
+  expect(
+    parseArgs("exec", ["pod/web-1", "--pod-uid", "pod-uid", "--", "true"]),
+  ).toMatchObject({ name: "web-1", podUid: "pod-uid" });
+  for (const value of ["../uid", "with space", "x".repeat(129), "\0"])
+    expect(() =>
+      parseArgs("exec", ["web-1", "--pod-uid", value, "--", "true"]),
+    ).toThrow(expect.objectContaining({ code: "VALIDATION_ERROR" }));
+  expect(() => parseArgs("pods", ["--pod-uid", "pod-uid"])).toThrow(
+    expect.objectContaining({ code: "VALIDATION_ERROR" }),
+  );
+});
+
+test("preview replay pins deployment selection to a named Pod and UID", () => {
+  const l = fixture();
+  try {
+    const preview = cli(
+      ["exec", "deployment/web", ...flags, "--", "ls", "/"],
+      l.env,
+    );
+    expect(preview.status, preview.stdout).toBe(0);
+    const help = JSON.stringify(object(preview.data).help);
+    expect(help).toContain("pod/web-1");
+    expect(help).toContain("--pod-uid 'pod-uid'");
+    expect(help).not.toContain("deployment/web");
+    const execute = cli(
+      [
+        "exec",
+        "pod/web-1",
+        ...flags,
+        "--pod-uid",
+        "pod-uid",
+        "--execute",
+        "--",
+        "ls",
+        "/",
+      ],
+      l.env,
+    );
+    expect(execute.status, execute.stdout).toBe(0);
+  } finally {
+    l.clean();
+  }
+});
+test("replayed Pod UID mismatch refuses before any exec", () => {
+  const l = fixture([
+    {
+      prefix: ["get", "pod"],
+      stdout: JSON.stringify({
+        ...pod,
+        metadata: { ...pod.metadata, uid: "new-pod-uid" },
+      }),
+    },
+  ]);
+  try {
+    const result = cli(
+      [
+        "exec",
+        "pod/web-1",
+        ...flags,
+        "--pod-uid",
+        "pod-uid",
+        "--execute",
+        "--",
+        "ls",
+        "/",
+      ],
+      l.env,
+    );
+    expect(result.status, result.stdout).toBe(1);
+    expect(object(result.data).code).toBe("TARGET_CHANGED");
+    expect(calls(l).some((argv) => argv[0] === "exec")).toBe(false);
+    expect(records(l)).not.toContain('"phase":"start"');
+  } finally {
+    l.clean();
+  }
+});
+test("FORBIDDEN exec plus a missing audit end preserves the known denial", () => {
+  const l = fixture([{ prefix: ["exec"], mode: "audit-end-fail-forbidden" }]);
+  try {
+    const result = cli(
+      ["exec", "web-1", ...flags, "--execute", "--", "ls"],
+      l.env,
+    );
+    expect(result.status, result.stdout).toBe(1);
+    expect(object(result.data)).toMatchObject({
+      code: "AUDIT_INCOMPLETE",
+      launch_code: "FORBIDDEN",
+      mode: "refused - nothing ran",
+      remote_exit: null,
+    });
+    expect(result.stdout).toContain("remote command did not start");
+    expect(result.stdout).not.toContain("the action ran; do not retry");
+  } finally {
+    const dir = join(l.env.XDG_STATE_HOME, "k8s-axi");
+    if (existsSync(dir)) chmodSync(dir, 0o700);
+    l.clean();
+  }
+});
+
 test("scrub sources deduplicate optional references and select only credential literals", () => {
   expect(scrubSources(spec, "app").secrets).toEqual([
     { name: "db-creds", optional: false },

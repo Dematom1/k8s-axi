@@ -1,6 +1,7 @@
 import { AxiError, exitCodeForError } from "axi-sdk-js";
 import {
   validateResourceName,
+  isPodUid,
   validateSelector,
   type Parsed,
 } from "../args.js";
@@ -285,6 +286,16 @@ export async function execCommand(p: Parsed): Promise<string> {
     };
     const pod = await getPod(p, target, d);
     const podName = validateResourceName(text(object(pod.metadata).name));
+    const podUid = text(object(pod.metadata).uid);
+    targetEcho.pod = podName;
+    if (!isPodUid(podUid))
+      fail("UPSTREAM_ERROR", "pod UID unavailable or invalid");
+    targetEcho.pod_uid = podUid;
+    if (p.podUid && p.podUid !== podUid)
+      fail(
+        "TARGET_CHANGED",
+        "Pod UID differs from the preview; repeat the preview before execution",
+      );
     const spec = object(pod.spec);
     const containers = objects(spec.containers).map((c) => text(c.name));
     const annotation = text(
@@ -299,7 +310,6 @@ export async function execCommand(p: Parsed): Promise<string> {
         : containers.length === 1
           ? containers[0]
           : undefined);
-    targetEcho.pod = podName;
     if (p.container && !containers.includes(p.container))
       fail(
         "NOT_FOUND",
@@ -347,9 +357,10 @@ export async function execCommand(p: Parsed): Promise<string> {
       permission: `allowed (${permissionLabel})`,
     });
     if (!execute) {
-      const replayTarget = p.execDeployment ? `deployment/${p.name}` : podName;
+      const replayTarget = `pod/${podName}`;
       const replayable = [
         replayTarget,
+        podUid,
         container,
         target.defaultNamespace,
         target.context,
@@ -357,7 +368,7 @@ export async function execCommand(p: Parsed): Promise<string> {
       ].every((value) => safe(value) === value);
       const quote = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
       const run = replayable
-        ? `k8s-axi exec ${quote(replayTarget)} -c ${quote(container)} -n ${quote(target.defaultNamespace)} --context ${quote(target.context)} --timeout ${p.timeout}${p.full ? " --full" : ""} --execute -- ${command.map(quote).join(" ")}`
+        ? `k8s-axi exec ${quote(replayTarget)} -c ${quote(container)} -n ${quote(target.defaultNamespace)} --context ${quote(target.context)} --timeout ${p.timeout}${p.full ? " --full" : ""} --pod-uid ${quote(podUid)} --execute -- ${command.map(quote).join(" ")}`
         : undefined;
       return encodeObject({
         ...echo(),
@@ -371,7 +382,7 @@ export async function execCommand(p: Parsed): Promise<string> {
         help: [
           run
             ? `Run \`${run}\``
-            : "Reissue the original invocation with --execute and explicit --context and -n; sanitized values are not replayable",
+            : "Reissue the original invocation with --execute, explicit --context and -n, and the inspected Pod target and --pod-uid; sanitized values are not replayable",
         ],
       });
     }
@@ -482,6 +493,12 @@ export async function execCommand(p: Parsed): Promise<string> {
       (!p.full && (stdout.text.length > 8000 || stderr.text.length > 8000));
     const output = {
       ...echo(),
+      ...(outcome === "forbidden"
+        ? {
+            mode: "refused - nothing ran",
+            permission: `denied at exec (${permissionLabel})`,
+          }
+        : {}),
       remote_exit: remoteExit,
       duration: `${duration}ms`,
       stdout: p.full ? stdout.text : stdout.text.slice(-8000),
@@ -512,9 +529,17 @@ export async function execCommand(p: Parsed): Promise<string> {
       process.exitCode = 1;
       return encodeObject({
         ...output,
-        error: "action ran but its audit end record could not be written",
+        error:
+          outcome === "forbidden"
+            ? "remote command did not start: exec denied; audit end unavailable"
+            : "action ran but its audit end record could not be written",
         code: "AUDIT_INCOMPLETE",
-        help: ["the action ran; do not retry"],
+        ...(outcome === "forbidden" ? { launch_code: "FORBIDDEN" } : {}),
+        help: [
+          outcome === "forbidden"
+            ? "Execution denied; repair permissions and the audit log before retrying"
+            : "the action ran; do not retry",
+        ],
       });
     }
     if (code) process.exitCode = 1;

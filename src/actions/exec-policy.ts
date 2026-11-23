@@ -182,13 +182,39 @@ function unwrap(argv: readonly string[]): readonly string[] | undefined {
   return argv.slice(i);
 }
 
+const GREP_VALUE_OPTIONS = new Set([
+  "-e",
+  "--regexp",
+  "-f",
+  "--file",
+  "-m",
+  "--max-count",
+  "-A",
+  "--after-context",
+  "-B",
+  "--before-context",
+  "-C",
+  "--context",
+  "-d",
+  "--directories",
+  "-D",
+  "--devices",
+  "--binary-files",
+  "--label",
+  "--include",
+  "--exclude",
+  "--exclude-dir",
+  "--exclude-from",
+  "--group-separator",
+]);
 function grepFileOperands(
   argv: readonly string[],
-): Map<number, string> | undefined {
+): { files: Map<number, string>; recursive: boolean } | undefined {
   const files = new Map<number, string>();
   const positional: number[] = [];
-  let explicitPattern = false;
-  let options = true;
+  let explicitPattern = false,
+    options = true,
+    recursive = false;
   for (let i = 1; i < argv.length; i++) {
     const token = argv[i] ?? "";
     if (options && token === "--") {
@@ -199,20 +225,40 @@ function grepFileOperands(
       positional.push(i);
       continue;
     }
-    const long = /^--(regexp|file)(?:=(.*))?$/s.exec(token);
-    const short = /^-[EGFPivwxyZzqsaRrnlLhHcobIU]*([ef])(.*)$/s.exec(token);
-    if (!long && !short) continue;
-    const file = long?.[1] === "file" || short?.[1] === "f";
-    const attached = long ? long[2] : short?.[2] || undefined;
+    let option: string | undefined;
+    let attached: string | undefined;
+    if (token.startsWith("--")) {
+      const equal = token.indexOf("=");
+      option = equal < 0 ? token : token.slice(0, equal);
+      attached = equal < 0 ? undefined : token.slice(equal + 1);
+      if (["--recursive", "--dereference-recursive"].includes(option))
+        recursive = true;
+      if (!GREP_VALUE_OPTIONS.has(option)) continue;
+    } else {
+      for (let j = 1; j < token.length; j++) {
+        const flag = token[j] ?? "";
+        if (flag === "r" || flag === "R") recursive = true;
+        if (GREP_VALUE_OPTIONS.has("-" + flag)) {
+          option = "-" + flag;
+          attached = token.slice(j + 1) || undefined;
+          break;
+        }
+      }
+      if (!option) continue;
+    }
     const index = attached === undefined ? ++i : i;
     const value = attached ?? argv[index];
     if (value === undefined) return undefined;
-    explicitPattern = true;
-    if (file) files.set(index, value);
+    if (["-e", "--regexp", "-f", "--file"].includes(option))
+      explicitPattern = true;
+    if (["-f", "--file", "--exclude-from"].includes(option))
+      files.set(index, value);
+    if (["-d", "--directories"].includes(option) && value === "recurse")
+      recursive = true;
   }
   if (!explicitPattern) positional.shift();
   for (const index of positional) files.set(index, argv[index] ?? "");
-  return files;
+  return { files, recursive };
 }
 
 export function execPolicy(
@@ -262,12 +308,32 @@ export function execPolicy(
         "find execution and write predicates are not supported",
         "find",
       );
+    const grep = command === "grep" ? grepFileOperands(commandArgv) : undefined;
+    if (command === "grep" && !grep)
+      return refuse("missing grep option value", "grep");
+    const grepOperands = grep?.files;
+    const recursiveShort = ["ls", "chmod", "chown", "chgrp"].includes(command)
+      ? /^-[^-]*R/
+      : command === "cp"
+        ? /^-[^-]*[rRa]/
+        : command === "rm"
+          ? /^-[^-]*[rR]/
+          : undefined;
+    const endOptions = commandArgv.indexOf("--");
     const recursive =
-      ["find", "tar", "cpio", "zip", "rsync"].includes(command) ||
-      commandArgv.some(
-        (a) =>
-          a === "--recursive" || a === "--archive" || /^-[^-]*[rRa]/.test(a),
-      );
+      grep?.recursive ??
+      (["find", "tar", "cpio", "zip", "rsync"].includes(command) ||
+        commandArgv
+          .slice(1, endOptions < 0 ? undefined : endOptions)
+          .some(
+            (arg) =>
+              recursiveShort?.test(arg) ||
+              (arg === "--recursive" &&
+                ["ls", "cp", "rm", "chmod", "chown", "chgrp"].includes(
+                  command,
+                )) ||
+              (arg === "--archive" && command === "cp"),
+          ));
     const protectedPaths = [
       "/proc",
       "/var/run/secrets",
@@ -280,10 +346,6 @@ export function execPolicy(
       objects(podSpec.containers).find((c) => c.name === containerName)
         ?.workingDir,
     );
-    const grepOperands =
-      command === "grep" ? grepFileOperands(commandArgv) : undefined;
-    if (command === "grep" && !grepOperands)
-      return refuse("missing grep pattern option value", "grep");
     for (const [index, token] of commandArgv.entries()) {
       if (grepOperands && index > 0 && !grepOperands.has(index)) continue;
       const raw =

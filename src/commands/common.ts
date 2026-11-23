@@ -44,6 +44,7 @@ function helpFor(command: Parsed["command"], action: string): string {
             "-n <namespace> (required with --execute)",
             "-c, --container <name> (annotation, then sole container)",
             "--timeout <1..300> (30)",
+            "--pod-uid <uid> (preview replay identity; changed UID refuses)",
             "--full (up to 1 MiB per stream)",
             "--execute (default: preview only)",
             "-- <argv...> (required; no shell expansion)",
@@ -103,7 +104,7 @@ function helpFor(command: Parsed["command"], action: string): string {
       : command === "exec"
         ? [
             "k8s-axi exec deployment/web -n fixtures --context <name> -- ls /app",
-            "k8s-axi exec <pod> -c app -n fixtures --context <name> --execute -- ls /app",
+            "k8s-axi exec pod/<name> --pod-uid <uid> -c app -n fixtures --context <name> --execute -- ls /app",
             "k8s-axi exec <pod> --timeout 3 -n fixtures --context <name> --execute -- sleep 10",
           ]
         : command === "setup"

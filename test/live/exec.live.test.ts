@@ -77,6 +77,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
         timeout?: number;
         target?: string;
         container?: string;
+        podUid?: string;
       } = {},
       exit = 0,
     ) =>
@@ -91,6 +92,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
           ...(options.container ? ["-c", options.container] : []),
           ...(options.execute ? ["--execute"] : []),
           ...(options.full ? ["--full"] : []),
+          ...(options.podUid ? ["--pod-uid", options.podUid] : []),
           ...(options.timeout ? ["--timeout", String(options.timeout)] : []),
           "--",
           ...command,
@@ -115,6 +117,9 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     expect(object(preview.target).server).toMatch(/^https:\/\//);
     expect(audit()).toBe(""); // E13: preview has no start/effect record.
     const pod = String(object(preview.target).pod);
+    const podUid = String(object(preview.target).pod_uid);
+    expect(String(preview.help)).toContain(`pod/${pod}`);
+    expect(String(preview.help)).toContain(`--pod-uid '${podUid}'`);
     const markerState = (path: string) =>
       kubectl([
         "exec",
@@ -155,6 +160,14 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
         .filter(Boolean)
         .map((line) => object(JSON.parse(line)).phase),
     ).toEqual(forbidden.map(() => "refused"));
+    expect(
+      exec(
+        ["touch", previewMarker],
+        { execute: true, target: `pod/${pod}`, podUid: "wrong-preview-uid" },
+        1,
+      ).code,
+    ).toBe("TARGET_CHANGED");
+    expect(markerState(previewMarker)).toBe("absent");
     expect(markerState(refusalMarker)).toBe("absent");
     // Independent read-only checks must detect the would-be container effects.
     kubectl([
@@ -278,7 +291,10 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       ]),
     ])
       expect(run(args, 2).code).toBe("VALIDATION_ERROR");
-    expect(exec(["true"], { execute: true, target: pod }).remote_exit).toBe(0);
+    expect(
+      exec(["true"], { execute: true, target: `pod/${pod}`, podUid })
+        .remote_exit,
+    ).toBe(0);
     const transcript = join(process.env.TMPDIR ?? "", "exec-session.jsonl");
     writeFileSync(
       transcript,
