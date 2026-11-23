@@ -86,6 +86,40 @@ const FILE_COMMANDS = new Set([
   "rsync",
   "grep",
 ]);
+// File tools whose options run another program. Long names also match GNU
+// abbreviations, so a benign prefix such as tar --checkpoint is refused too.
+const RUNS_PROGRAM: Record<string, { long: string[]; short?: RegExp }> = {
+  tar: {
+    long: [
+      "--checkpoint-action",
+      "--to-command",
+      "--use-compress-program",
+      "--info-script",
+      "--new-volume-script",
+      "--rsh-command",
+      "--rmt-command",
+    ],
+    short: /^-[^-]*[IF]/,
+  },
+  cpio: { long: ["--rsh-command", "--rmt-command"] },
+  sort: { long: ["--compress-program"] },
+  rsync: { long: ["--rsh", "--rsync-path"], short: /^-[^-]*e/ },
+  zip: { long: ["--unzip-command"], short: /^-[^-]*TT/ },
+};
+function runsProgram(command: string, argv: readonly string[]) {
+  const rule = RUNS_PROGRAM[command];
+  return argv.slice(1).find((token, i) => {
+    if (!rule) return false;
+    const name = token.split("=")[0] ?? "";
+    if (name.length > 2 && name.startsWith("--"))
+      return rule.long.some((option) => option.startsWith(name));
+    // tar's old-style first argument bundles option letters without a dash.
+    if (command === "tar" && i === 0 && /^[A-Za-z]+$/.test(token))
+      return /[IF]/.test(token);
+    return rule.short?.test(token) ?? false;
+  });
+}
+
 const WRAPPERS = new Set([
   "timeout",
   "nice",
@@ -209,7 +243,9 @@ const GREP_VALUE_OPTIONS = new Set([
 ]);
 function grepFileOperands(
   argv: readonly string[],
-): { files: Map<number, string>; recursive: boolean } | undefined {
+):
+  | { files: Map<number, string>; recursive: boolean; searchesCwd: boolean }
+  | undefined {
   const files = new Map<number, string>();
   const positional: number[] = [];
   let explicitPattern = false,
@@ -258,8 +294,14 @@ function grepFileOperands(
   }
   if (!explicitPattern) positional.shift();
   for (const index of positional) files.set(index, argv[index] ?? "");
-  return { files, recursive };
+  // A recursive grep with no file operand searches its working directory.
+  return { files, recursive, searchesCwd: recursive && !positional.length };
 }
+
+const safeProc = (path: string) =>
+  /^\/proc\/(?:meminfo|cpuinfo|loadavg|uptime|version|stat|net\/[^/]+(?:\/.*)?)$/.test(
+    path,
+  );
 
 export function execPolicy(
   argv: readonly string[],
@@ -308,6 +350,12 @@ export function execPolicy(
         "find execution and write predicates are not supported",
         "find",
       );
+    const runner = runsProgram(command, commandArgv);
+    if (runner !== undefined)
+      return refuse(
+        "options that run another program are not supported",
+        runner,
+      );
     const grep = command === "grep" ? grepFileOperands(commandArgv) : undefined;
     if (command === "grep" && !grep)
       return refuse("missing grep option value", "grep");
@@ -346,8 +394,53 @@ export function execPolicy(
       objects(podSpec.containers).find((c) => c.name === containerName)
         ?.workingDir,
     );
+    const sensitive = (path: string) =>
+      protectedPaths.some(
+        (p) =>
+          (under(path, p) && !(p === "/proc" && safeProc(path))) ||
+          (recursive && under(p, path)),
+      );
+    if (grep?.searchesCwd) {
+      if (!workingDir.startsWith("/"))
+        return refuse(
+          "recursive grep without a file operand needs container workingDir",
+          "grep",
+        );
+      if (sensitive(posix.normalize(workingDir)))
+        return refuse(
+          "sensitive path or recursive ancestor is not supported",
+          "grep",
+        );
+    }
     for (const [index, token] of commandArgv.entries()) {
       if (grepOperands && index > 0 && !grepOperands.has(index)) continue;
+      const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(token);
+      if (
+        !grepOperands &&
+        index > 0 &&
+        !url &&
+        !["echo", "printf"].includes(command)
+      )
+        for (const value of [
+          token.includes("=") ? token.slice(token.indexOf("=") + 1) : "",
+          /^-[^-]./.test(token) ? token.slice(2) : "",
+        ]) {
+          // Embedded values such as dd if=/x, curl -d@/x and -F f=@/x.
+          const embedded = value.replace(/^@/, "");
+          if (!embedded.includes("/")) continue;
+          if (!embedded.startsWith("/") && embedded.split("/").includes(".."))
+            return refuse("relative parent paths are not supported", token);
+          if (!embedded.startsWith("/") && !workingDir.startsWith("/"))
+            return refuse(
+              "relative path cannot be checked without container workingDir",
+              token,
+            );
+          if (sensitive(posix.resolve(workingDir || "/", embedded)))
+            return refuse(
+              "sensitive path or recursive ancestor is not supported",
+              token,
+            );
+        }
       const raw =
         grepOperands?.get(index) ??
         (token.startsWith("--") && token.includes("=")
@@ -379,17 +472,7 @@ export function execPolicy(
           );
         path = posix.resolve(workingDir, candidate);
       }
-      const safeProc =
-        /^\/proc\/(?:meminfo|cpuinfo|loadavg|uptime|version|stat|net\/[^/]+(?:\/.*)?)$/.test(
-          path,
-        );
-      if (
-        protectedPaths.some(
-          (p) =>
-            (under(path, p) && !(p === "/proc" && safeProc)) ||
-            (recursive && under(p, path)),
-        )
-      )
+      if (sensitive(path))
         return refuse(
           "sensitive path or recursive ancestor is not supported",
           token,
