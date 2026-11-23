@@ -49,7 +49,7 @@ test("A1/A11 server dry-run diffs replicas, pins context, never passes the user'
     [
       { prefix: ["apply"], stdout: JSON.stringify(after) },
       {
-        prefix: ["get", "Deployment.v1.apps/web"],
+        prefix: ["get", "Deployment/web"],
         stdout: JSON.stringify(deployment),
       },
     ],
@@ -162,7 +162,7 @@ test("A4/A5 redacts credential env literals and args before truncation and strip
     [
       { prefix: ["apply"], stdout: JSON.stringify(after) },
       {
-        prefix: ["get", "Deployment.v1.apps/web"],
+        prefix: ["get", "Deployment/web"],
         stdout: JSON.stringify(before),
       },
     ],
@@ -206,7 +206,7 @@ test("target namespace follows document namespaces rather than the context defau
     [doc],
     [
       { prefix: ["apply"], stdout: JSON.stringify(doc) },
-      { prefix: ["get", "Deployment.v1.apps/web"], stdout: "" },
+      { prefix: ["get", "Deployment/web"], stdout: "" },
     ],
   );
   expect(cli(["apply", "-f", l.path], l.env).data).toMatchObject({
@@ -290,6 +290,16 @@ test("A10/A12 rejects unsupported input locally", () => {
   expect(cli(["diff", "-f", l.path], l.env).status).toBe(2);
 });
 
+test("YAML parses Kubernetes defaultMode using YAML 1.1 octal", () => {
+  const manifests = parseManifests(
+    `apiVersion: v1\nkind: Pod\nmetadata: {name: scalars}\nspec:\n  containers: [{name: app, image: busybox}]\n  volumes:\n    - name: settings\n      configMap: {name: settings, defaultMode: 0644}`,
+  );
+  expect(manifests).toHaveLength(1);
+  expect(manifests[0]?.value).toMatchObject({
+    spec: { volumes: [{ configMap: { defaultMode: 0o644 } }] },
+  });
+});
+
 test("stdin JSON and multi-document YAML parse, empty or malformed docs fail safely", () => {
   expect(
     parseManifests(
@@ -308,7 +318,7 @@ test("stdin JSON and multi-document YAML parse, empty or malformed docs fail saf
     [deployment],
     [
       { prefix: ["apply"], stdout: JSON.stringify(deployment) },
-      { prefix: ["get", "Deployment.v1.apps/web"], stdout: "" },
+      { prefix: ["get", "Deployment/web"], stdout: "" },
     ],
   );
   const r = spawnSync(
@@ -350,6 +360,11 @@ test("normalizes server-only fields and safely truncates all string leaves", () 
     "canary",
   );
   expect(
+    mapApplyFailure(
+      'cannot get resource "widgets" in API group "team--ops.example.com" in the namespace "sandbox"',
+    ).code,
+  ).toBe("FORBIDDEN");
+  expect(
     structuralDiff(
       "x",
       { x: "old" },
@@ -376,10 +391,35 @@ test("action allowlist rejects Secret/List apply and unprojected Secret reads", 
   Object.assign(process.env, l.env);
   try {
     const target = await resolveTarget(undefined, deadline());
-    for (const resource of ["Secret", "secrets", "Secret.v1", "pods --raw"])
+    for (const resource of [
+      "Secret",
+      "secrets",
+      "Secret.v1",
+      "pods --raw",
+      "Deployment.v1.-bad.example.com",
+      "Deployment.v1.bad-.example.com",
+      "Deployment.v1.bad..example.com",
+      "Deployment.v1.Bad.example.com",
+    ])
       expect(() =>
         argvForAction({ kind: "apply-get", resource, name: "x" }, target),
       ).toThrow();
+    expect(
+      argvForAction(
+        {
+          kind: "apply-get",
+          resource: "Deployment.v1.team--ops.example.com",
+          name: "web",
+        },
+        target,
+      ),
+    ).toContain("Deployment.v1.team--ops.example.com/web");
+    expect(() =>
+      argvForAction(
+        { kind: "apply-get", resource: "ConfigMap.v1.", name: "settings" },
+        target,
+      ),
+    ).toThrow();
     for (const kind of [
       "Secret",
       "List",
@@ -543,17 +583,17 @@ test.each([
     "HorizontalPodAutoscaler",
     "HorizontalPodAutoscaler.v1.autoscaling",
   ],
-  ["v1", "ConfigMap", "ConfigMap.v1."],
+  ["v1", "ConfigMap", "ConfigMap.v1"],
 ])(
   "manifest API version %s pins the live-object representation",
-  (apiVersion, kind, resource) => {
+  (apiVersion, kind, _resource) => {
     const manifest = { apiVersion, kind, metadata: { name: "versioned" } };
     const l = setup(
       [manifest],
       [
         { prefix: ["apply"], stdout: JSON.stringify(manifest) },
         {
-          prefix: ["get", `${resource}/versioned`],
+          prefix: ["get", `${kind}/versioned`],
           stdout: JSON.stringify(manifest),
         },
       ],
@@ -565,7 +605,7 @@ test.each([
       changes: [],
     });
     expect(l.calls().find((call) => call[0] === "get")).toContain(
-      `${resource}/versioned`,
+      `${kind}/versioned`,
     );
   },
 );
