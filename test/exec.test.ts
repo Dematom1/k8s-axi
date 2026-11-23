@@ -777,7 +777,7 @@ test("actions accept only their exact typed argv, with Secret reads isolated fro
           metadata: { name: "app" },
         }),
       },
-      { kind: "apply-get", resource: "ConfigMap.v1.", name: "app" },
+      { kind: "apply-get", resource: "ConfigMap", name: "app" },
     ] satisfies Action[]) {
       const argv = argvForAction(action, target);
       expect(argv.includes("--subresource=exec")).toBe(
@@ -829,6 +829,15 @@ test("actions accept only their exact typed argv, with Secret reads isolated fro
           ),
         ).toThrow();
     }
+    for (const resource of [
+      "Secret",
+      "secrets.v1.",
+      "ConfigMapList",
+      "ConfigMap.v1.bad_name",
+    ])
+      expect(() =>
+        argvForAction({ kind: "apply-get", resource, name: "app" }, target),
+      ).toThrow();
     const readArgv = argvFor(
       {
         op: "list",
