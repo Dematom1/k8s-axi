@@ -1,0 +1,41 @@
+name: port-forward race probe
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    env:
+      K8S_AXI_PF_PROBE_ERRORS: ${{ runner.temp }}/pf-race-errors.log
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Run 300 serial silent collision replays, stopping on first failure
+        shell: bash
+        run: |
+          set -eu
+          node --version
+          sw_vers
+          for iteration in {1..300}; do
+            if ./node_modules/.bin/vitest run test/port-forward.test.ts \
+              -t 'IPv4 collision replay port-forward-ipv6-silent fails promptly with PORT_IN_USE' \
+              --reporter=verbose > "$RUNNER_TEMP/pf-race-result.log" 2>&1; then
+              echo "replay $iteration/300: pass"
+            else
+              echo "replay $iteration/300: FAIL"
+              cat "$RUNNER_TEMP/pf-race-result.log"
+              if [ -f "$K8S_AXI_PF_PROBE_ERRORS" ]; then cat "$K8S_AXI_PF_PROBE_ERRORS"; fi
+              exit 1
+            fi
+          done
+          echo '300 replays completed; 0 failures'

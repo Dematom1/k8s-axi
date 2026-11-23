@@ -422,6 +422,8 @@ export async function portForwardCommand(args: string[]): Promise<string> {
       });
     }
   }).catch((error: unknown) => {
+    if (process.env.K8S_AXI_PF_PROBE_ERRORS)
+      console.error("[CI-PF-RACE]", stage, error);
     if (error instanceof AxiError) throw error;
     const errno = object(error).errno;
     const reason =

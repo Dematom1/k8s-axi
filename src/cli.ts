@@ -55,6 +55,8 @@ export function formatError(error: unknown): {
   output: string;
   exitCode: number;
 } {
+  if (process.env.K8S_AXI_PF_PROBE_ERRORS && !(error instanceof AxiError))
+    console.error("[CI-PF-RACE] formatError", error);
   return error instanceof AxiError
     ? {
         output:

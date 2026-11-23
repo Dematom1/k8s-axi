@@ -253,19 +253,32 @@ test.each(["port-forward-ipv6-only", "port-forward-ipv6-silent"])(
       ],
       { env: { ...process.env, ...s.env }, encoding: "utf8", timeout: 22000 },
     );
-    expect(result.error).toBeUndefined();
-    expect(result.status, result.stdout).toBe(1);
-    expect(object(decode(result.stdout))).toMatchObject({
-      code: "PORT_IN_USE",
-    });
-    expect(Date.now() - before).toBeLessThan(8000);
-    expect(object(decode(result.stdout)).error).toMatch(
-      /PORT_IN_USE; kubectl exit (?:none|0), signal SIGTERM/,
-    );
-    expect(result.stdout + result.stderr).not.toContain(
-      "Unable to create listener",
-    );
-    expect(s.records()).toEqual([]);
+    try {
+      expect(result.error).toBeUndefined();
+      expect(result.status, result.stdout).toBe(1);
+      expect(object(decode(result.stdout))).toMatchObject({
+        code: "PORT_IN_USE",
+      });
+      expect(Date.now() - before).toBeLessThan(8000);
+      expect(object(decode(result.stdout)).error).toMatch(
+        /PORT_IN_USE; kubectl exit (?:none|0), signal SIGTERM/,
+      );
+      expect(result.stdout + result.stderr).not.toContain(
+        "Unable to create listener",
+      );
+      expect(s.records()).toEqual([]);
+    } catch (error) {
+      if (process.env.K8S_AXI_PF_PROBE_ERRORS)
+        console.error("[CI-PF-RACE] full product result", {
+          status: result.status,
+          signal: result.signal,
+          error: result.error?.stack,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          sessions: s.records(),
+        });
+      throw error;
+    }
   },
 );
 test.each([

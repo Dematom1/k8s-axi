@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { appendFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { setTimeout as sleep } from "node:timers/promises";
 import { argvForAction, assertSafeAction } from "../src/actions/registry.js";
@@ -222,6 +223,11 @@ async function supervise(): Promise<void> {
 }
 
 // Private entry point: never print subprocess output or an unhandled exception.
-await supervise().catch(() => {
+await supervise().catch((error: unknown) => {
+  if (process.env.K8S_AXI_PF_PROBE_ERRORS)
+    appendFileSync(
+      process.env.K8S_AXI_PF_PROBE_ERRORS,
+      `[CI-PF-RACE] supervisor ${process.pid}: ${error instanceof Error ? error.stack : String(error)}\n`,
+    );
   process.exitCode = 1;
 });
