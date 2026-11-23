@@ -49,7 +49,7 @@ test("A1/A11 server dry-run diffs replicas, pins context, never passes the user'
     [
       { prefix: ["apply"], stdout: JSON.stringify(after) },
       {
-        prefix: ["get", "Deployment.v1.apps/web"],
+        prefix: ["get", "Deployment/web"],
         stdout: JSON.stringify(deployment),
       },
     ],
@@ -162,7 +162,7 @@ test("A4/A5 redacts credential env literals and args before truncation and strip
     [
       { prefix: ["apply"], stdout: JSON.stringify(after) },
       {
-        prefix: ["get", "Deployment.v1.apps/web"],
+        prefix: ["get", "Deployment/web"],
         stdout: JSON.stringify(before),
       },
     ],
@@ -206,7 +206,7 @@ test("target namespace follows document namespaces rather than the context defau
     [doc],
     [
       { prefix: ["apply"], stdout: JSON.stringify(doc) },
-      { prefix: ["get", "Deployment.v1.apps/web"], stdout: "" },
+      { prefix: ["get", "Deployment/web"], stdout: "" },
     ],
   );
   expect(cli(["apply", "-f", l.path], l.env).data).toMatchObject({
@@ -318,7 +318,7 @@ test("stdin JSON and multi-document YAML parse, empty or malformed docs fail saf
     [deployment],
     [
       { prefix: ["apply"], stdout: JSON.stringify(deployment) },
-      { prefix: ["get", "Deployment.v1.apps/web"], stdout: "" },
+      { prefix: ["get", "Deployment/web"], stdout: "" },
     ],
   );
   const r = spawnSync(
@@ -586,14 +586,14 @@ test.each([
   ["v1", "ConfigMap", "ConfigMap.v1"],
 ])(
   "manifest API version %s pins the live-object representation",
-  (apiVersion, kind, resource) => {
+  (apiVersion, kind, _resource) => {
     const manifest = { apiVersion, kind, metadata: { name: "versioned" } };
     const l = setup(
       [manifest],
       [
         { prefix: ["apply"], stdout: JSON.stringify(manifest) },
         {
-          prefix: ["get", `${resource}/versioned`],
+          prefix: ["get", `${kind}/versioned`],
           stdout: JSON.stringify(manifest),
         },
       ],
@@ -605,7 +605,7 @@ test.each([
       changes: [],
     });
     expect(l.calls().find((call) => call[0] === "get")).toContain(
-      `${resource}/versioned`,
+      `${kind}/versioned`,
     );
   },
 );
