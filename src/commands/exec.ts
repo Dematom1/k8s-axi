@@ -561,9 +561,11 @@ export async function execCommand(p: Parsed): Promise<string> {
             help: [
               result.timedOut
                 ? "Incomplete output withheld after timeout; the remote process may still be running"
-                : result.capped || stdout.capped || stderr.capped
-                  ? "Output exceeded the stream limit and was withheld; narrow the remote command"
-                  : "Use --full before -- to remove the character preview limit",
+                : result.capped
+                  ? "Output exceeded the 1 MiB capture limit, so kubectl was stopped and the remote result is unknown; verify the remote state before retrying a narrower command"
+                  : stdout.capped || stderr.capped
+                    ? "Output exceeded the stream limit after redaction and was withheld; the remote exit above is final; narrow the remote command"
+                    : "Use --full before -- to remove the character preview limit",
             ],
           }
         : {}),

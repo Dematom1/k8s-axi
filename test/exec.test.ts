@@ -1454,6 +1454,9 @@ for (const size of [700_000, 1_100_000])
         expect(object(result.data).code).toBe("OUTPUT_TOO_LARGE");
         expect(object(result.data).stdout).toBe("");
         expect(object(result.data).stderr).toBe("");
+        expect(JSON.stringify(object(result.data).help)).toContain(
+          "verify the remote state before retrying",
+        );
       }
     } finally {
       l.clean();
