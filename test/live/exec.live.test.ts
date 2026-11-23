@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -100,7 +101,9 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       const path = join(env.XDG_STATE_HOME, "k8s-axi/audit.jsonl");
       return existsSync(path) ? readFileSync(path, "utf8") : "";
     };
-    const preview = exec(["ls", "/"]);
+    const previewMarker = `/tmp/k8s-axi-preview-${randomUUID()}`;
+    const refusalMarker = `/tmp/k8s-axi-refusal-${randomUUID()}`;
+    const preview = exec(["touch", previewMarker]);
     expect(preview.mode).toContain("preview");
     expect(object(preview.target)).toMatchObject({
       context,
@@ -112,12 +115,29 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     expect(object(preview.target).server).toMatch(/^https:\/\//);
     expect(audit()).toBe(""); // E13: preview has no start/effect record.
     const pod = String(object(preview.target).pod);
+    const markerState = (path: string) =>
+      kubectl([
+        "exec",
+        pod,
+        "-n",
+        "fixtures",
+        "-c",
+        "app",
+        "--",
+        "sh",
+        "-c",
+        'if test -e "$1"; then printf present; else printf absent; fi',
+        "marker-check",
+        path,
+      ]).trim();
+    expect(markerState(previewMarker)).toBe("absent");
     const forbidden = [
       ["printenv", "DB_PASSWORD"],
       ["env"],
       ["busybox", "env"],
       ["timeout", "5", "printenv"],
       ["sh", "-c", "echo $DB_PASSWORD"],
+      ["sh", "-c", `touch ${refusalMarker}`],
       ["python3", "-c", "import os; print(os.environ)"],
       ["cat", "/proc/1/environ"],
       ["cat", "/proc/self/../1/environ"],
@@ -135,8 +155,22 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
         .filter(Boolean)
         .map((line) => object(JSON.parse(line)).phase),
     ).toEqual(forbidden.map(() => "refused"));
-    // Namespace Events are not API audit records and cannot prove that exec did not run.
-    // The unit CLI tests assert that preview and guard refusals make no exec call.
+    expect(markerState(refusalMarker)).toBe("absent");
+    // Independent read-only checks must detect the would-be container effects.
+    kubectl([
+      "exec",
+      pod,
+      "-n",
+      "fixtures",
+      "-c",
+      "app",
+      "--",
+      "touch",
+      previewMarker,
+      refusalMarker,
+    ]);
+    expect(markerState(previewMarker)).toBe("present");
+    expect(markerState(refusalMarker)).toBe("present");
 
     // E4-E7: trusted image-side scripts bypass input inspection, not output guards.
     for (const script of [

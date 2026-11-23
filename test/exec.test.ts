@@ -320,6 +320,70 @@ test("relative operands use the selected container workingDir and fail closed wh
   ).toBe(false);
 });
 
+for (const options of [
+  ["-e", "foo"],
+  ["--regexp", "foo"],
+  ["-efoo"],
+  ["--regexp=foo"],
+  ["-f", "/app/patterns"],
+  ["--file", "/app/patterns"],
+  ["-f/app/patterns"],
+  ["--file=/app/patterns"],
+  ["-iefoo"],
+  ["-efoo\nbar"],
+  ["--regexp=foo\nbar"],
+])
+  test(`grep pattern-option form ${options.join(" ")} protects every remaining file operand`, () => {
+    const cwdSpec = {
+      ...spec,
+      containers: spec.containers.map((c) => ({ ...c, workingDir: "/etc" })),
+    };
+    expect(
+      execPolicy(["grep", ...options, "app-conn/conn"], cwdSpec, "app").ok,
+    ).toBe(false);
+    expect(
+      execPolicy(["grep", ...options, "app-conn/conn"], spec, "app").ok,
+    ).toBe(false);
+    expect(
+      execPolicy(["grep", ...options, "/app/log"], cwdSpec, "app").ok,
+    ).toBe(true);
+  });
+for (const options of [
+  ["-f", "app-conn/conn"],
+  ["--file", "app-conn/conn"],
+  ["-fapp-conn/conn"],
+  ["--file=app-conn/conn"],
+])
+  test(`grep pattern-option file ${options.join(" ")} is itself protected`, () => {
+    const cwdSpec = {
+      ...spec,
+      containers: spec.containers.map((c) => ({ ...c, workingDir: "/etc" })),
+    };
+    expect(
+      execPolicy(["grep", ...options, "/app/log"], cwdSpec, "app").ok,
+    ).toBe(false);
+    expect(execPolicy(["grep", ...options, "/app/log"], spec, "app").ok).toBe(
+      false,
+    );
+  });
+test("grep pattern-option values are literal patterns, including paths and empty patterns", () => {
+  const cwdSpec = {
+    ...spec,
+    containers: spec.containers.map((c) => ({ ...c, workingDir: "/etc" })),
+  };
+  for (const options of [
+    ["-e", "app-conn/conn"],
+    ["--regexp=app-conn/conn"],
+    ["--regexp="],
+    ["-e", ""],
+  ])
+    expect(
+      execPolicy(["grep", ...options, "/app/log"], cwdSpec, "app").ok,
+    ).toBe(true);
+  expect(execPolicy(["grep", "-e"], cwdSpec, "app").ok).toBe(false);
+  expect(execPolicy(["grep", "--file"], cwdSpec, "app").ok).toBe(false);
+});
+
 test("scrub sources deduplicate optional references and select only credential literals", () => {
   expect(scrubSources(spec, "app").secrets).toEqual([
     { name: "db-creds", optional: false },

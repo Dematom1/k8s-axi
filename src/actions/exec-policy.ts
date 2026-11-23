@@ -182,6 +182,39 @@ function unwrap(argv: readonly string[]): readonly string[] | undefined {
   return argv.slice(i);
 }
 
+function grepFileOperands(
+  argv: readonly string[],
+): Map<number, string> | undefined {
+  const files = new Map<number, string>();
+  const positional: number[] = [];
+  let explicitPattern = false;
+  let options = true;
+  for (let i = 1; i < argv.length; i++) {
+    const token = argv[i] ?? "";
+    if (options && token === "--") {
+      options = false;
+      continue;
+    }
+    if (!options || token === "-" || !token.startsWith("-")) {
+      positional.push(i);
+      continue;
+    }
+    const long = /^--(regexp|file)(?:=(.*))?$/s.exec(token);
+    const short = /^-[EGFPivwxyZzqsaRrnlLhHcobIU]*([ef])(.*)$/s.exec(token);
+    if (!long && !short) continue;
+    const file = long?.[1] === "file" || short?.[1] === "f";
+    const attached = long ? long[2] : short?.[2] || undefined;
+    const index = attached === undefined ? ++i : i;
+    const value = attached ?? argv[index];
+    if (value === undefined) return undefined;
+    explicitPattern = true;
+    if (file) files.set(index, value);
+  }
+  if (!explicitPattern) positional.shift();
+  for (const index of positional) files.set(index, argv[index] ?? "");
+  return files;
+}
+
 export function execPolicy(
   argv: readonly string[],
   podSpec: Obj,
@@ -247,30 +280,29 @@ export function execPolicy(
       objects(podSpec.containers).find((c) => c.name === containerName)
         ?.workingDir,
     );
-    const firstOperand = commandArgv.findIndex(
-      (token, i) => i > 0 && !token.startsWith("-"),
-    );
+    const grepOperands =
+      command === "grep" ? grepFileOperands(commandArgv) : undefined;
+    if (command === "grep" && !grepOperands)
+      return refuse("missing grep pattern option value", "grep");
     for (const [index, token] of commandArgv.entries()) {
-      const candidate = (
-        token.startsWith("--") && token.includes("=")
+      if (grepOperands && index > 0 && !grepOperands.has(index)) continue;
+      const raw =
+        grepOperands?.get(index) ??
+        (token.startsWith("--") && token.includes("=")
           ? token.slice(token.indexOf("=") + 1)
-          : token
-      ).replace(/^@/, "");
+          : token);
+      const candidate = command === "curl" ? raw.replace(/^@/, "") : raw;
       if (!candidate.startsWith("/") && candidate.split("/").includes(".."))
         return refuse("relative parent paths are not supported", token);
       let path = posix.normalize(candidate);
       if (!path.startsWith("/")) {
-        const pattern =
-          command === "grep" &&
-          index === firstOperand &&
-          !["-f", "--file"].includes(commandArgv[index - 1] ?? "");
         const tarMode =
           command === "tar" && index === 1 && /^[A-Za-z]+$/.test(candidate);
         const operand =
-          !pattern &&
           !tarMode &&
-          !candidate.startsWith("-") &&
-          !/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate) &&
+          (grepOperands?.has(index) || !candidate.startsWith("-")) &&
+          (FILE_COMMANDS.has(command) ||
+            !/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) &&
           !(index > 0 && ["echo", "printf"].includes(command)) &&
           (candidate.includes("/") ||
             (index > 0 &&
