@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.5](https://github.com/Dematom1/k8s-axi/compare/k8s-axi-v0.1.4...k8s-axi-v0.1.5) (2026-11-23)
+
+
+### Features
+
+* add guarded Kubernetes port forwarding ([#25](https://github.com/Dematom1/k8s-axi/issues/25)) ([498f019](https://github.com/Dematom1/k8s-axi/commit/498f019fbbbcad750de7274b8dec90664c3846bc))
+* **k8s-axi:** add guarded manifest previews ([#29](https://github.com/Dematom1/k8s-axi/issues/29)) ([c44033a](https://github.com/Dematom1/k8s-axi/commit/c44033a16ac2690f79f619892cdd0fd7eef63f3d))
+
+
+### Bug Fixes
+
+* **apply:** match Kubernetes YAML and API group semantics ([#32](https://github.com/Dematom1/k8s-axi/issues/32)) ([46821af](https://github.com/Dematom1/k8s-axi/commit/46821aff38cc4a8f2a15c6dab1f69e39b71f404e))
+* make k8s live labs work with dibs ([#27](https://github.com/Dematom1/k8s-axi/issues/27)) ([f5da85a](https://github.com/Dematom1/k8s-axi/commit/f5da85a4bc0e2589f06f51196a11489e5394e84b))
+* **port-forward:** handle EPERM after process group exit ([#31](https://github.com/Dematom1/k8s-axi/issues/31)) ([204be97](https://github.com/Dematom1/k8s-axi/commit/204be972becf987546be9bf5bd60010c733d9be9))
+* **port-forward:** report startup failure diagnostics ([#28](https://github.com/Dematom1/k8s-axi/issues/28)) ([31a200b](https://github.com/Dematom1/k8s-axi/commit/31a200b28c06750d35fb9acfa540c166105fb507))
+
 ## [0.1.4](https://github.com/Dematom1/k8s-axi/compare/k8s-axi-v0.1.3...k8s-axi-v0.1.4) (2026-11-15)
 
 
