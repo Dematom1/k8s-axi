@@ -413,12 +413,12 @@ test("action allowlist rejects Secret/List apply and unprojected Secret reads", 
         target,
       ),
     ).toContain("Deployment.v1.team--ops.example.com/web");
-    expect(
+    expect(() =>
       argvForAction(
         { kind: "apply-get", resource: "ConfigMap.v1.", name: "settings" },
         target,
       ),
-    ).toContain("ConfigMap.v1./settings");
+    ).toThrow();
     for (const kind of [
       "Secret",
       "List",
@@ -582,7 +582,7 @@ test.each([
     "HorizontalPodAutoscaler",
     "HorizontalPodAutoscaler.v1.autoscaling",
   ],
-  ["v1", "ConfigMap", "ConfigMap.v1."],
+  ["v1", "ConfigMap", "ConfigMap.v1"],
 ])(
   "manifest API version %s pins the live-object representation",
   (apiVersion, kind, resource) => {
