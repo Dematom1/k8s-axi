@@ -43,6 +43,49 @@ const CODE = new Set([
   "strace",
   "gdb",
 ]);
+const FILE_COMMANDS = new Set([
+  "cat",
+  "head",
+  "tail",
+  "less",
+  "more",
+  "ls",
+  "stat",
+  "wc",
+  "du",
+  "df",
+  "readlink",
+  "realpath",
+  "file",
+  "od",
+  "hexdump",
+  "xxd",
+  "cp",
+  "mv",
+  "rm",
+  "touch",
+  "mkdir",
+  "rmdir",
+  "chmod",
+  "chown",
+  "chgrp",
+  "tee",
+  "base64",
+  "md5sum",
+  "sha1sum",
+  "sha256sum",
+  "cut",
+  "sort",
+  "uniq",
+  "diff",
+  "cmp",
+  "find",
+  "tar",
+  "cpio",
+  "zip",
+  "rsync",
+  "grep",
+]);
 const WRAPPERS = new Set([
   "timeout",
   "nice",
@@ -161,7 +204,7 @@ export function execPolicy(
   let commandArgv = argv;
   for (let depth = 0; depth < 64; depth++) {
     const command = posix.basename(commandArgv[0] ?? "");
-    if (!command || command.startsWith("-"))
+    if (!command || commandArgv[0]?.startsWith("-"))
       return refuse("missing command", "argv");
     if (WRAPPERS.has(command)) {
       const inner = unwrap(commandArgv);
@@ -200,7 +243,14 @@ export function execPolicy(
     ].map((p) => posix.normalize(p));
     const under = (path: string, parent: string) =>
       path === parent || path.startsWith(parent.replace(/\/$/, "") + "/");
-    for (const token of argv) {
+    const workingDir = text(
+      objects(podSpec.containers).find((c) => c.name === containerName)
+        ?.workingDir,
+    );
+    const firstOperand = commandArgv.findIndex(
+      (token, i) => i > 0 && !token.startsWith("-"),
+    );
+    for (const [index, token] of commandArgv.entries()) {
       const candidate = (
         token.startsWith("--") && token.includes("=")
           ? token.slice(token.indexOf("=") + 1)
@@ -208,8 +258,33 @@ export function execPolicy(
       ).replace(/^@/, "");
       if (!candidate.startsWith("/") && candidate.split("/").includes(".."))
         return refuse("relative parent paths are not supported", token);
-      const path = posix.normalize(candidate);
-      if (!path.startsWith("/")) continue;
+      let path = posix.normalize(candidate);
+      if (!path.startsWith("/")) {
+        const pattern =
+          command === "grep" &&
+          index === firstOperand &&
+          !["-f", "--file"].includes(commandArgv[index - 1] ?? "");
+        const tarMode =
+          command === "tar" && index === 1 && /^[A-Za-z]+$/.test(candidate);
+        const operand =
+          !pattern &&
+          !tarMode &&
+          !candidate.startsWith("-") &&
+          !/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate) &&
+          !(index > 0 && ["echo", "printf"].includes(command)) &&
+          (candidate.includes("/") ||
+            (index > 0 &&
+              (FILE_COMMANDS.has(command) ||
+                token.startsWith("@") ||
+                token.startsWith("--file="))));
+        if (!operand || candidate === "-") continue;
+        if (!workingDir.startsWith("/"))
+          return refuse(
+            "relative path cannot be checked without container workingDir",
+            token,
+          );
+        path = posix.resolve(workingDir, candidate);
+      }
       const safeProc =
         /^\/proc\/(?:meminfo|cpuinfo|loadavg|uptime|version|stat|net\/[^/]+(?:\/.*)?)$/.test(
           path,

@@ -16,6 +16,7 @@ export interface Rule {
   code?: number;
   delayMs?: number;
   mode?: string;
+  afterCalls?: number;
 }
 export function lab(
   rules: Rule[] = [],

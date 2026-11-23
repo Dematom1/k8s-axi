@@ -15,7 +15,8 @@ export type Action =
   | { kind: "apply"; manifest: string }
   | { kind: "secret-values"; name: string }
   | { kind: "apply-get"; resource: string; name: string }
-  | { kind: "can-i"; resource: "pods/exec" | "pods/portforward" };
+  | { kind: "can-i"; resource: "pods/exec"; target: string }
+  | { kind: "can-i"; resource: "pods/portforward" };
 
 function validResourceName(value: string): boolean {
   try {
@@ -81,14 +82,17 @@ export function argvForAction(action: Action, target: Target): string[] {
         ...base,
       ];
     case "can-i":
-      if (!["pods/exec", "pods/portforward"].includes(action.resource))
+      if (
+        !["pods/exec", "pods/portforward"].includes(action.resource) ||
+        (action.resource === "pods/exec" && !validResourceName(action.target))
+      )
         throw new Error("invalid action permission");
       return action.resource === "pods/exec"
         ? [
             "auth",
             "can-i",
             "create",
-            "pods",
+            `pods/${action.target}`,
             "--subresource=exec",
             "-n",
             target.defaultNamespace,

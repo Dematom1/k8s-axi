@@ -44,6 +44,7 @@ export type ListResource =
   | "namespaces"
   | "pods"
   | "deployments.apps"
+  | "replicasets.apps"
   | "jobs.batch"
   | "persistentvolumeclaims"
   | "services"
@@ -326,6 +327,7 @@ export function assertSafe(argv: readonly string[]): void {
       "namespaces",
       "pods",
       "deployments.apps",
+      "replicasets.apps",
       "jobs.batch",
       "persistentvolumeclaims",
       "services",
@@ -353,6 +355,7 @@ export function assertSafe(argv: readonly string[]): void {
     [
       "pods",
       "deployments.apps",
+      "replicasets.apps",
       "jobs.batch",
       "endpointslices.discovery.k8s.io",
     ].includes(resource ?? "") &&

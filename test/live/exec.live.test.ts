@@ -100,21 +100,6 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       const path = join(env.XDG_STATE_HOME, "k8s-axi/audit.jsonl");
       return existsSync(path) ? readFileSync(path, "utf8") : "";
     };
-    const eventsBefore = kubectl([
-      "get",
-      "events",
-      "-n",
-      "fixtures",
-      "-o",
-      "json",
-    ]);
-    const before = JSON.parse(eventsBefore) as {
-      items: {
-        metadata: { uid: string };
-        involvedObject?: { name: string };
-        reason?: string;
-      }[];
-    };
     const preview = exec(["ls", "/"]);
     expect(preview.mode).toContain("preview");
     expect(object(preview.target)).toMatchObject({
@@ -150,17 +135,8 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
         .filter(Boolean)
         .map((line) => object(JSON.parse(line)).phase),
     ).toEqual(forbidden.map(() => "refused"));
-    // API events must not acquire an exec event during preview or guard refusals.
-    const after = JSON.parse(
-      kubectl(["get", "events", "-n", "fixtures", "-o", "json"]),
-    ) as typeof before;
-    expect(
-      after.items.filter(
-        (e) =>
-          !before.items.some((old) => old.metadata.uid === e.metadata.uid) &&
-          /exec/i.test(e.reason ?? ""),
-      ),
-    ).toEqual([]);
+    // Namespace Events are not API audit records and cannot prove that exec did not run.
+    // The unit CLI tests assert that preview and guard refusals make no exec call.
 
     // E4-E7: trusted image-side scripts bypass input inspection, not output guards.
     for (const script of [

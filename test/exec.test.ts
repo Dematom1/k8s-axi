@@ -1,4 +1,7 @@
 import { expect, test } from "vitest";
+import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
+import { decode } from "@toon-format/toon";
 import {
   chmodSync,
   existsSync,
@@ -7,7 +10,7 @@ import {
   readdirSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { execPolicy } from "../src/actions/exec-policy.js";
 import { ScrubSet, scrubSources } from "../src/actions/scrub.js";
 import {
@@ -63,7 +66,13 @@ const spec = {
 };
 const pod = {
   kind: "Pod",
-  metadata: { name: "web-1", creationTimestamp: "2026-01-01" },
+  metadata: {
+    name: "web-1",
+    uid: "pod-uid",
+    resourceVersion: "1",
+    creationTimestamp: "2026-01-01",
+    ownerReferences: [{ kind: "ReplicaSet", uid: "rs-uid", controller: true }],
+  },
   spec,
   status: { conditions: [{ type: "Ready", status: "True" }] },
 };
@@ -79,7 +88,24 @@ function fixture(extra: Rule[] = [], valueSpec: Obj = spec) {
     {
       prefix: ["get", "deployment.apps"],
       stdout: JSON.stringify({
+        metadata: { uid: "deployment-uid" },
         spec: { selector: { matchLabels: { app: "web" } } },
+      }),
+    },
+    {
+      prefix: ["get", "replicasets.apps"],
+      stdout: JSON.stringify({
+        items: [
+          {
+            metadata: {
+              name: "web-rs",
+              uid: "rs-uid",
+              ownerReferences: [
+                { kind: "Deployment", uid: "deployment-uid", controller: true },
+              ],
+            },
+          },
+        ],
       }),
     },
     {
@@ -88,7 +114,12 @@ function fixture(extra: Rule[] = [], valueSpec: Obj = spec) {
         items: [
           {
             ...pod,
-            metadata: { name: "web-old", creationTimestamp: "2025-01-01" },
+            metadata: {
+              ...pod.metadata,
+              name: "web-old",
+              uid: "older-pod-uid",
+              creationTimestamp: "2025-01-01",
+            },
           },
           pod,
         ],
@@ -241,6 +272,54 @@ test("ScrubSet hides raw, encoded and aligned values without serializable state"
     ).count,
   ).toBe(2);
 });
+test("same-Secret overlaps merge while adjacent matches and surrounding text remain distinct", () => {
+  const scrub = new ScrubSet([Buffer.from("abcdeabcde")]);
+  expect(scrub.scrub("before:abcdeabcdeabcde:after")).toEqual({
+    text: "before:[REDACTED SECRET VALUE]:after",
+    count: 1,
+  });
+  expect(scrub.scrub("abcdeabcdeabcdeabcde")).toEqual({
+    text: "[REDACTED SECRET VALUE]",
+    count: 1,
+  });
+  expect(
+    new ScrubSet([Buffer.from("abcdefghij")]).scrub("abcdefghijabcdefghij!"),
+  ).toEqual({
+    text: "[REDACTED SECRET VALUE][REDACTED SECRET VALUE]!",
+    count: 2,
+  });
+});
+
+test("relative operands use the selected container workingDir and fail closed when it is unknown", () => {
+  const cwdSpec = {
+    ...spec,
+    containers: spec.containers.map((c) => ({ ...c, workingDir: "/etc" })),
+  };
+  for (const argv of [
+    ["cat", "app-conn/conn"],
+    ["cat", "./app-conn/conn"],
+    ["grep", "needle", "app-conn/conn"],
+    ["tar", "c", "."],
+  ])
+    expect(execPolicy(argv, cwdSpec, "app").ok).toBe(false);
+  expect(execPolicy(["cat", "ordinary.conf"], cwdSpec, "app").ok).toBe(true);
+  expect(execPolicy(["cat", "ordinary.conf"], spec, "app").ok).toBe(false);
+  expect(execPolicy(["cat", "private/conn"], spec, "app").ok).toBe(false);
+  expect(execPolicy(["cat", "/app/config"], spec, "app").ok).toBe(true);
+  expect(execPolicy(["echo", "ordinary text"], spec, "app").ok).toBe(true);
+  expect(execPolicy(["echo", "ordinary/path"], spec, "app").ok).toBe(true);
+  expect(
+    execPolicy(["curl", "https://example.invalid/path"], spec, "app").ok,
+  ).toBe(true);
+  expect(execPolicy(["curl", "--file=app-conn/conn"], cwdSpec, "app").ok).toBe(
+    false,
+  );
+  expect(
+    execPolicy(["grep", "--file", "app-conn/conn", "/app/log"], cwdSpec, "app")
+      .ok,
+  ).toBe(false);
+});
+
 test("scrub sources deduplicate optional references and select only credential literals", () => {
   expect(scrubSources(spec, "app").secrets).toEqual([
     { name: "db-creds", optional: false },
@@ -409,7 +488,7 @@ test("E8: missing Secret read permission fails closed in preview and execute", (
       "auth",
       "can-i",
       "create",
-      "pods",
+      "pods/web-1",
       "--subresource=exec",
       "-n",
       "sandbox",
@@ -419,6 +498,32 @@ test("E8: missing Secret read permission fails closed in preview and execute", (
     l.clean();
   }
 });
+test("resourceNames-scoped exec permission is checked on the selected Pod", () => {
+  const l = fixture([
+    {
+      prefix: ["auth", "can-i", "create", "pods/web-1", "--subresource=exec"],
+      stdout: "yes\n",
+    },
+    { prefix: ["auth", "can-i"], stdout: "no\n", code: 1 },
+  ]);
+  try {
+    for (const execute of [[], ["--execute"]]) {
+      const result = cli(
+        ["exec", "web-1", ...flags, ...execute, "--", "ls", "/"],
+        l.env,
+      );
+      expect(result.status, result.stdout).toBe(0);
+    }
+    expect(
+      calls(l)
+        .filter((argv) => argv[0] === "auth")
+        .every((argv) => argv[3] === "pods/web-1"),
+    ).toBe(true);
+  } finally {
+    l.clean();
+  }
+});
+
 test("E9: denied permission is truthful in preview and execute", () => {
   const l = fixture([{ prefix: ["auth", "can-i"], code: 1, stdout: "no\n" }]);
   try {
@@ -661,7 +766,7 @@ test("actions accept only their exact typed argv, with Secret reads isolated fro
     for (const action of [
       { kind: "exec", target: "web-1", container: "app", command: ["ls"] },
       { kind: "secret-values", name: "db-creds" },
-      { kind: "can-i", resource: "pods/exec" },
+      { kind: "can-i", resource: "pods/exec", target: "web-1" },
       { kind: "can-i", resource: "pods/portforward" },
       { kind: "port-forward", target: "web-1", ports: ["8080:80"] },
       {
@@ -683,7 +788,7 @@ test("actions accept only their exact typed argv, with Secret reads isolated fro
           "auth",
           "can-i",
           "create",
-          "pods",
+          "pods/web-1",
           "--subresource=exec",
           "-n",
           "sandbox",
@@ -822,6 +927,287 @@ for (const mode of ["require-audit", "audit-end-fail"])
       l.clean();
     }
   });
+test("dash-prefixed raw command names are refused before preview or audit start", () => {
+  const l = fixture();
+  try {
+    for (const execute of [[], ["--execute"]]) {
+      const result = cli(
+        ["exec", "web-1", ...flags, ...execute, "--", "-bin/tool"],
+        l.env,
+      );
+      expect(result.status, result.stdout).toBe(1);
+      expect(object(result.data).code).toBe("SECRET_EXPOSURE");
+    }
+    expect(calls(l).some((argv) => argv[0] === "exec")).toBe(false);
+    expect(records(l)).not.toContain('"phase":"start"');
+    expect(execPolicy(["echo", "-remote-argument"], spec, "app").ok).toBe(true);
+  } finally {
+    l.clean();
+  }
+});
+
+test("deployment targets require a ReplicaSet controlled by the requested deployment UID", () => {
+  const l = fixture([
+    {
+      prefix: ["get", "pods"],
+      stdout: JSON.stringify({
+        items: [
+          {
+            ...pod,
+            metadata: {
+              ...pod.metadata,
+              name: "matching-job",
+              creationTimestamp: "2030-01-01",
+              ownerReferences: [
+                { kind: "Job", uid: "rs-uid", controller: true },
+              ],
+            },
+          },
+          {
+            ...pod,
+            metadata: {
+              ...pod.metadata,
+              name: "foreign-rs",
+              creationTimestamp: "2030-01-01",
+              ownerReferences: [
+                { kind: "ReplicaSet", uid: "foreign-rs", controller: true },
+              ],
+            },
+          },
+          pod,
+        ],
+      }),
+    },
+    {
+      prefix: ["get", "replicasets.apps"],
+      stdout: JSON.stringify({
+        items: [
+          {
+            metadata: {
+              name: "web-rs",
+              uid: "rs-uid",
+              ownerReferences: [
+                { kind: "Deployment", uid: "deployment-uid", controller: true },
+              ],
+            },
+          },
+          {
+            metadata: {
+              name: "foreign-rs",
+              uid: "foreign-rs",
+              ownerReferences: [
+                {
+                  kind: "Deployment",
+                  uid: "different-deployment",
+                  controller: true,
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    },
+  ]);
+  try {
+    const result = cli(
+      ["exec", "deployment/web", ...flags, "--", "ls", "/"],
+      l.env,
+    );
+    expect(result.status, result.stdout).toBe(0);
+    expect(object(object(result.data).target).pod).toBe("web-1");
+  } finally {
+    l.clean();
+  }
+});
+
+for (const changed of [{ uid: "replacement-uid" }, { resourceVersion: "2" }])
+  test(`exec refuses a pod changed after scrub preparation: ${JSON.stringify(changed)}`, () => {
+    const l = fixture([
+      {
+        prefix: ["get", "pod"],
+        afterCalls: 1,
+        stdout: JSON.stringify({
+          ...pod,
+          metadata: { ...pod.metadata, ...changed },
+        }),
+      },
+    ]);
+    try {
+      const result = cli(
+        ["exec", "web-1", ...flags, "--execute", "--", "ls", "/"],
+        l.env,
+      );
+      expect(result.status, result.stdout).toBe(1);
+      expect(object(result.data).code).toBe("TARGET_CHANGED");
+      expect(
+        calls(l).filter((argv) => argv[0] === "get" && argv[1] === "pod"),
+      ).toHaveLength(2);
+      expect(calls(l).some((argv) => argv[0] === "exec")).toBe(false);
+      expect(records(l)).toContain('"phase":"end"');
+    } finally {
+      l.clean();
+    }
+  });
+
+test("sanitized preview replay fields never become executable marker arguments", () => {
+  const l = fixture();
+  try {
+    const result = cli(["exec", "web-1", ...flags, "--", "echo", C1], l.env);
+    expect(result.status, result.stdout).toBe(0);
+    const help = object(result.data).help;
+    expect(JSON.stringify(help)).not.toContain("k8s-axi exec");
+    expect(JSON.stringify(help)).not.toContain("[REDACTED");
+    expect(JSON.stringify(help)).toContain("original invocation");
+    const unchanged = cli(
+      ["exec", "web-1", ...flags, "--", "echo", "ordinary"],
+      l.env,
+    );
+    expect(JSON.stringify(object(unchanged.data).help)).toContain(
+      "k8s-axi exec",
+    );
+  } finally {
+    l.clean();
+  }
+});
+
+test("timeout withholds both partial Secret prefixes, not just full matches", () => {
+  const prefix = C1.slice(0, 9);
+  const l = fixture([
+    {
+      prefix: ["exec"],
+      mode: "partial-timeout",
+      stdout: prefix,
+      stderr: prefix,
+    },
+  ]);
+  try {
+    const result = cli(
+      [
+        "exec",
+        "web-1",
+        ...flags,
+        "--execute",
+        "--timeout",
+        "1",
+        "--",
+        "sleep",
+        "600",
+      ],
+      l.env,
+    );
+    expect(result.status, result.stdout).toBe(1);
+    expect(object(result.data)).toMatchObject({
+      code: "TIMEOUT",
+      stdout: "",
+      stderr: "",
+    });
+    expect(result.stdout + records(l)).not.toContain(prefix);
+    expect(object(result.data).remote_process).toContain(
+      "may still be running",
+    );
+  } finally {
+    l.clean();
+  }
+});
+
+test("--full cannot exceed the stream ceiling when scrubbing expands captured output", () => {
+  const l = fixture([{ prefix: ["exec"], stdout: `${C1} `.repeat(45_000) }]);
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [
+        resolve("dist/bin/k8s-axi.js"),
+        "exec",
+        "web-1",
+        ...flags,
+        "--execute",
+        "--full",
+        "--",
+        "ls",
+      ],
+      {
+        env: { ...process.env, ...l.env },
+        encoding: "utf8",
+        timeout: 10_000,
+        maxBuffer: 16 * 1024 * 1024,
+      },
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    const data = object(decode(result.stdout, { strict: true }));
+    expect(data.truncated).toBe(true);
+    expect(Buffer.byteLength(String(data.stdout))).toBeLessThanOrEqual(
+      1024 * 1024,
+    );
+    expect(result.stdout).not.toContain(C1);
+  } finally {
+    l.clean();
+  }
+});
+
+test("missing kubectl plus a failed end record does not claim the remote command ran", () => {
+  const l = fixture([
+    {
+      prefix: ["get", "pod"],
+      afterCalls: 1,
+      mode: "disable-exec-audit",
+      stdout: JSON.stringify(pod),
+    },
+  ]);
+  try {
+    const result = cli(
+      ["exec", "web-1", ...flags, "--execute", "--", "ls"],
+      l.env,
+    );
+    expect(result.status, result.stdout).toBe(1);
+    expect(object(result.data).code).toBe("AUDIT_INCOMPLETE");
+    expect(object(result.data).launch_code).toBe("KUBECTL_NOT_INSTALLED");
+    expect(result.stdout).toContain("remote command did not start");
+    expect(result.stdout).not.toContain("the action ran; do not retry");
+    expect(calls(l).some((argv) => argv[0] === "exec")).toBe(false);
+  } finally {
+    const dir = join(l.env.XDG_STATE_HOME, "k8s-axi");
+    if (existsSync(dir)) chmodSync(dir, 0o700);
+    l.clean();
+  }
+});
+
+test("JWT redaction preserves embedded token matches and dotted surrounding text", () => {
+  const jwt = "eyJabcdefghijk.abcdefghijkl.abcdefghijkl";
+  expect(redactText(`prefix${jwt}.suffix ${jwt} ${jwt}`).text).toBe(
+    "prefix[REDACTED JWT].suffix [REDACTED JWT] [REDACTED JWT]",
+  );
+  expect(redactText(`prefix..${jwt}..suffix`).text).toBe(
+    "prefix..[REDACTED JWT]..suffix",
+  );
+  expect(redactText("eyJshort.abcdefghijkl.abcdefghijkl").text).toBe(
+    "eyJshort.abcdefghijkl.abcdefghijkl",
+  );
+});
+
+test("crafted eyJ prefixes cannot stall JWT redaction", () => {
+  const module = pathToFileURL(resolve("dist/src/redact.js")).href;
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `
+    import {redactText} from ${JSON.stringify(module)};
+    import assert from "node:assert/strict";
+    const input = "eyJ".repeat(22_000);
+    const start = performance.now();
+    assert.equal(redactText(input).text, input);
+    console.log(performance.now() - start);
+  `,
+    ],
+    { encoding: "utf8", timeout: 2000 },
+  );
+  expect(result.error).toBeUndefined();
+  expect(result.status, result.stderr).toBe(0);
+  expect(Number(result.stdout)).toBeLessThan(1000);
+});
+
 for (const size of [700_000, 1_100_000])
   test(`per-stream capture cap ${size}`, () => {
     const l = fixture([

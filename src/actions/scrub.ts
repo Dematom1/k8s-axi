@@ -50,7 +50,7 @@ export class ScrubSet {
       for (
         let start = text.indexOf(form);
         start !== -1;
-        start = text.indexOf(form, start + form.length)
+        start = text.indexOf(form, start + 1)
       )
         matches.push({ start, end: start + form.length });
     }

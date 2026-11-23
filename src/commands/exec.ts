@@ -121,8 +121,45 @@ async function getPod(p: Parsed, target: Target, d: Deadline): Promise<Obj> {
       d,
     ),
   );
+  const deploymentUid = text(object(resource.metadata).uid);
+  if (!deploymentUid) fail("UPSTREAM_ERROR", "deployment identity unavailable");
+  const replicaSets = parseList(
+    await kubectl(
+      {
+        op: "list",
+        resource: "replicasets.apps",
+        scope: {
+          kind: "namespace",
+          name: target.defaultNamespace,
+          source: "flag",
+        },
+        selector: validateSelector(labels.join(",")),
+      },
+      target,
+      d,
+    ),
+  );
+  const ownedReplicaSets = new Set(
+    replicaSets
+      .filter((rs) =>
+        objects(object(rs.metadata).ownerReferences).some(
+          (owner) =>
+            owner.controller === true &&
+            owner.kind === "Deployment" &&
+            owner.uid === deploymentUid,
+        ),
+      )
+      .map((rs) => text(object(rs.metadata).uid))
+      .filter(Boolean),
+  );
   const ready = pods.filter(
     (pod) =>
+      objects(object(pod.metadata).ownerReferences).some(
+        (owner) =>
+          owner.controller === true &&
+          owner.kind === "ReplicaSet" &&
+          ownedReplicaSets.has(text(owner.uid)),
+      ) &&
       !object(pod.metadata).deletionTimestamp &&
       objects(object(pod.status).conditions).some(
         (c) => c.type === "Ready" && c.status === "True",
@@ -222,6 +259,7 @@ export async function execCommand(p: Parsed): Promise<string> {
   let targetEcho: Obj = {};
   let scrub = new ScrubSet([]);
   let started = false;
+  let launchAttempted = false;
   let completed = false;
   const safe = (s: string) => redactText(scrub.scrub(s).text).text;
   const auditBase = () => ({
@@ -285,7 +323,7 @@ export async function execCommand(p: Parsed): Promise<string> {
       );
     }
     const permission = await actionProcess(
-      { kind: "can-i", resource: "pods/exec" },
+      { kind: "can-i", resource: "pods/exec", target: podName },
       target,
       remaining(d),
     );
@@ -309,8 +347,18 @@ export async function execCommand(p: Parsed): Promise<string> {
       permission: `allowed (${permissionLabel})`,
     });
     if (!execute) {
-      const quote = (s: string) => `'${safe(s).replace(/'/g, "'\\''")}'`;
-      const run = `k8s-axi exec ${quote(p.execDeployment ? `deployment/${p.name}` : podName)} -c ${quote(container)} -n ${quote(target.defaultNamespace)} --context ${quote(target.context)} --timeout ${p.timeout}${p.full ? " --full" : ""} --execute -- ${command.map(quote).join(" ")}`;
+      const replayTarget = p.execDeployment ? `deployment/${p.name}` : podName;
+      const replayable = [
+        replayTarget,
+        container,
+        target.defaultNamespace,
+        target.context,
+        ...command,
+      ].every((value) => safe(value) === value);
+      const quote = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
+      const run = replayable
+        ? `k8s-axi exec ${quote(replayTarget)} -c ${quote(container)} -n ${quote(target.defaultNamespace)} --context ${quote(target.context)} --timeout ${p.timeout}${p.full ? " --full" : ""} --execute -- ${command.map(quote).join(" ")}`
+        : undefined;
       return encodeObject({
         ...echo(),
         guards: {
@@ -320,7 +368,11 @@ export async function execCommand(p: Parsed): Promise<string> {
           output: "1 MiB per stream, newest 8000 chars shown (--full for all)",
           timeout: `${p.timeout}s local; a timed-out command may keep running in the container`,
         },
-        help: [`Run \`${run}\``],
+        help: [
+          run
+            ? `Run \`${run}\``
+            : "Reissue the original invocation with --execute and explicit --context and -n; sanitized values are not replayable",
+        ],
       });
     }
     const action = {
@@ -339,7 +391,33 @@ export async function execCommand(p: Parsed): Promise<string> {
       pid: process.pid,
     });
     started = true;
+    const inspected = object(pod.metadata);
+    const current = object(
+      parseObject(
+        await kubectl(
+          {
+            op: "get",
+            resource: "pod",
+            name: podName,
+            namespace: target.defaultNamespace,
+          },
+          target,
+          d,
+        ),
+      ).metadata,
+    );
+    if (
+      !text(inspected.uid) ||
+      !text(inspected.resourceVersion) ||
+      current.uid !== inspected.uid ||
+      current.resourceVersion !== inspected.resourceVersion
+    )
+      fail(
+        "TARGET_CHANGED",
+        "pod identity or resourceVersion changed; repeat the preview before execution",
+      );
     const start = Date.now();
+    launchAttempted = true;
     const result = await actionProcess(action, target, p.timeout * 1000);
     const duration = Date.now() - start;
     let code: string | undefined;
@@ -381,12 +459,15 @@ export async function execCommand(p: Parsed): Promise<string> {
     }
     const showOutput =
       !result.capped &&
-      (result.exit === 0 || outcome === "remote_nonzero" || result.timedOut);
+      !result.timedOut &&
+      (result.exit === 0 || outcome === "remote_nonzero");
     const clean = (value: string) => {
       const scrubbed = scrub.scrub(showOutput ? value : "");
       const redacted = redactText(scrubbed.text);
+      const capped = Buffer.byteLength(redacted.text) > CAP;
       return {
-        text: redacted.text,
+        text: capped ? "" : redacted.text,
+        capped,
         scrubbed: scrubbed.count,
         redacted: redacted.count,
       };
@@ -395,6 +476,9 @@ export async function execCommand(p: Parsed): Promise<string> {
       stderr = clean(result.stderr);
     const truncated =
       result.capped ||
+      result.timedOut ||
+      stdout.capped ||
+      stderr.capped ||
       (!p.full && (stdout.text.length > 8000 || stderr.text.length > 8000));
     const output = {
       ...echo(),
@@ -440,9 +524,11 @@ export async function execCommand(p: Parsed): Promise<string> {
       ...(truncated
         ? {
             help: [
-              result.capped
-                ? "Output exceeded the capture limit; narrow the remote command"
-                : "Use --full before -- to remove the character preview limit",
+              result.timedOut
+                ? "Incomplete output withheld after timeout; the remote process may still be running"
+                : result.capped || stdout.capped || stderr.capped
+                  ? "Output exceeded the stream limit and was withheld; narrow the remote command"
+                  : "Use --full before -- to remove the character preview limit",
             ],
           }
         : {}),
@@ -462,11 +548,20 @@ export async function execCommand(p: Parsed): Promise<string> {
       } catch {
         if (started) {
           process.exitCode = 1;
+          const notLaunched =
+            !launchAttempted || error.code === "KUBECTL_NOT_INSTALLED";
           return encodeObject({
             target: targetEcho,
-            error: "action may have run; audit end unavailable",
+            error: notLaunched
+              ? "remote command did not start; audit end unavailable"
+              : "action may have run; audit end unavailable",
             code: "AUDIT_INCOMPLETE",
-            help: ["the action ran; do not retry"],
+            launch_code: error.code,
+            help: [
+              notLaunched
+                ? "Restore the failed preflight or kubectl launch and the audit log before retrying"
+                : "the action may have run; do not retry",
+            ],
           });
         }
         throw new AxiError(
