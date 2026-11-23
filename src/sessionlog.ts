@@ -40,6 +40,7 @@ const COMMANDS = new Set([
   "apply",
   "diff",
   "port-forward",
+  "exec",
 ]);
 const CONTEXTS = COMMANDS;
 
@@ -115,11 +116,14 @@ function commandCalls(
     const argsAfter = args.slice(index + 1);
     const command = argsAfter.find((arg) => !arg.startsWith("-"));
     if (!command || !COMMANDS.has(command)) continue;
-    const contextArg = argsAfter.findIndex((arg) => arg === "--context");
+    const terminator = command === "exec" ? argsAfter.indexOf("--") : -1;
+    const cliArgs =
+      terminator >= 0 ? argsAfter.slice(0, terminator) : argsAfter;
+    const contextArg = cliArgs.findIndex((arg) => arg === "--context");
     const contextValue =
       contextArg >= 0
-        ? argsAfter[contextArg + 1]
-        : argsAfter.find((arg) => arg.startsWith("--context="))?.slice(10);
+        ? cliArgs[contextArg + 1]
+        : cliArgs.find((arg) => arg.startsWith("--context="))?.slice(10);
     calls.push({
       command,
       ...(contextValue && CONTEXTS.has(command.split(" ")[0]!)

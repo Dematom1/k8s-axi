@@ -44,6 +44,7 @@ test("skill is deterministic and rejects one-character drift", () => {
 for (const line of COMMAND_LINES)
   test(`help ${line}`, () => {
     const args = (line.split(":")[0] ?? "")
+      .replace(/ -- .*/, "")
       .split(" ")
       .filter((x) => !x.startsWith("<"));
     const p = cli([...args, "--help"], { PATH: "" });

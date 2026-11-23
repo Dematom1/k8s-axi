@@ -2,6 +2,7 @@ import {
   appendFileSync,
   chmodSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
@@ -21,8 +22,16 @@ if (process.env.K8S_AXI_CALLS)
     process.env.K8S_AXI_CALLS,
     JSON.stringify({ args, kuberc: process.env.KUBERC, stdin }) + "\n",
   );
-const match = (scenario.rules ?? []).find((r) =>
-  r.prefix.every((x, i) => args[i] === x),
+const match = (scenario.rules ?? []).find(
+  (r) =>
+    r.prefix.every((x, i) => args[i] === x) &&
+    (r.afterCalls === undefined ||
+      readFileSync(process.env.K8S_AXI_CALLS, "utf8")
+        .trim()
+        .split("\n")
+        .filter((line) =>
+          r.prefix.every((x, i) => JSON.parse(line).args[i] === x),
+        ).length > r.afterCalls),
 );
 if (
   args[0] === "get" &&
@@ -72,6 +81,10 @@ if (r.mode === "port-forward-ipv6-silent") {
     process.stdout.write(bytes === 0 ? "closed" : "unexpected input"),
   );
   process.stdin.resume();
+} else if (r.mode === "partial-timeout") {
+  process.stdout.write(r.stdout ?? "");
+  process.stderr.write(r.stderr ?? "");
+  setInterval(() => {}, 1000);
 } else if (r.mode === "hang") setInterval(() => {}, 1000);
 else if (r.mode === "ignore-term") {
   process.on("SIGTERM", () => {});
@@ -92,9 +105,29 @@ else if (r.mode === "ignore-term") {
   if (process.env.K8S_AXI_PID)
     writeFileSync(process.env.K8S_AXI_PID, String(p.pid));
   setInterval(() => {}, 1000);
+} else if (["audit-end-fail", "audit-end-fail-forbidden"].includes(r.mode)) {
+  chmodSync(`${process.env.XDG_STATE_HOME}/k8s-axi`, 0o555);
+  if (r.mode === "audit-end-fail-forbidden") {
+    process.stderr.write("Error from server (Forbidden): exec denied\n");
+    process.exitCode = 1;
+  } else process.stdout.write("action ran");
+} else if (r.mode === "require-audit") {
+  const record = readFileSync(
+    `${process.env.XDG_STATE_HOME}/k8s-axi/audit.jsonl`,
+    "utf8",
+  )
+    .trim()
+    .split("\n")
+    .at(-1);
+  if (JSON.parse(record).phase !== "start") process.exitCode = 55;
+  else process.stdout.write("audit precedes effect");
 } else if (r.mode === "huge") process.stdout.write("x".repeat(100000));
 else
   setTimeout(() => {
+    if (r.mode === "disable-exec-audit") {
+      rmSync(join(dirname(process.env.K8S_AXI_SCENARIO), "bin/kubectl"));
+      chmodSync(`${process.env.XDG_STATE_HOME}/k8s-axi`, 0o555);
+    }
     if (r.mode === "disable-kubectl")
       chmodSync(
         join(dirname(process.env.K8S_AXI_SCENARIO), "bin/kubectl"),

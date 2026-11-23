@@ -1,6 +1,15 @@
 import { usage } from "./errors.js";
 export type NamespaceName = string & { readonly __brand: "NamespaceName" };
 export type ResourceName = string & { readonly __brand: "ResourceName" };
+export type PodUid = string & { readonly __brand: "PodUid" };
+export function isPodUid(value: string): value is PodUid {
+  return /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(value);
+}
+function validatePodUid(value: string): PodUid {
+  if (!isPodUid(value))
+    usage("--pod-uid requires a bounded Pod UID token", "exec");
+  return value;
+}
 export type Selector = string & { readonly __brand: "Selector" };
 function isNamespace(x: string): x is NamespaceName {
   return x.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(x);
@@ -61,6 +70,7 @@ export const NOUNS = [
   "setup",
   "context",
   "audit",
+  "exec",
   "apply",
   "diff",
 ] as const;
@@ -90,6 +100,7 @@ const booleans = new Set([
   "full",
   "warnings",
   "previous",
+  "execute",
 ]);
 const hints: Record<string, string> = {
   follow: "Nothing streams; use --tail and --since",
@@ -130,6 +141,10 @@ export interface Parsed {
   previous: boolean;
   rolloutStatus: boolean;
   auditAction?: "exec" | "port-forward" | "apply";
+  execute?: boolean;
+  remoteArgv?: string[];
+  execDeployment?: boolean;
+  podUid?: PodUid;
   filename?: string;
 }
 export function actionsFor(command: Parsed["command"]): string[] {
@@ -192,26 +207,41 @@ function helpRoute(
 }
 
 export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
+  const separator = command === "exec" ? args.indexOf("--") : -1;
+  const remoteArgv = separator >= 0 ? args.slice(separator + 1) : [];
+  if (separator >= 0) args = args.slice(0, separator);
   const pos: string[] = [];
   const flags = new Map<string, string | true>();
   const allowed = [
     ...globalFlags,
-    ...(["apply", "diff"].includes(command)
-      ? ["filename", "namespace", "full"]
-      : command === "audit"
-        ? ["limit", "action"]
-        : ["ctx", "context", "setup"].includes(command)
-          ? []
-          : listFlags.filter(
-              (f) =>
-                f !== "selector" ||
-                ["pods", "deployments", "jobs"].includes(command),
-            )),
+    ...(command === "exec"
+      ? ["namespace", "container", "full", "execute", "pod-uid"]
+      : ["apply", "diff"].includes(command)
+        ? ["filename", "namespace", "full"]
+        : command === "audit"
+          ? ["limit", "action"]
+          : ["ctx", "context", "setup"].includes(command)
+            ? []
+            : listFlags.filter(
+                (f) =>
+                  f !== "selector" ||
+                  ["pods", "deployments", "jobs"].includes(command),
+              )),
     ...(command === "events" ? ["warnings", "since", "for"] : []),
     ...(command === "pods" ? ["container", "tail", "since", "previous"] : []),
   ];
   if (args.some((x) => x === "--help" || x === "-h"))
     return helpRoute(command, args, allowed);
+  if (command === "exec") {
+    if (
+      args.some((x) =>
+        ["-i", "-t", "--stdin", "--tty"].includes(x.split("=")[0] ?? ""),
+      )
+    )
+      usage("interactive sessions are not supported", command);
+    if (separator < 0 || !remoteArgv.length)
+      usage("exec requires -- <argv...>", command);
+  }
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? "";
     if (!arg.startsWith("-")) {
@@ -247,7 +277,17 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
   };
   let action = "list";
   let name: ResourceName | undefined;
-  if (pos.length) {
+  const execDeployment =
+    command === "exec" && (pos[0] ?? "").startsWith("deployment/");
+  if (command === "exec") {
+    if (pos.length !== 1)
+      usage("exec requires one pod or deployment/<name>", command);
+    name = validateResourceName(
+      execDeployment
+        ? (pos[0] ?? "").slice("deployment/".length)
+        : (pos[0] ?? "").replace(/^pod\//, ""),
+    );
+  } else if (pos.length) {
     action = pos[0] ?? "";
     const actions = actionsFor(command);
     if (!actions.includes(action))
@@ -263,7 +303,7 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
   if (["view", "logs"].includes(action) && flags.has("all-namespaces"))
     usage("view and logs require one namespace, not -A", command);
   if (
-    (flags.has("container") && action !== "logs") ||
+    (flags.has("container") && action !== "logs" && command !== "exec") ||
     (flags.has("tail") && action !== "logs") ||
     (flags.has("previous") && action !== "logs")
   )
@@ -312,7 +352,12 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     fields: str("fields")?.split(","),
     problems: flags.has("problems"),
     full: flags.has("full"),
-    timeout: integer(str("timeout") ?? "20", "--timeout", 1, 120),
+    timeout: integer(
+      str("timeout") ?? (command === "exec" ? "30" : "20"),
+      "--timeout",
+      1,
+      command === "exec" ? 300 : 120,
+    ),
     help: flags.has("help"),
     warnings: flags.has("warnings"),
     since: str("since") ? parseDuration(str("since") ?? "") : undefined,
@@ -324,6 +369,10 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     tail: integer(str("tail") ?? "100", "--tail", 1, 1000),
     previous: flags.has("previous"),
     rolloutStatus: false,
+    execute: flags.has("execute"),
+    remoteArgv: command === "exec" ? remoteArgv : undefined,
+    execDeployment,
+    podUid: str("pod-uid") ? validatePodUid(str("pod-uid") ?? "") : undefined,
     auditAction:
       auditAction === "exec" ||
       auditAction === "port-forward" ||

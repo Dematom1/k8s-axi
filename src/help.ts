@@ -1,5 +1,5 @@
 export const DESCRIPTION =
-  "k8s-axi: Kubernetes diagnostics, guarded port forwarding, and manifest previews for agents";
+  "k8s-axi: Kubernetes diagnostics, guarded exec and port forwarding, and manifest previews for agents";
 export const COMMAND_LINES = [
   "triage: cluster checks and problems, all namespaces by default",
   "ctx: context, server, namespace and client version, local only",
@@ -33,6 +33,7 @@ export const COMMAND_LINES = [
   "port-forward <target> [local:]remote: preview loopback forwarding; --execute -n <ns> --context <ctx> starts an owned session (--ttl 15m, range 10s..60m)",
   "port-forward list: owned forwarding sessions, at most 5 per user",
   "port-forward stop <id> | --all: stop owned sessions",
+  "exec <pod|pod/name|deployment/name> -- <argv...>: guarded preview; --execute requires --context and -n",
 ];
 export const TOP_HELP = [
   DESCRIPTION,
@@ -40,9 +41,11 @@ export const TOP_HELP = [
   ...COMMAND_LINES,
   "Global: --context <name>, --timeout <seconds> (20, range 1..120), --help, --version (-v, -V)",
   "Lists: -n <namespace> or -A, --limit <n> (100, max 1000), --fields <a,b>, --problems",
-  "Output is TOON. Exit 0: completed reads, including problems. Exit 1: failed or partial reads. Exit 2: usage.",
-  "Cluster Secret values are never read. Secret manifest values must be <redacted>; --full does not reveal them.",
+  "Output is TOON. Exit 0: completed reads or successful exec. Exit 1: failed, refused, or partial operation. Exit 2: usage.",
+  "Secret inventory and apply/diff never read cluster Secret values. Secret manifest values must be <redacted>; --full does not reveal them.",
   "Reads and apply/diff server dry-run previews are enabled. apply --execute is not available.",
-  "Port-forward previews by default; --execute requires explicit --context and -n. Sessions bind loopback only and expire.",
-  "Secret values are never shown. Executed port-forward sessions are recorded in a local audit log.",
+  "Exec reads referenced Secret values only into memory to scrub output; short-value limits apply.",
+  "Exec previews by default; --execute requires explicit --context and -n and writes a local audit record before running. No interactive sessions.",
+  "Exec: --timeout <1..300> (30), --full; 1 MiB per stream. Preview replay pins pod/<name> and --pod-uid <uid>. Local timeout may leave the remote command running.",
+  "Port-forward previews by default; --execute requires explicit --context and -n. Sessions bind loopback only, expire, and are recorded in the local audit log.",
 ];

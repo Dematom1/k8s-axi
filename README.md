@@ -1,6 +1,6 @@
 # k8s-axi
 
-Kubernetes diagnostics, server dry-run manifest previews, and bounded, opt-in port forwarding for agents. Output is TOON, including errors.
+Kubernetes diagnostics, guarded exec, server dry-run manifest previews, and bounded, opt-in port forwarding for agents. Output is TOON, including errors.
 
 ## Install
 
@@ -37,6 +37,7 @@ Node 22.12 or newer, kubectl on PATH, and a named kubeconfig context with read a
 KUBECONFIG passes through unchanged. There is no in-cluster ServiceAccount configuration in v1.
 Client and server minors more than one apart produce an advisory warning on home.
 The tool does not log in or prompt. Credential plugins are run by kubectl and inherit the process deadline.
+Exec additionally needs `create pods/exec` and `get secrets` for the selected container's referenced Secrets. Deployment targets need deployment reads and pod/ReplicaSet listing.
 
 ## Commands
 
@@ -58,6 +59,8 @@ Run `k8s-axi` for an all-namespace overview or `k8s-axi <command> --help` for fl
 - `audit [--limit <n>] [--action exec|port-forward|apply]`: newest local guarded-action records; no network access.
 - `port-forward <pod|pod/name|service/name|deployment/name> [local:]remote`: previews one loopback-only forwarding session. `--execute` requires explicit `--context` and `-n`. The local port defaults to random; explicit local ports must be 1024–65535. `--ttl` defaults to 15m, with a range of 10s–60m. Deployments resolve to the newest Ready pod. Services resolve their TCP port to the selected pod's target port.
 - `port-forward list`, `port-forward stop <id>`, `port-forward stop --all`: manage up to five sessions per user. These commands make no cluster calls. `--address` is refused. Linux and macOS are supported.
+- `exec <pod|pod/name|deployment/name> [-c <container>] -n <namespace> --context <name> [--timeout <1..300>] [--full] [--pod-uid <uid>] [--execute] -- <argv...>`: preview by default. Execution requires explicit context and namespace. Deployment targets resolve to the newest Ready pod owned through the Deployment's ReplicaSet UID chain. Generated execute commands name the exact `pod/<name>` and carry `--pod-uid`; a different UID returns `TARGET_CHANGED`. Direct invocations without that flag inspect a fresh target. Container selection uses the default-container annotation, then the sole container, otherwise requires `-c`. There is no shell expansion or interactive stdin/TTY. The default local timeout is 30 seconds. Output is capped at 1 MiB per stream before and after redaction; oversized redacted streams are withheld. The newest 8000 characters are shown unless `--full` is set. A timed-out command may keep running in the container; timeout and capture-limit output is withheld because partial Secret values cannot be scrubbed.
+
 - `apply -f <path | -> [--context <name>] [-n <namespace>] [--full]`, `diff` with the same flags: identical server dry-run previews with per-object create/configure/unchanged outcomes and structural path changes. Requires real create/patch/get permissions; Secret manifests also require `list` on secrets. No `--execute`, URLs, directories, `-k`, or `--recursive`.
 
 Apply/diff read YAML multi-document or JSON input using Kubernetes-compatible YAML 1.1 scalar rules (for example, `defaultMode: 0644` is parsed as octal 420), flatten `kind: List` and typed List wrappers such as `SecretList`, and accept at most 1 MiB and 50 objects. Each object needs `apiVersion`, `kind`, and `metadata.name`. Namespace comes from the manifest, then `-n`, then the context default; conflicting manifest and flag namespaces are rejected. kubectl receives one JSON object at a time through stdin, never the user's path.
@@ -75,58 +78,59 @@ Logs use the limits described above.
 ## Errors and exits
 
 All errors have `error`, `code`, and actionable `help` on stdout. Raw subprocess stderr is suppressed.
-Exit 0 means required reads completed, including an unhealthy cluster. Exit 1 means a failed or partial read. Exit 2 means usage error.
+Exit 0 means required reads completed or exec succeeded, including an unhealthy cluster. Exit 1 means a failed, refused, or partial operation. Exit 2 means usage error.
 A failed check cannot produce a healthy headline. Partial triage includes completed rows, `complete: false`, and `code: PARTIAL`.
 A missing context or namespace is an error. An empty namespace that cannot be verified is not a definitive empty result.
 
-| Code                  | Meaning                                                                     |
-| --------------------- | --------------------------------------------------------------------------- |
-| VALIDATION_ERROR      | Invalid arguments or selector. Exit 2.                                      |
-| REFUSED               | Write, raw passthrough, streaming, or self-update refused.                  |
-| CONTEXT_NOT_FOUND     | Requested context is not configured.                                        |
-| NO_CONTEXT            | No named current context.                                                   |
-| NOT_FOUND             | Requested object does not exist.                                            |
-| FORBIDDEN             | Cluster denied the read.                                                    |
-| AUTH_REQUIRED         | Credentials required or credential helper failed.                           |
-| AUTH_EXPIRED          | Credentials expired.                                                        |
-| SERVER_UNREACHABLE    | Network or TLS failure.                                                     |
-| TIMEOUT               | Per-call or overall deadline expired.                                       |
-| RATE_LIMITED          | Cluster throttled the read.                                                 |
-| UNSUPPORTED_RESOURCE  | Cluster has no such resource type.                                          |
-| UPSTREAM_ERROR        | Invalid response or unclassified read failure.                              |
-| KUBECTL_NOT_INSTALLED | Install kubectl on PATH.                                                    |
-| OUTPUT_TOO_LARGE      | Combined subprocess output exceeds 128 MiB. Narrow the scope.               |
-| NAMESPACE_NOT_FOUND   | Namespace does not exist.                                                   |
-| NAMESPACE_UNVERIFIED  | Namespace lookup forbidden and result empty.                                |
-| PARTIAL               | One or more triage checks failed.                                           |
-| CONFIG_INVALID        | Local configuration or integration could not be read, written, or verified. |
-| SECRET_EXPOSURE       | Action input could expose Secret material.                                  |
-| SCRUB_UNAVAILABLE     | Secret values could not be loaded for safe output scrubbing.                |
-| REMOTE_EXIT_NONZERO   | The remote command returned a nonzero exit status.                          |
-| AUDIT_UNAVAILABLE     | The action audit log could not be written or read.                          |
-| AUDIT_INCOMPLETE      | The action ran, but its completion record could not be written.             |
-| SESSION_LIMIT         | The maximum number of owned port-forward sessions is running.               |
-| SESSION_NOT_FOUND     | The requested owned session does not exist.                                 |
-| PORT_IN_USE           | The requested local port is already in use.                                 |
-| SECRET_MANIFEST       | A Secret manifest contains values instead of redacted placeholders.         |
-| INVALID_MANIFEST      | The manifest is invalid or unsupported.                                     |
-| LOGS_UNAVAILABLE      | The requested container logs are unavailable.                               |
-| UNSUPPORTED_PLATFORM  | Port-forward process groups require Linux or macOS.                         |
+| Code                  | Meaning                                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------------------------- |
+| VALIDATION_ERROR      | Invalid arguments or selector. Exit 2.                                                                |
+| REFUSED               | Write, raw passthrough, streaming, or self-update refused.                                            |
+| CONTEXT_NOT_FOUND     | Requested context is not configured.                                                                  |
+| NO_CONTEXT            | No named current context.                                                                             |
+| NOT_FOUND             | Requested object does not exist.                                                                      |
+| FORBIDDEN             | Cluster denied the read.                                                                              |
+| AUTH_REQUIRED         | Credentials required or credential helper failed.                                                     |
+| AUTH_EXPIRED          | Credentials expired.                                                                                  |
+| SERVER_UNREACHABLE    | Network or TLS failure.                                                                               |
+| TIMEOUT               | Per-call or overall deadline expired.                                                                 |
+| RATE_LIMITED          | Cluster throttled the read.                                                                           |
+| UNSUPPORTED_RESOURCE  | Cluster has no such resource type.                                                                    |
+| UPSTREAM_ERROR        | Invalid response or unclassified read failure.                                                        |
+| KUBECTL_NOT_INSTALLED | Install kubectl on PATH.                                                                              |
+| OUTPUT_TOO_LARGE      | A stream exceeds 128 MiB for reads or 1 MiB for exec. Narrow the scope.                               |
+| NAMESPACE_NOT_FOUND   | Namespace does not exist.                                                                             |
+| NAMESPACE_UNVERIFIED  | Namespace lookup forbidden and result empty.                                                          |
+| PARTIAL               | One or more triage checks failed.                                                                     |
+| CONFIG_INVALID        | Local configuration or integration could not be read, written, or verified.                           |
+| SECRET_EXPOSURE       | Action input could expose Secret material.                                                            |
+| SCRUB_UNAVAILABLE     | Secret values could not be loaded for safe output scrubbing.                                          |
+| TARGET_CHANGED        | Pod UID or resourceVersion changed before exec; repeat the preview.                                   |
+| REMOTE_EXIT_NONZERO   | The remote command returned a nonzero exit status.                                                    |
+| AUDIT_UNAVAILABLE     | The action audit log could not be written or read.                                                    |
+| AUDIT_INCOMPLETE      | Completion record missing; inspect whether exec reports a known launch failure or possible execution. |
+| SESSION_LIMIT         | The maximum number of owned port-forward sessions is running.                                         |
+| SESSION_NOT_FOUND     | The requested owned session does not exist.                                                           |
+| PORT_IN_USE           | The requested local port is already in use.                                                           |
+| SECRET_MANIFEST       | A Secret manifest contains values instead of redacted placeholders.                                   |
+| INVALID_MANIFEST      | The manifest is invalid or unsupported.                                                               |
+| LOGS_UNAVAILABLE      | The requested container logs are unavailable.                                                         |
+| UNSUPPORTED_PLATFORM  | Port-forward process groups require Linux or macOS.                                                   |
 
 ## Safety model
 
-Cluster access is read-only by default. Apply preview and diff use client-side apply semantics with `--dry-run=server`; they never persist objects and never submit Secrets. They echo the target context, sanitized server, namespace and each object. Previews are not audited. `apply --execute` and `exec` are not enabled. Port forwarding previews the resolved context, server, namespace, pod, ports, permission, and expiry. Only `--execute` starts a forwarding session, after its start record is written to the local audit log. `k8s-axi audit` reads the log without contacting the cluster. There is no arbitrary kubectl argument path, attach, proxy, raw output, public auth review, or self-update.
-
+Cluster access is read-only by default. Apply preview and diff use client-side apply semantics with `--dry-run=server`; they never persist objects and never submit Secrets. They echo the target context, sanitized server, namespace and each object. Previews are not audited. `apply --execute` is not enabled. Port forwarding previews the resolved context, server, namespace, pod, ports, permission, and expiry. Only `--execute` starts a forwarding session, after its start record is written to the local audit log. Exec previews perform target, permission, and output-scrub checks without executing a remote command. `--execute` requires explicit `--context` and `-n`, echoes the resolved target, and appends an audit record before spawning. If that append fails, nothing runs. If only the completion record fails, `AUDIT_INCOMPLETE` warns not to retry an action that ran or may have run. Exec preserves a known preflight failure, kubectl launch failure, or API exec denial separately when the remote command did not start. `k8s-axi audit` reads the log without contacting the cluster. There is no arbitrary kubectl argument path, attach, proxy, raw output, public auth review, or self-update.
 Port-forward sessions live under `${XDG_STATE_HOME:-$HOME/.local/state}/k8s-axi/sessions/`, with 0700 directories and 0600 records. A detached supervisor owns each process group, waits up to 15 seconds for loopback readiness, and expires the session without reconnecting. Explicit stop, expiry, SessionEnd, and opportunistic reaping clean up sessions. SessionEnd stops sessions owned by the payload's real cwd and uid; agents in the same directory share ownership.
-
 Before signalling a live supervisor's process group, cleanup verifies its token in the process command. After supervisor death, cleanup requires the surviving child's pid, process group, exact start time, and exact command to match the saved identity. A mismatch or unreadable identity drops the record without signalling and audits `dropped`; it cannot safely promise cleanup of that unverified process.
 Every network call pins the resolved context. Namespace preflight distinguishes a missing namespace from an empty list.
-Read and preview subprocesses have closed stdin (except the manifest pipe for dry-run apply), a shared overall deadline, per-call timeouts, process-group cleanup, and a 128 MiB combined output cap. Port-forward supervisors close stdin and cap each captured stream at 1 MiB; their lifetime is bounded by the session TTL. The audit log is stored at `${XDG_STATE_HOME:-$HOME/.local/state}/k8s-axi/audit.jsonl`, with private directory and file permissions.
+Read and preview subprocesses have closed stdin (except the manifest pipe for dry-run apply), a shared overall deadline, per-call timeouts, process-group cleanup, and a 128 MiB per-stream output cap. Port-forward supervisors close stdin and cap each captured stream at 1 MiB; their lifetime is bounded by the session TTL. Exec output is capped at 1 MiB per stream. The audit log is stored at `${XDG_STATE_HOME:-$HOME/.local/state}/k8s-axi/audit.jsonl`, with private directory and file permissions.
 KUBERC is disabled so user defaults cannot silently rewrite a read. kubectl can write its own discovery cache, but k8s-axi never modifies kubeconfig or cluster resources.
 
-Secrets are read only through a fixed go-template. Only namespace, name, type, creation time, and key names reach this process. Cluster Secret data, stringData, annotations, and labels do not. Secret manifest values are read locally only to enforce the placeholder guard and are never printed.
-This is an output guarantee, not access control: API permission to list Secrets also permits values through other clients.
-Pods omit env, args, command, volumes, and all annotations. The default-container annotation is used internally for log selection only.
+Secret inventory and apply/diff Secret comparisons use a fixed go-template that returns metadata and key names, never values. Secret manifest values are read locally only to enforce the placeholder guard and are never printed. Exec is the sole cluster-Secret value-read exception: it reads Secrets referenced by the selected container's env, envFrom, and mounted Secret or projected-Secret volumes into memory only to scrub output. Credential-named literal env values are scrubbed too. A missing required Secret or denied `get secrets` permission refuses both preview and execution with `SCRUB_UNAVAILABLE`; absent optional Secrets are skipped.
+Exec scrubs raw values and base64, base64url, hex, and percent-encoded forms before pattern redaction and truncation. Values shorter than four characters are not value-scrubbed; the preview reports their count. Encoded forms need at least eight characters. JWT pattern redaction covers projected ServiceAccount tokens. Command echoes and audited argv are scrubbed too; audit hashes use the original argv. Refusal records omit argv because the scrub set may be unavailable.
+The input guard rejects environment dumpers, shells, interpreters, unsafe wrapper options, sensitive paths, and recursive traversal of their ancestors. Relative file operands require an explicit container `workingDir`. Exec rechecks the Pod UID and resourceVersion immediately before launch and refuses changes with `TARGET_CHANGED`; kubectl has no atomic UID precondition for exec, so this does not eliminate the final replacement race. Value scrubbing uses each Secret's API value at launch; a mounted Secret file that differs from it (while kubelet projects a rotation, or a `subPath` mount pinned at Pod start) is not value-scrubbed, only pattern-redacted, and direct reads of Secret mount paths stay refused. These guards are not a sandbox: exec may change container state, arbitrary image binaries may transform credentials in unknown ways, and CSI or external credentials cannot be enumerated as Kubernetes Secret values. Use a trusted image and restricted RBAC.
+This is an output safeguard, not access control: API permission to list Secrets also permits values through other clients.
+Diagnostic pod views omit env, args, command, volumes, and all annotations. Apply/diff may show non-sensitive fields in structural changes. The default-container annotation is used internally for log and exec selection.
 Free text is redacted before truncation, including `--full`. Log redaction is **best effort**. Unknown credential formats can remain in arbitrary log text.
 
 ## Agent integration

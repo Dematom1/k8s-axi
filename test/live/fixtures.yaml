@@ -66,6 +66,81 @@ spec:
           env:
             - name: API_KEY
               value: CANARY_ENV_8KSA
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: db-creds, key: password }
+          envFrom:
+            - secretRef: { name: app-dsn }
+          volumeMounts:
+            - { name: app-conn, mountPath: /etc/app-conn, readOnly: true }
+            - { name: leak-scripts, mountPath: /scripts, readOnly: true }
+      volumes:
+        - name: app-conn
+          secret: { secretName: app-conn }
+        - name: leak-scripts
+          configMap: { name: leak-scripts, defaultMode: 493 }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: leak-scripts
+  namespace: fixtures
+data:
+  leak-env: |
+    #!/bin/sh
+    printf '%s\n' "$DB_PASSWORD"
+  leak-b64: |
+    #!/bin/sh
+    printf '%s' "$DB_PASSWORD" | base64
+  leak-neutral: |
+    #!/bin/sh
+    printf '%s\n' "$dsn"
+  leak-file: |
+    #!/bin/sh
+    cat /etc/app-conn/conn
+  leak-token: |
+    #!/bin/sh
+    cat /var/run/secrets/kubernetes.io/serviceaccount/token
+  exit7: |
+    #!/bin/sh
+    exit 7
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: operator
+  namespace: fixtures
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: exec-operator
+  namespace: fixtures
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [replicasets]
+    verbs: [list]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: exec-operator
+  namespace: fixtures
+subjects:
+  - { kind: ServiceAccount, name: operator, namespace: fixtures }
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: exec-operator
 ---
 apiVersion: apps/v1
 kind: Deployment
