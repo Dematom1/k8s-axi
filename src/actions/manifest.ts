@@ -74,10 +74,22 @@ export function parseManifests(
   function add(value: unknown, depth = 0): void {
     if (flattened.length >= 50 || depth > 50)
       usage("manifest exceeds 50 documents");
-    if (object(value).kind === "List") {
-      const items = object(value).items;
+    const wrapper = object(value);
+    const kind = text(wrapper.kind);
+    if (kind.endsWith("List")) {
+      const items = wrapper.items;
       if (!Array.isArray(items)) usage("List requires items");
-      for (const item of items) add(item, depth + 1);
+      for (const item of items)
+        add(
+          kind === "List"
+            ? item
+            : {
+                apiVersion: wrapper.apiVersion,
+                kind: kind.slice(0, -4),
+                ...object(item),
+              },
+          depth + 1,
+        );
     } else if (value !== null) flattened.push(value);
   }
   values.forEach((value) => add(value));

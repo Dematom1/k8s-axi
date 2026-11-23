@@ -73,8 +73,10 @@ export function argvForAction(action: Action, target: Target): string[] {
       ];
     case "apply-get":
       if (
-        !/^[A-Za-z][A-Za-z0-9]*(?:\.[a-z0-9.-]+)?$/.test(action.resource) ||
-        /^(?:secrets?|list)(?:\.|$)/i.test(action.resource) ||
+        !/^[A-Za-z][A-Za-z0-9]*\.v[0-9][a-z0-9]*\.(?:[a-z0-9]+(?:[.-][a-z0-9]+)*)?$/.test(
+          action.resource,
+        ) ||
+        /^(?:secrets?|[A-Za-z0-9]*List)(?:\.|$)/i.test(action.resource) ||
         !validResourceName(action.name)
       )
         throw new Error("invalid preview get action");
@@ -91,7 +93,7 @@ export function argvForAction(action: Action, target: Target): string[] {
     case "apply": {
       const manifest: unknown = JSON.parse(action.manifest);
       const kind = text(object(manifest).kind);
-      if (!kind || /^(?:secrets?|list)$/i.test(kind))
+      if (!kind || /^secrets?$/i.test(kind) || /List$/i.test(kind))
         throw new Error("invalid preview apply action");
       return [
         "apply",

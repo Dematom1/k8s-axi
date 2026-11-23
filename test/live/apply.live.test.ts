@@ -94,6 +94,10 @@ live(
         stringData: { password: "CANARY_DB_PASSWORD_8KSA" },
       };
       expect(run([secret], 1).data.code).toBe("SECRET_MANIFEST");
+      expect(
+        run([{ apiVersion: "v1", kind: "SecretList", items: [secret] }], 1).data
+          .code,
+      ).toBe("SECRET_MANIFEST");
       secret.stringData.password = "<redacted>";
       const redacted = {
         ...secret,
@@ -114,12 +118,33 @@ live(
       object(containers[0]).env = [
         { name: "API_KEY", value: "CANARY_NEW_ENV_8KSA" },
       ];
-      object(containers[0]).args = ["password=CANARY_ARG_8KSA"];
+      object(containers[0]).args = [
+        "password=CANARY_ARG_8KSA",
+        "--token",
+        "CANARY_ADJACENT_8KSA",
+      ];
       for (const flags of [[], ["--full"]]) {
         const output = run([sensitive], 0, context, "apply", flags).stdout;
         expect(output).toContain("[REDACTED]");
         expect(output).not.toContain("last-applied-configuration");
       }
+      const config = {
+        apiVersion: "v1",
+        kind: "ConfigMap",
+        metadata: { name: "app-config" },
+        data: { setting: "changed", password: "CANARY_FIELD_8KSA" },
+      };
+      const configPreview = run([config]).stdout;
+      expect(configPreview).toContain("data.password");
+      expect(configPreview).toContain("[REDACTED]");
+      expect(
+        kubectl([
+          "get",
+          "configmap/app-config",
+          "-o",
+          "jsonpath={.data.setting}",
+        ]),
+      ).toBe("safe");
       const forbidden = run([manifest], 1, "limited");
       expect(forbidden.data.code).toBe("FORBIDDEN");
       expect(forbidden.stdout).toContain(
@@ -188,6 +213,8 @@ live(
         "CANARY_ENV_8KSA",
         "CANARY_NEW_ENV_8KSA",
         "CANARY_ARG_8KSA",
+        "CANARY_ADJACENT_8KSA",
+        "CANARY_FIELD_8KSA",
       ]) {
         for (const form of [
           canary,

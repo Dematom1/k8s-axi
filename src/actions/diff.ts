@@ -4,6 +4,13 @@ import { preview } from "../commands/common.js";
 
 const credentials =
   /(?:password|passwd|secret|token|api[_-]?key|private[_-]?key|_(?:PASS|PWD|KEY))$/i;
+function credentialFlag(value: unknown): boolean {
+  return (
+    typeof value === "string" &&
+    /^--?[^=]+$/.test(value) &&
+    (value === "-p" || credentials.test(value.replace(/^--?/, "")))
+  );
+}
 export interface Change {
   object: string;
   path: string;
@@ -37,33 +44,51 @@ export function structuralDiff(
   full = false,
 ): Change[] {
   const changes: Change[] = [];
-  const sanitize = (v: unknown): unknown => {
+  const sanitize = (v: unknown, sensitive = false): unknown => {
+    if (sensitive) return v === undefined ? null : "[REDACTED]";
     if (typeof v === "string") return redactText(v).text;
-    if (Array.isArray(v)) return v.map(sanitize);
+    if (Array.isArray(v))
+      return v.map((value, i) => sanitize(value, credentialFlag(v[i - 1])));
     if (v && typeof v === "object") {
       const obj = object(v);
       return Object.fromEntries(
         Object.entries(obj).map(([key, value]) => [
           key,
-          key === "value" &&
-          typeof obj.name === "string" &&
-          credentials.test(obj.name)
-            ? "[REDACTED]"
-            : sanitize(value),
+          sanitize(
+            value,
+            credentials.test(key) ||
+              (key === "value" &&
+                typeof obj.name === "string" &&
+                credentials.test(obj.name)),
+          ),
         ]),
       );
     }
     return v ?? null;
   };
-  const render = (v: unknown): unknown => {
-    const safe = sanitize(v);
+  const render = (v: unknown, sensitive = false): unknown => {
+    const safe = sanitize(v, sensitive);
     if (typeof safe === "string") return preview(safe, full);
     return safe && typeof safe === "object"
       ? preview(JSON.stringify(safe), full)
       : safe;
   };
-  function visit(a: unknown, b: unknown, path: string): void {
+  function visit(
+    a: unknown,
+    b: unknown,
+    path: string,
+    sensitive = false,
+  ): void {
     if (JSON.stringify(a) === JSON.stringify(b)) return;
+    if (sensitive) {
+      changes.push({
+        object: id,
+        path,
+        before: render(a, true),
+        after: render(b, true),
+      });
+      return;
+    }
     if (
       a !== undefined &&
       b !== undefined &&
@@ -80,7 +105,12 @@ export function structuralDiff(
       if (!left.length && !right.length)
         changes.push({ object: id, path, before: render(a), after: render(b) });
       for (let i = 0; i < Math.max(left.length, right.length); i++)
-        visit(left[i], right[i], `${path}[${i}]`);
+        visit(
+          left[i],
+          right[i],
+          `${path}[${i}]`,
+          credentialFlag(left[i - 1]) || credentialFlag(right[i - 1]),
+        );
     } else if (
       (typeof a === "object" && a !== null) ||
       (typeof b === "object" && b !== null)
@@ -97,15 +127,12 @@ export function structuralDiff(
         ...Object.keys(right),
       ])) {
         const next = path ? `${path}.${key}` : key;
-        if (key === "value" && sensitive) {
-          if (JSON.stringify(left[key]) !== JSON.stringify(right[key]))
-            changes.push({
-              object: id,
-              path: next,
-              before: left[key] === undefined ? null : "[REDACTED]",
-              after: right[key] === undefined ? null : "[REDACTED]",
-            });
-        } else visit(left[key], right[key], next);
+        visit(
+          left[key],
+          right[key],
+          next,
+          credentials.test(key) || (key === "value" && sensitive),
+        );
       }
     } else
       changes.push({ object: id, path, before: render(a), after: render(b) });

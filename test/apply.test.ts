@@ -49,7 +49,7 @@ test("A1/A11 server dry-run diffs replicas, pins context, never passes the user'
     [
       { prefix: ["apply"], stdout: JSON.stringify(after) },
       {
-        prefix: ["get", "Deployment.apps/web"],
+        prefix: ["get", "Deployment.v1.apps/web"],
         stdout: JSON.stringify(deployment),
       },
     ],
@@ -162,7 +162,7 @@ test("A4/A5 redacts credential env literals and args before truncation and strip
     [
       { prefix: ["apply"], stdout: JSON.stringify(after) },
       {
-        prefix: ["get", "Deployment.apps/web"],
+        prefix: ["get", "Deployment.v1.apps/web"],
         stdout: JSON.stringify(before),
       },
     ],
@@ -206,7 +206,7 @@ test("target namespace follows document namespaces rather than the context defau
     [doc],
     [
       { prefix: ["apply"], stdout: JSON.stringify(doc) },
-      { prefix: ["get", "Deployment.apps/web"], stdout: "" },
+      { prefix: ["get", "Deployment.v1.apps/web"], stdout: "" },
     ],
   );
   expect(cli(["apply", "-f", l.path], l.env).data).toMatchObject({
@@ -308,7 +308,7 @@ test("stdin JSON and multi-document YAML parse, empty or malformed docs fail saf
     [deployment],
     [
       { prefix: ["apply"], stdout: JSON.stringify(deployment) },
-      { prefix: ["get", "Deployment.apps/web"], stdout: "" },
+      { prefix: ["get", "Deployment.v1.apps/web"], stdout: "" },
     ],
   );
   const r = spawnSync(
@@ -380,7 +380,13 @@ test("action allowlist rejects Secret/List apply and unprojected Secret reads", 
       expect(() =>
         argvForAction({ kind: "apply-get", resource, name: "x" }, target),
       ).toThrow();
-    for (const kind of ["Secret", "List", "secret"])
+    for (const kind of [
+      "Secret",
+      "List",
+      "secret",
+      "SecretList",
+      "DeploymentList",
+    ])
       expect(() =>
         argvForAction(
           { kind: "apply", manifest: JSON.stringify({ kind }) },
@@ -389,7 +395,7 @@ test("action allowlist rejects Secret/List apply and unprojected Secret reads", 
       ).toThrow();
     const action = {
       kind: "apply-get",
-      resource: "Deployment.apps",
+      resource: "Deployment.v1.apps",
       name: "web",
     } as const;
     const argv = argvForAction(action, {
@@ -404,3 +410,136 @@ test("action allowlist rejects Secret/List apply and unprojected Secret reads", 
     process.env = old;
   }
 });
+
+test.each(["List", "SecretList", "ConfigMapList"])(
+  "typed wrapper %s cannot send real Secret values to kubectl",
+  (kind) => {
+    const canary = "NEUTRAL_TYPED_VALUE_631879";
+    const member = { ...secret, stringData: { password: canary } };
+    const wrapper = {
+      apiVersion: "v1",
+      kind,
+      metadata: { name: "bundle" },
+      items: [member],
+    };
+    const l = setup([deployment, wrapper]);
+    const result = cli(["apply", "-f", l.path], l.env);
+    expect(result.status).toBe(1);
+    expect(result.data).toMatchObject({ code: "SECRET_MANIFEST" });
+    expect(result.stdout + result.stderr).not.toContain(canary);
+    expect(l.calls()).toEqual([]);
+  },
+);
+
+test("typed Lists inherit member kind and API version and enforce the object cap", () => {
+  const member = {
+    metadata: { name: "db-creds" },
+    stringData: { password: "<redacted>" },
+  };
+  const wrapper = { apiVersion: "v1", kind: "SecretList", items: [member] };
+  expect(parseManifests(JSON.stringify(wrapper))).toMatchObject([
+    { kind: "Secret", value: { apiVersion: "v1", kind: "Secret", ...member } },
+  ]);
+  expect(() =>
+    parseManifests(
+      JSON.stringify({ ...wrapper, items: Array(51).fill(member) }),
+    ),
+  ).toThrow();
+  const l = setup([wrapper], [{ prefix: ["get", "secrets"], stdout: "" }]);
+  expect(cli(["apply", "-f", l.path], l.env).status).toBe(0);
+  expect(l.calls().some((call) => call[0] === "apply")).toBe(false);
+});
+
+test.each(["--password", "--token", "--api-key", "-p"])(
+  "credential flags %s hide adjacent values on every diff path",
+  (flag) => {
+    const oldValue = "NEUTRAL_OLD_VALUE_631879",
+      newValue = "NEUTRAL_NEW_VALUE_631879";
+    const before = { spec: { args: [flag, oldValue, "--verbose", "safe"] } };
+    const after = { spec: { args: [flag, newValue, "--verbose", "safe"] } };
+    for (const full of [false, true]) {
+      const changes = structuralDiff("x", before, after, full);
+      expect(changes).toEqual([
+        {
+          object: "x",
+          path: "spec.args[1]",
+          before: "[REDACTED]",
+          after: "[REDACTED]",
+        },
+      ]);
+      const aggregate = structuralDiff("x", { spec: "old shape" }, after, full);
+      expect(JSON.stringify(aggregate)).not.toContain(newValue);
+      expect(JSON.stringify(aggregate)).toContain("safe");
+      const removedFlag = structuralDiff(
+        "x",
+        before,
+        { spec: { args: ["--label", oldValue, "--verbose", "changed"] } },
+        full,
+      );
+      expect(JSON.stringify(removedFlag)).not.toContain(oldValue);
+      expect(JSON.stringify(removedFlag)).toContain("changed");
+    }
+  },
+);
+
+test.each(["password", "token", "secret", "apiKey", "DB_PASSWORD"])(
+  "credential-named fields %s hide scalar and aggregate changes",
+  (key) => {
+    const canary = "NEUTRAL_FIELD_VALUE_631879";
+    for (const full of [false, true]) {
+      const after = { data: { [key]: canary, ordinary: "visible" } };
+      const changes = structuralDiff("x", {}, after, full);
+      expect(changes).toContainEqual({
+        object: "x",
+        path: `data.${key}`,
+        before: null,
+        after: "[REDACTED]",
+      });
+      expect(changes).toContainEqual({
+        object: "x",
+        path: "data.ordinary",
+        before: null,
+        after: "visible",
+      });
+      expect(
+        JSON.stringify(structuralDiff("x", { data: "old shape" }, after, full)),
+      ).not.toContain(canary);
+      expect(
+        JSON.stringify(structuralDiff("x", after, {}, full)),
+      ).not.toContain(canary);
+    }
+  },
+);
+
+test.each([
+  [
+    "autoscaling/v1",
+    "HorizontalPodAutoscaler",
+    "HorizontalPodAutoscaler.v1.autoscaling",
+  ],
+  ["v1", "ConfigMap", "ConfigMap.v1."],
+])(
+  "manifest API version %s pins the live-object representation",
+  (apiVersion, kind, resource) => {
+    const manifest = { apiVersion, kind, metadata: { name: "versioned" } };
+    const l = setup(
+      [manifest],
+      [
+        { prefix: ["apply"], stdout: JSON.stringify(manifest) },
+        {
+          prefix: ["get", `${resource}/versioned`],
+          stdout: JSON.stringify(manifest),
+        },
+      ],
+    );
+    const result = cli(["apply", "-f", l.path], l.env);
+    expect(result.status).toBe(0);
+    expect(result.data).toMatchObject({
+      objects: [{ result: "unchanged", changes: 0 }],
+      changes: [],
+    });
+    expect(l.calls().find((call) => call[0] === "get")).toContain(
+      `${resource}/versioned`,
+    );
+  },
+);

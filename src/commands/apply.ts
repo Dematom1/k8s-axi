@@ -144,9 +144,10 @@ export async function applyCommand(p: Parsed): Promise<string> {
           d,
         ),
       );
-      const group = text(manifest.value.apiVersion).split("/");
-      const resource =
-        manifest.kind + (group.length === 2 ? "." + group[0] : "");
+      const apiVersion = text(manifest.value.apiVersion).split("/");
+      const group = apiVersion.length === 2 ? apiVersion[0] : "";
+      const version = apiVersion.at(-1);
+      const resource = `${manifest.kind}.${version}.${group}`;
       const raw = await previewCall(
         { kind: "apply-get", resource, name: manifest.name },
         t,
