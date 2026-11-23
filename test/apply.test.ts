@@ -290,6 +290,16 @@ test("A10/A12 rejects unsupported input locally", () => {
   expect(cli(["diff", "-f", l.path], l.env).status).toBe(2);
 });
 
+test("YAML scalars use Kubernetes YAML 1.1 semantics", () => {
+  const [manifest] = parseManifests(`apiVersion: v1\nkind: ConfigMap\nmetadata: {name: scalars}\ndata:\n  mode: 0644\n  booleans: [yes, no, on, off]\n  legacyOctal: 010\n  sexagesimal: 1:20`);
+  expect(manifest.value.data).toEqual({
+    mode: 420,
+    booleans: [true, false, true, false],
+    legacyOctal: 8,
+    sexagesimal: 80,
+  });
+});
+
 test("stdin JSON and multi-document YAML parse, empty or malformed docs fail safely", () => {
   expect(
     parseManifests(

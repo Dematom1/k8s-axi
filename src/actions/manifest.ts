@@ -58,7 +58,7 @@ export function parseManifests(
   if (Buffer.byteLength(raw) > MANIFEST_CAP) usage("manifest exceeds 1 MiB");
   let values: unknown[];
   try {
-    const docs = parseAllDocuments(raw, { uniqueKeys: true });
+    const docs = parseAllDocuments(raw, { uniqueKeys: true, version: "1.1" });
     if (docs.length > 50) usage("manifest exceeds 50 documents");
     values = docs.map((doc) => {
       if (doc.errors.length || doc.warnings.length)
