@@ -50,6 +50,7 @@ export interface ForwardSession {
   child?: ChildIdentity;
   state: "starting" | "ready" | "failed";
   code?: string;
+  failure?: { exit: number | null; signal: string | null };
 }
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -112,7 +113,13 @@ function session(value: unknown): value is ForwardSession {
     v.pgid === v.supervisor_pid &&
     (v.child === undefined || (identity(v.child) && v.child.pgid === v.pgid)) &&
     (v.state === "starting" || v.state === "ready" || v.state === "failed") &&
-    (v.code === undefined || typeof v.code === "string")
+    (v.code === undefined || typeof v.code === "string") &&
+    (v.failure === undefined ||
+      ((object(v.failure).exit === null ||
+        Number.isInteger(object(v.failure).exit)) &&
+        (object(v.failure).signal === null ||
+          (typeof object(v.failure).signal === "string" &&
+            /^SIG[A-Z0-9]+$/.test(String(object(v.failure).signal))))))
   );
 }
 export function readSession(id: string): ForwardSession | undefined {
@@ -439,7 +446,11 @@ export async function startSession(
       if (current.state === "ready") return current;
       if (current.state === "failed")
         throw new AxiError(
-          "port-forward could not start",
+          `port-forward could not start (${current.code ?? "UPSTREAM_ERROR"}; ${
+            current.failure
+              ? `kubectl exit ${current.failure.exit ?? "none"}, signal ${current.failure.signal ?? "none"}`
+              : "before kubectl launch"
+          })`,
           current.code ?? "UPSTREAM_ERROR",
           ["Check the target and local port, then preview again"],
         );
