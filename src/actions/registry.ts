@@ -116,18 +116,6 @@ export function argvForAction(action: Action, target: Target): string[] {
         target.defaultNamespace,
         ...base,
       ];
-    case "can-i":
-      if (action.resource !== "pods/exec" && action.resource !== "pods/portforward")
-        throw new Error("invalid permission action");
-      return [
-        "auth",
-        "can-i",
-        "create",
-        action.resource,
-        "-n",
-        target.defaultNamespace,
-        ...base,
-      ];
     case "apply":
       return [
         "apply",

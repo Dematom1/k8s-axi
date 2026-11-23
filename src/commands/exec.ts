@@ -248,9 +248,7 @@ export async function execCommand(p: Parsed): Promise<string> {
     const pod = await getPod(p, target, d);
     const podName = validateResourceName(text(object(pod.metadata).name));
     const spec = object(pod.spec);
-    const containers = objects(spec.containers)
-      .concat(objects(spec.initContainers))
-      .map((c) => text(c.name));
+    const containers = objects(spec.containers).map((c) => text(c.name));
     const annotation = text(
       object(object(pod.metadata).annotations)[
         "kubectl.kubernetes.io/default-container"
