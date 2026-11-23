@@ -39,7 +39,7 @@ jobs:
         with:
           go-version: "1.26.4"
           cache: false
-      - run: go install github.com/Dematom1/berth@v0.2.0
+      - run: go install github.com/Dematom1/dibs@v0.2.7
       - run: npm ci
       - run: npm run test:live
       - name: Reclaim abandoned lab leases
@@ -47,8 +47,9 @@ jobs:
         run: |
           set -eu
           export PATH="$GITHUB_WORKSPACE/.lab-live/bin:$PATH"
-          berth sweep --confirm
-          berth list --json | node -e '
+          export DIBS_STATE="${DIBS_STATE:-${BERTH_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/berth}}"
+          dibs sweep --confirm
+          dibs list --json | node -e '
             let input = "";
             process.stdin.on("data", chunk => input += chunk);
             process.stdin.on("end", () => {
