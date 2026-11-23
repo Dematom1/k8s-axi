@@ -28,8 +28,17 @@ function helpFor(command: Parsed["command"], action: string): string {
       (line) =>
         line.startsWith(command + " ") || line.startsWith(command + ":"),
     ),
-    flags:
-      command === "exec"
+    flags: ["apply", "diff"].includes(command)
+      ? [
+          "-f, --filename <path | -> (required; max 1 MiB, 50 objects)",
+          "-n <namespace> (manifest, flag, then context default)",
+          "--context <name>",
+          "--timeout <seconds> (20, range 1..120)",
+          "--full",
+          "--help",
+          "Server dry-run only; --execute, URLs, directories, -k and --recursive are not supported",
+        ]
+      : command === "exec"
         ? [
             "--context <name> (required with --execute)",
             "-n <namespace> (required with --execute)",
@@ -86,8 +95,12 @@ function helpFor(command: Parsed["command"], action: string): string {
                 ? ["--warnings", "--since <duration>", "--for Kind/name"]
                 : []),
             ],
-    examples:
-      command === "exec"
+    examples: ["apply", "diff"].includes(command)
+      ? [
+          `k8s-axi ${command} -f manifest.yaml --context <name> -n <namespace>`,
+          `k8s-axi ${command} -f - --context <name> --full`,
+        ]
+      : command === "exec"
         ? [
             "k8s-axi exec deployment/web -n fixtures --context <name> -- ls /app",
             "k8s-axi exec <pod> -c app -n fixtures --context <name> --execute -- ls /app",

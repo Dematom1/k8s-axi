@@ -1,5 +1,5 @@
 export const DESCRIPTION =
-  "k8s-axi: Kubernetes diagnostics and guarded exec and port forwarding for agents";
+  "k8s-axi: Kubernetes diagnostics, guarded exec and port forwarding, and manifest previews for agents";
 export const COMMAND_LINES = [
   "triage: cluster checks and problems, all namespaces by default",
   "ctx: context, server, namespace and client version, local only",
@@ -28,6 +28,8 @@ export const COMMAND_LINES = [
   "context: last session summary for this directory",
   "context end: stop directory-owned forwarding and record command counts from stdin hook payload",
   "audit: show the local log of executed guarded actions",
+  "apply -f <path | ->: server dry-run with redacted structural changes; never applies Secrets",
+  "diff -f <path | ->: identical to apply preview; no real writes",
   "port-forward <target> [local:]remote: preview loopback forwarding; --execute -n <ns> --context <ctx> starts an owned session (--ttl 15m, range 10s..60m)",
   "port-forward list: owned forwarding sessions, at most 5 per user",
   "port-forward stop <id> | --all: stop owned sessions",
@@ -40,7 +42,9 @@ export const TOP_HELP = [
   "Global: --context <name>, --timeout <seconds> (20, range 1..120), --help, --version (-v, -V)",
   "Lists: -n <namespace> or -A, --limit <n> (100, max 1000), --fields <a,b>, --problems",
   "Output is TOON. Exit 0: completed reads or successful exec. Exit 1: failed, refused, or partial operation. Exit 2: usage.",
-  "Secret inventory never reads values. Exec reads referenced Secret values only into memory to scrub output; short-value limits apply.",
+  "Secret inventory and apply/diff never read cluster Secret values. Secret manifest values must be <redacted>; --full does not reveal them.",
+  "Reads and apply/diff server dry-run previews are enabled. apply --execute is not available.",
+  "Exec reads referenced Secret values only into memory to scrub output; short-value limits apply.",
   "Exec previews by default; --execute requires explicit --context and -n and writes a local audit record before running. No interactive sessions.",
   "Exec: --timeout <1..300> (30), --full; 1 MiB per stream. Local timeout may leave the remote command running.",
   "Port-forward previews by default; --execute requires explicit --context and -n. Sessions bind loopback only, expire, and are recorded in the local audit log.",

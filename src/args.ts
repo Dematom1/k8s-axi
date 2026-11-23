@@ -62,6 +62,8 @@ export const NOUNS = [
   "context",
   "audit",
   "exec",
+  "apply",
+  "diff",
 ] as const;
 export type Noun = (typeof NOUNS)[number];
 const globalFlags = ["context", "timeout", "help"];
@@ -80,6 +82,7 @@ const aliases: Record<string, string> = {
   l: "selector",
   c: "container",
   h: "help",
+  f: "filename",
 };
 const booleans = new Set([
   "help",
@@ -132,6 +135,7 @@ export interface Parsed {
   execute?: boolean;
   remoteArgv?: string[];
   execDeployment?: boolean;
+  filename?: string;
 }
 export function actionsFor(command: Parsed["command"]): string[] {
   return command === "pods"
@@ -202,15 +206,17 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     ...globalFlags,
     ...(command === "exec"
       ? ["namespace", "container", "full", "execute"]
-      : command === "audit"
-        ? ["limit", "action"]
-        : ["ctx", "context", "setup"].includes(command)
-          ? []
-          : listFlags.filter(
-              (f) =>
-                f !== "selector" ||
-                ["pods", "deployments", "jobs"].includes(command),
-            )),
+      : ["apply", "diff"].includes(command)
+        ? ["filename", "namespace", "full"]
+        : command === "audit"
+          ? ["limit", "action"]
+          : ["ctx", "context", "setup"].includes(command)
+            ? []
+            : listFlags.filter(
+                (f) =>
+                  f !== "selector" ||
+                  ["pods", "deployments", "jobs"].includes(command),
+              )),
     ...(command === "events" ? ["warnings", "since", "for"] : []),
     ...(command === "pods" ? ["container", "tail", "since", "previous"] : []),
   ];
@@ -234,6 +240,8 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     }
     const [raw = "", ...rest] = arg.replace(/^--?/, "").split("=");
     const key = aliases[raw] ?? raw;
+    if (key === "execute" && ["apply", "diff"].includes(command))
+      usage(`--execute is not available for ${command}`, command);
     if (!allowed.includes(key))
       usage(
         `${hints[raw] ?? `Unknown flag ${arg}`}; valid flags: ${allowed.map((x) => "--" + x).join(", ")}`,
@@ -245,7 +253,10 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
       flags.set(key, true);
     } else {
       const value = rest.length ? rest.join("=") : args[++i];
-      if (!value || value.startsWith("-"))
+      if (
+        !value ||
+        (value.startsWith("-") && !(key === "filename" && value === "-"))
+      )
         usage(`--${key} requires a value`, command);
       flags.set(key, value);
     }
@@ -318,6 +329,7 @@ export function parseArgs(command: Parsed["command"], args: string[]): Parsed {
     command,
     action,
     name,
+    filename: str("filename"),
     context: str("context"),
     namespace: str("namespace")
       ? validateNamespace(str("namespace") ?? "")

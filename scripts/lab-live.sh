@@ -151,6 +151,12 @@ kubectl create rolebinding nsonly --role=nsonly --serviceaccount=fixtures:nsonly
 nsonly_token=$(kubectl create token nsonly -n fixtures --duration=1h)
 kubectl config set-credentials nsonly --token="$nsonly_token" >/dev/null
 kubectl config set-context nsonly --cluster="$cluster" --user=nsonly --namespace=fixtures >/dev/null
+kubectl create serviceaccount previewer-patch -n fixtures
+kubectl create role previewer-patch --verb=get,patch --resource=deployments.apps,configmaps -n fixtures
+kubectl create rolebinding previewer-patch --role=previewer-patch --serviceaccount=fixtures:previewer-patch -n fixtures
+previewer_token=$(kubectl create token previewer-patch -n fixtures --duration=1h)
+kubectl config set-credentials previewer-patch --token="$previewer_token" >/dev/null
+kubectl config set-context previewer-patch --cluster="$cluster" --user=previewer-patch --namespace=fixtures >/dev/null
 kubectl wait -n fixtures --for=condition=Available deployment/web --timeout=120s
 kubectl wait -n fixtures --for=condition=Ready pod/chatty --timeout=300s
 kubectl wait -n fixtures --for=condition=Failed job/failjob --timeout=300s

@@ -10,10 +10,16 @@ import { createServer } from "node:http";
 import { SECRET_TEMPLATE } from "../../dist/src/registry.js";
 const args = process.argv.slice(2);
 const scenario = JSON.parse(readFileSync(process.env.K8S_AXI_SCENARIO, "utf8"));
+let stdin;
+if (args[0] === "apply") {
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  stdin = Buffer.concat(chunks).toString("utf8");
+}
 if (process.env.K8S_AXI_CALLS)
   appendFileSync(
     process.env.K8S_AXI_CALLS,
-    JSON.stringify({ args, kuberc: process.env.KUBERC }) + "\n",
+    JSON.stringify({ args, kuberc: process.env.KUBERC, stdin }) + "\n",
   );
 const match = (scenario.rules ?? []).find((r) =>
   r.prefix.every((x, i) => args[i] === x),

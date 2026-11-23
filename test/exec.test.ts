@@ -664,7 +664,15 @@ test("actions accept only their exact typed argv, with Secret reads isolated fro
       { kind: "can-i", resource: "pods/exec" },
       { kind: "can-i", resource: "pods/portforward" },
       { kind: "port-forward", target: "web-1", ports: ["8080:80"] },
-      { kind: "apply", manifest: "{}" },
+      {
+        kind: "apply",
+        manifest: JSON.stringify({
+          apiVersion: "v1",
+          kind: "ConfigMap",
+          metadata: { name: "app" },
+        }),
+      },
+      { kind: "apply-get", resource: "ConfigMap.v1.", name: "app" },
     ] satisfies Action[]) {
       const argv = argvForAction(action, target);
       expect(argv.includes("--subresource=exec")).toBe(

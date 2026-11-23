@@ -1,7 +1,6 @@
 import type { NamespaceName, ResourceName, Selector } from "./args.js";
 export const LOG_LIMIT_BYTES = 1048576;
 export const REFUSALS = [
-  "apply",
   "create",
   "delete",
   "edit",
