@@ -196,13 +196,17 @@ async function supervise(): Promise<void> {
         ? "KUBECTL_NOT_INSTALLED"
         : "UPSTREAM_ERROR";
   });
-  await new Promise<void>((resolve) => child.once("close", () => resolve()));
+  const failure = await new Promise<NonNullable<ForwardSession["failure"]>>(
+    (resolve) =>
+      child.once("close", (exit, signal) => resolve({ exit, signal })),
+  );
   clearTimeout(expiry);
   clearTimeout(startup);
   if (killTimer) clearTimeout(killTimer);
   if (partialTimer) clearTimeout(partialTimer);
   if (!ready && ending.reason !== "expired" && ending.reason !== "stopped") {
     current.state = "failed";
+    current.failure = failure;
     current.code =
       failureCode ??
       (capped

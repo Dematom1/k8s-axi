@@ -1,4 +1,10 @@
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  chmodSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { SECRET_TEMPLATE } from "../../dist/src/registry.js";
@@ -83,6 +89,11 @@ else if (r.mode === "ignore-term") {
 } else if (r.mode === "huge") process.stdout.write("x".repeat(100000));
 else
   setTimeout(() => {
+    if (r.mode === "disable-kubectl")
+      chmodSync(
+        join(dirname(process.env.K8S_AXI_SCENARIO), "bin/kubectl"),
+        0o600,
+      );
     process.stdout.write(r.stdout ?? "");
     process.stderr.write(r.stderr ?? "");
     process.exitCode = r.code ?? 0;

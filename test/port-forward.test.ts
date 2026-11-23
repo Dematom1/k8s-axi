@@ -223,7 +223,11 @@ test("occupied local port is classified and startup is cleaned up", async () => 
     if (!address || typeof address === "string") throw new Error("no port");
     const r = s.run("echo", `${address.port}:8080`, ...flags, "--execute");
     expect(r.status).toBe(1);
-    expect(r.data).toMatchObject({ code: "PORT_IN_USE" });
+    expect(r.data).toMatchObject({
+      code: "PORT_IN_USE",
+      error:
+        "port-forward could not start (PORT_IN_USE; before kubectl launch)",
+    });
     expect(s.records()).toEqual([]);
     expect(readFileSync(join(s.l.dir, "calls"), "utf8")).not.toContain(
       '"port-forward"',
@@ -255,12 +259,50 @@ test.each(["port-forward-ipv6-only", "port-forward-ipv6-silent"])(
       code: "PORT_IN_USE",
     });
     expect(Date.now() - before).toBeLessThan(8000);
+    expect(object(decode(result.stdout)).error).toMatch(
+      /PORT_IN_USE; kubectl exit (?:none|0), signal SIGTERM/,
+    );
     expect(result.stdout + result.stderr).not.toContain(
       "Unable to create listener",
     );
     expect(s.records()).toEqual([]);
   },
 );
+test.each([
+  ["Error from server (Forbidden): CANARY_RAW_STDERR", "FORBIDDEN"],
+  ["Error from server (NotFound): CANARY_RAW_STDERR", "NOT_FOUND"],
+  ["CANARY_RAW_STDERR", "UPSTREAM_ERROR"],
+])(
+  "startup reports classified kubectl exit without raw stderr: %s",
+  (stderr, code) => {
+    const s = setup([{ prefix: ["port-forward"], stderr, code: 1 }]);
+    const r = s.run("echo", ":8080", ...flags, "--execute");
+    expect(r.status).toBe(1);
+    expect(r.data).toMatchObject({
+      code,
+      error: `port-forward could not start (${code}; kubectl exit 1, signal none)`,
+    });
+    expect(r.stdout + r.stderr).not.toContain("CANARY_RAW_STDERR");
+    expect(s.records()).toEqual([]);
+  },
+);
+test("local permission-check failure has safe stage and errno diagnostics", () => {
+  const s = setup([
+    {
+      prefix: ["get", "pod"],
+      stdout: '{"metadata":{"name":"echo"}}',
+      mode: "disable-kubectl",
+    },
+  ]);
+  const r = s.run("echo", ":8080", ...flags, "--execute");
+  expect(r.status).toBe(1);
+  expect(r.data).toMatchObject({
+    code: "UPSTREAM_ERROR",
+    error: "port-forward permission check failed (EACCES)",
+  });
+  expect(r.stdout + r.stderr).not.toContain(s.l.dir);
+  expect(s.records()).toEqual([]);
+});
 test("read-only state refuses execution before spawning; preview still works", () => {
   const s = setup();
   mkdirSync(s.state, { recursive: true });

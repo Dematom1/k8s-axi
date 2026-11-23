@@ -1,4 +1,5 @@
 import { AxiError } from "axi-sdk-js";
+import { getSystemErrorName } from "node:util";
 import {
   integer,
   parseDuration,
@@ -178,6 +179,7 @@ async function permission(target: Target, budget: number): Promise<boolean> {
 export async function portForwardCommand(args: string[]): Promise<string> {
   if (args.includes("--help") || args.includes("-h")) return encodeObject(HELP);
   const p = parse(args);
+  let stage = "session state";
   return withSessions(p.kind === "forward" && p.execute, async () => {
     await reapSessions();
     if (p.kind === "list") {
@@ -196,6 +198,7 @@ export async function portForwardCommand(args: string[]): Promise<string> {
       });
     }
     if (p.kind === "stop") {
+      stage = "session stop";
       const rows = allSessions().filter((r) => !p.id || r.id === p.id);
       if (p.id && !rows.length)
         fail("SESSION_NOT_FOUND", "port-forward session not found", [
@@ -204,6 +207,7 @@ export async function portForwardCommand(args: string[]): Promise<string> {
       for (const row of rows) await stopSession(row, "stopped");
       return encodeObject({ stopped: rows.length });
     }
+    stage = "target resolution";
     const d = deadline(p.timeout);
     const resolved = await resolveTarget(p.context, d);
     const t = {
@@ -322,6 +326,7 @@ export async function portForwardCommand(args: string[]): Promise<string> {
       ...(p.resource !== "pod" ? { from: p.rawTarget } : {}),
       ports: [p.mapping],
     };
+    stage = "permission check";
     const permitted = await permission(t, remaining(d));
     if (!permitted) {
       if (p.execute)
@@ -385,6 +390,7 @@ export async function portForwardCommand(args: string[]): Promise<string> {
         help: [`Run \`${command}\``],
       });
     }
+    stage = "session startup or cleanup";
     try {
       const record = await startSession(
         t,
@@ -415,5 +421,17 @@ export async function portForwardCommand(args: string[]): Promise<string> {
         help: error.suggestions,
       });
     }
+  }).catch((error: unknown) => {
+    if (error instanceof AxiError) throw error;
+    const errno = object(error).errno;
+    const reason =
+      typeof errno === "number" && Number.isSafeInteger(errno) && errno < 0
+        ? getSystemErrorName(errno)
+        : "unclassified local error";
+    throw new AxiError(
+      `port-forward ${stage} failed (${reason})`,
+      "UPSTREAM_ERROR",
+      ["Check local process and state permissions, then preview again"],
+    );
   });
 }
