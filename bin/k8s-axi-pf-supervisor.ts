@@ -123,6 +123,12 @@ async function supervise(): Promise<void> {
       return;
     }
     stderr += chunk.toString("utf8");
+    if (
+      /address already in use|unable to listen on any of the requested ports/i.test(
+        stderr,
+      )
+    )
+      stop("exited", "PORT_IN_USE");
   });
   child.once("error", (error) => {
     failureCode =

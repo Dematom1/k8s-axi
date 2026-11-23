@@ -229,6 +229,32 @@ test("occupied local port is classified and startup is cleaned up", async () => 
     server.close();
   }
 });
+test("IPv4 collision with IPv6-only forwarding fails promptly with PORT_IN_USE", () => {
+  const s = setup([
+    { prefix: ["port-forward"], mode: "port-forward-ipv6-only" },
+  ]);
+  const before = Date.now();
+  const result = spawnSync(
+    process.execPath,
+    [
+      resolve("dist/bin/k8s-axi.js"),
+      "port-forward",
+      "echo",
+      "18080:8080",
+      ...flags,
+      "--execute",
+    ],
+    { env: { ...process.env, ...s.env }, encoding: "utf8", timeout: 22000 },
+  );
+  expect(result.error).toBeUndefined();
+  expect(result.status, result.stdout).toBe(1);
+  expect(object(decode(result.stdout))).toMatchObject({ code: "PORT_IN_USE" });
+  expect(Date.now() - before).toBeLessThan(8000);
+  expect(result.stdout + result.stderr).not.toContain(
+    "Unable to create listener",
+  );
+  expect(s.records()).toEqual([]);
+});
 test("read-only state refuses execution before spawning; preview still works", () => {
   const s = setup();
   mkdirSync(s.state, { recursive: true });

@@ -27,7 +27,14 @@ if (
 }
 const r = match ??
   scenario.default ?? { stdout: JSON.stringify({ items: [] }) };
-if (r.mode === "port-forward") {
+if (r.mode === "port-forward-ipv6-only") {
+  const [local, remote] = args[2].split(":");
+  process.stdout.write(`Forwarding from [::1]:${local} -> ${remote}\n`);
+  process.stderr.write(
+    `Unable to create listener: Error listen tcp4 127.0.0.1:${local}: bind: address already in use\n`,
+  );
+  setInterval(() => {}, 1000);
+} else if (r.mode === "port-forward") {
   const [local, remote] = args[2].split(":");
   const server = createServer((_req, res) => res.end("k8s-axi-echo\n"));
   server.on("error", () => {
