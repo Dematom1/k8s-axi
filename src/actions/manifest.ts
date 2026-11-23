@@ -79,17 +79,28 @@ export function parseManifests(
     if (kind.endsWith("List")) {
       const items = wrapper.items;
       if (!Array.isArray(items)) usage("List requires items");
-      for (const item of items)
+      for (const item of items) {
+        if (kind === "List") {
+          add(item, depth + 1);
+          continue;
+        }
+        const member = object(item);
+        const memberKind = kind.slice(0, -4);
+        if (
+          (member.kind !== undefined && member.kind !== memberKind) ||
+          (member.apiVersion !== undefined &&
+            member.apiVersion !== wrapper.apiVersion)
+        )
+          usage("typed List item conflicts with wrapper kind or apiVersion");
         add(
-          kind === "List"
-            ? item
-            : {
-                apiVersion: wrapper.apiVersion,
-                kind: kind.slice(0, -4),
-                ...object(item),
-              },
+          {
+            ...member,
+            apiVersion: wrapper.apiVersion,
+            kind: memberKind,
+          },
           depth + 1,
         );
+      }
     } else if (value !== null) flattened.push(value);
   }
   values.forEach((value) => add(value));

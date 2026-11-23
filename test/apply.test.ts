@@ -431,6 +431,25 @@ test.each(["List", "SecretList", "ConfigMapList"])(
   },
 );
 
+test.each([
+  ["kind", "ConfigMap"],
+  ["apiVersion", "apps/v1"],
+])("typed Lists reject conflicting member %s before kubectl", (field, value) => {
+  const member = {
+    metadata: { name: "db-creds" },
+    stringData: { password: "NEUTRAL_TYPED_VALUE_631879" },
+    [field]: value,
+  };
+  const l = setup([
+    { apiVersion: "v1", kind: "SecretList", items: [member] },
+  ]);
+  const result = cli(["apply", "-f", l.path], l.env);
+  expect(result.status).toBe(2);
+  expect(result.data).toMatchObject({ code: "VALIDATION_ERROR" });
+  expect(result.stdout + result.stderr).not.toContain("NEUTRAL_TYPED_VALUE_631879");
+  expect(l.calls()).toEqual([]);
+});
+
 test("typed Lists inherit member kind and API version and enforce the object cap", () => {
   const member = {
     metadata: { name: "db-creds" },
