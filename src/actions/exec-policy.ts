@@ -189,7 +189,8 @@ export function execPolicy(
     const recursive =
       ["find", "tar", "cpio", "zip", "rsync"].includes(command) ||
       commandArgv.some(
-        (a) => a === "--recursive" || a === "--archive" || /^-[^-]*[rRa]/.test(a),
+        (a) =>
+          a === "--recursive" || a === "--archive" || /^-[^-]*[rRa]/.test(a),
       );
     const protectedPaths = [
       "/proc",
