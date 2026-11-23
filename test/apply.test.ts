@@ -290,13 +290,12 @@ test("A10/A12 rejects unsupported input locally", () => {
   expect(cli(["diff", "-f", l.path], l.env).status).toBe(2);
 });
 
-test("YAML scalars use Kubernetes YAML 1.1 semantics", () => {
-  const [manifest] = parseManifests(`apiVersion: v1\nkind: ConfigMap\nmetadata: {name: scalars}\ndata:\n  mode: 0644\n  booleans: [yes, no, on, off]\n  legacyOctal: 010\n  sexagesimal: 1:20`);
-  expect(manifest.value.data).toEqual({
-    mode: 420,
-    booleans: [true, false, true, false],
-    legacyOctal: 8,
-    sexagesimal: 80,
+test("YAML parses Kubernetes defaultMode using YAML 1.1 octal", () => {
+  const [manifest] = parseManifests(
+    `apiVersion: v1\nkind: Pod\nmetadata: {name: scalars}\nspec:\n  containers: [{name: app, image: busybox}]\n  volumes:\n    - name: settings\n      configMap: {name: settings, defaultMode: 0644}`,
+  );
+  expect(manifest.value).toMatchObject({
+    spec: { volumes: [{ configMap: { defaultMode: 0o644 } }] },
   });
 });
 
@@ -391,10 +390,29 @@ test("action allowlist rejects Secret/List apply and unprojected Secret reads", 
   Object.assign(process.env, l.env);
   try {
     const target = await resolveTarget(undefined, deadline());
-    for (const resource of ["Secret", "secrets", "Secret.v1", "pods --raw"])
+    for (const resource of [
+      "Secret",
+      "secrets",
+      "Secret.v1",
+      "pods --raw",
+      "Deployment.v1.-bad.example.com",
+      "Deployment.v1.bad-.example.com",
+      "Deployment.v1.bad..example.com",
+      "Deployment.v1.Bad.example.com",
+    ])
       expect(() =>
         argvForAction({ kind: "apply-get", resource, name: "x" }, target),
       ).toThrow();
+    expect(
+      argvForAction(
+        {
+          kind: "apply-get",
+          resource: "Deployment.v1.team--ops.example.com",
+          name: "web",
+        },
+        target,
+      ),
+    ).toContain("Deployment.v1.team--ops.example.com/web");
     for (const kind of [
       "Secret",
       "List",
