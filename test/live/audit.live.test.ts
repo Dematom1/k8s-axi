@@ -13,8 +13,11 @@ live("disposable kind lab is up and audit reads an empty local state", () => {
   if (!leaseId) throw new Error("K8S_AXI_LAB_LEASE is required for live tests");
   const owner = process.env.K8S_AXI_LAB_OWNER;
   if (!owner) throw new Error("K8S_AXI_LAB_OWNER is required for live tests");
+  const cluster = process.env.K8S_AXI_LAB_CLUSTER;
+  if (!cluster)
+    throw new Error("K8S_AXI_LAB_CLUSTER is required for live tests");
   const leases: unknown = JSON.parse(
-    execFileSync("berth", ["list", "--owner", owner, "--json"], {
+    execFileSync("dibs", ["list", "--owner", owner, "--json"], {
       encoding: "utf8",
     }),
   );
@@ -24,7 +27,7 @@ live("disposable kind lab is up and audit reads an empty local state", () => {
         id: leaseId,
         owner,
         liveness: "alive",
-        resource_name: `berth-${leaseId}`,
+        resource_name: cluster,
         kubeconfig: process.env.KUBECONFIG,
         labels: { project: "k8s-axi", task: "lab-live" },
       },
@@ -34,7 +37,7 @@ live("disposable kind lab is up and audit reads an empty local state", () => {
     execFileSync(kind, ["get", "clusters"], { encoding: "utf8" })
       .trim()
       .split("\n"),
-  ).toContain(`berth-${leaseId}`);
+  ).toContain(cluster);
   const context = execFileSync("kubectl", ["config", "current-context"], {
     encoding: "utf8",
   }).trim();

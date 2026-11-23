@@ -7,18 +7,22 @@ real_home=${HOME:?HOME is required}
 # Keep leases outside the disposable lab and stable when HOME is isolated below.
 BERTH_STATE=${BERTH_STATE:-${XDG_STATE_HOME:-$real_home/.local/state}/berth}
 case "$BERTH_STATE" in /*) ;; *) echo 'BERTH_STATE must be absolute' >&2; exit 1 ;; esac
-export BERTH_STATE
+# Pin dibs to the existing shared ledger, including legacy BERTH_STATE callers.
+DIBS_STATE=${DIBS_STATE:-$BERTH_STATE}
+case "$DIBS_STATE" in /*) ;; *) echo 'DIBS_STATE must be absolute' >&2; exit 1 ;; esac
+BERTH_STATE=$DIBS_STATE
+export DIBS_STATE BERTH_STATE
 owned=0
-berth_ready=0
+dibs_ready=0
 case "${1:-}" in
   run|crashloop) mode=$1 ;;
   *) echo 'usage: scripts/lab-live.sh run|crashloop' >&2; exit 2 ;;
 esac
 command -v docker >/dev/null || { echo 'docker is required' >&2; exit 1; }
 command -v curl >/dev/null || { echo 'curl is required' >&2; exit 1; }
-command -v go >/dev/null || { echo 'Go 1.26+ is required for berth v0.2.0' >&2; exit 1; }
+command -v go >/dev/null || { echo 'Go 1.26+ is required for dibs v0.2.7' >&2; exit 1; }
 kind_bin="$lab/bin/kind"
-berth_bin="$lab/bin/berth"
+dibs_bin="$lab/bin/dibs"
 create_pid=
 cleanup() {
   result=$?
@@ -31,17 +35,17 @@ cleanup() {
   fi
   if [ "$owned" = 1 ]; then
     cleanup_ok=1
-    if [ "$berth_ready" = 1 ]; then
+    if [ "$dibs_ready" = 1 ]; then
       # Lookup also finds a lease saved before an interrupted/failed create.
-      if "$berth_bin" list --owner "pid:$$" --json > "$lab/leases.json" &&
+      if "$dibs_bin" list --owner "pid:$$" --json > "$lab/leases.json" &&
         ids=$(node -e 'for (const l of require(process.argv[1]).leases) console.log(l.id)' "$lab/leases.json"); then
         for id in $ids; do
-          if ! "$berth_bin" release "$id" --confirm; then cleanup_ok=0; fi
+          if ! "$dibs_bin" release "$id" --confirm; then cleanup_ok=0; fi
         done
       else cleanup_ok=0; fi
     fi
     if [ "$cleanup_ok" != 1 ]; then
-      echo "FAIL: lease cleanup incomplete; retained $lab and $BERTH_STATE for berth sweep --confirm" >&2
+      echo "FAIL: lease cleanup incomplete; retained $lab and $BERTH_STATE for dibs sweep --confirm" >&2
       [ "$result" != 0 ] || result=1
     fi
     if [ "$(cat "$lock/pid" 2>/dev/null || true)" = "$$" ]; then
@@ -93,9 +97,9 @@ verify() {
   else actual=$(shasum -a 256 "$file" | awk '{print $1}'); fi
   [ "$actual" = "$expected" ] || { echo "SHA-256 mismatch: $file" >&2; exit 1; }
 }
-GOBIN="$lab/bin" go install github.com/Dematom1/berth@v0.2.0
-[ "$("$berth_bin" --version)" = 0.2.0 ] || { echo 'FAIL: berth version mismatch' >&2; exit 1; }
-berth_ready=1
+GOBIN="$lab/bin" go install github.com/Dematom1/dibs@v0.2.7
+[ "$("$dibs_bin" --version)" = 0.2.7 ] || { echo 'FAIL: dibs version mismatch' >&2; exit 1; }
+dibs_ready=1
 curl -fsSL "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-$platform" -o "$lab/bin/kind-real"
 curl -fsSL "https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-$platform.sha256sum" -o "$lab/bin/kind-real.sha256"
 verify "$lab/bin/kind-real"
@@ -106,23 +110,26 @@ verify "$lab/bin/kubectl"
 chmod +x "$kind_bin" "$lab/bin/kind-real" "$lab/bin/kubectl"
 PATH="$lab/bin:$PATH"
 export PATH
-"$berth_bin" create --adapter kind --owner "pid:$$" --ttl 1h \
+"$dibs_bin" create --adapter kind --owner "pid:$$" --ttl 1h \
   --resources '2 CPUs, k8s-axi live test lab' \
   --label project=k8s-axi --label task=lab-live --quiet > "$lab/lease-id" &
 create_pid=$!
 wait "$create_pid"
 create_pid=
 lease_id=$(cat "$lab/lease-id")
-name="berth-$lease_id"
-kube_env=$("$berth_bin" env "$lease_id")
+"$dibs_bin" list --owner "pid:$$" --json > "$lab/leases.json"
+name=$(node -e 'const l = require(process.argv[1]).leases.find(l => l.id === process.argv[2]); if (!l?.resource_name) process.exit(1); console.log(l.resource_name)' "$lab/leases.json" "$lease_id")
+kube_env=$("$dibs_bin" env "$lease_id")
 eval "$kube_env"
 config=$KUBECONFIG
-export K8S_AXI_LAB_LEASE="$lease_id" K8S_AXI_LAB_OWNER="pid:$$"
-KUBECONFIG="$config" kubectl config set-context kind-k8sx-alt --cluster="kind-$name" --user="kind-$name" --namespace=fixtures >/dev/null
+cluster=$(kubectl config view --minify -o jsonpath='{.contexts[0].context.cluster}')
+user=$(kubectl config view --minify -o jsonpath='{.contexts[0].context.user}')
+export K8S_AXI_LAB_LEASE="$lease_id" K8S_AXI_LAB_OWNER="pid:$$" K8S_AXI_LAB_CLUSTER="$name"
+KUBECONFIG="$config" kubectl config set-context kind-k8sx-alt --cluster="$cluster" --user="$user" --namespace=fixtures >/dev/null
 KUBECONFIG="$config" kubectl config set-cluster ghost --server=https://127.0.0.1:1 >/dev/null
-KUBECONFIG="$config" kubectl config set-context ghost --cluster=ghost --user="kind-$name" --namespace=fixtures >/dev/null
+KUBECONFIG="$config" kubectl config set-context ghost --cluster=ghost --user="$user" --namespace=fixtures >/dev/null
 KUBECONFIG="$config" kubectl config set-cluster blackhole --server=https://10.255.255.1:6443 >/dev/null
-KUBECONFIG="$config" kubectl config set-context blackhole --cluster=blackhole --user="kind-$name" --namespace=fixtures >/dev/null
+KUBECONFIG="$config" kubectl config set-context blackhole --cluster=blackhole --user="$user" --namespace=fixtures >/dev/null
 node=$(KUBECONFIG="$config" kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
 export KUBECONFIG="$config" HOME="$lab/home" TMPDIR="$lab/tmp" KUBERC=off K8S_AXI_LAB_LIVE=1 K8S_AXI_LIVE=1 K8S_AXI_KIND="$kind_bin" K8S_AXI_REAL_HOME="$real_home"
 if [ "$mode" = crashloop ]; then
@@ -137,13 +144,13 @@ kubectl create serviceaccount limited -n fixtures
 kubectl create rolebinding "limited-$name" --clusterrole=view --serviceaccount=fixtures:limited -n fixtures
 limited_token=$(kubectl create token limited -n fixtures --duration=1h)
 kubectl config set-credentials limited --token="$limited_token" >/dev/null
-kubectl config set-context limited --cluster="kind-$name" --user=limited --namespace=fixtures >/dev/null
+kubectl config set-context limited --cluster="$cluster" --user=limited --namespace=fixtures >/dev/null
 kubectl create serviceaccount nsonly -n fixtures
 kubectl create role nsonly --verb=get,list,watch --resource=pods,events -n fixtures
 kubectl create rolebinding nsonly --role=nsonly --serviceaccount=fixtures:nsonly -n fixtures
 nsonly_token=$(kubectl create token nsonly -n fixtures --duration=1h)
 kubectl config set-credentials nsonly --token="$nsonly_token" >/dev/null
-kubectl config set-context nsonly --cluster="kind-$name" --user=nsonly --namespace=fixtures >/dev/null
+kubectl config set-context nsonly --cluster="$cluster" --user=nsonly --namespace=fixtures >/dev/null
 kubectl wait -n fixtures --for=condition=Available deployment/web --timeout=120s
 kubectl wait -n fixtures --for=condition=Ready pod/chatty --timeout=300s
 kubectl wait -n fixtures --for=condition=Failed job/failjob --timeout=300s
