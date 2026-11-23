@@ -424,8 +424,10 @@ test.each(["List", "SecretList", "ConfigMapList"])(
     };
     const l = setup([deployment, wrapper]);
     const result = cli(["apply", "-f", l.path], l.env);
-    expect(result.status).toBe(1);
-    expect(result.data).toMatchObject({ code: "SECRET_MANIFEST" });
+    expect(result.status).toBe(kind === "ConfigMapList" ? 2 : 1);
+    expect(result.data).toMatchObject({
+      code: kind === "ConfigMapList" ? "VALIDATION_ERROR" : "SECRET_MANIFEST",
+    });
     expect(result.stdout + result.stderr).not.toContain(canary);
     expect(l.calls()).toEqual([]);
   },
