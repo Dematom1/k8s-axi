@@ -4,9 +4,9 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 if [[ ${1:-} != --leased ]]; then
   exec sh "$root/scripts/lab-live.sh" crashloop
 fi
-[[ -n ${K8S_AXI_LAB_LEASE:-} && -n ${BERTH_STATE:-} &&
-   ${KUBECONFIG:-} == "$BERTH_STATE/resources/$K8S_AXI_LAB_LEASE/kubeconfig" ]] || {
-  echo 'a berth-managed lab is required; run scripts/lab-live.sh crashloop' >&2
+[[ -n ${K8S_AXI_LAB_LEASE:-} && -n ${DIBS_STATE:-} &&
+   ${KUBECONFIG:-} == "$DIBS_STATE/resources/$K8S_AXI_LAB_LEASE/kubeconfig" ]] || {
+  echo 'a dibs-managed lab is required; run scripts/lab-live.sh crashloop' >&2
   exit 1
 }
 lab=${TMPDIR:?lab TMPDIR is required}
