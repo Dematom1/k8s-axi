@@ -324,7 +324,10 @@ export async function stopSession(
   try {
     process.kill(-record.pgid, "SIGTERM");
   } catch (error) {
-    if (object(error).code !== "ESRCH") throw error;
+    // Darwin can return EPERM when the last owned process becomes a zombie.
+    const code = object(error).code;
+    if (code !== "ESRCH" && (code !== "EPERM" || ownsGroup(record)))
+      throw error;
   }
   const end = Date.now() + 2000;
   while (groupAlive(record.pgid) && ownsGroup(record) && Date.now() < end)
@@ -334,7 +337,9 @@ export async function stopSession(
     try {
       process.kill(-record.pgid, "SIGKILL");
     } catch (error) {
-      if (object(error).code !== "ESRCH") throw error;
+      const code = object(error).code;
+      if (code !== "ESRCH" && (code !== "EPERM" || ownsGroup(record)))
+        throw error;
     }
   }
   const killed = Date.now() + 1000;
