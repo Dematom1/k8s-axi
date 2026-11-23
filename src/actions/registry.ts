@@ -89,10 +89,12 @@ export function argvForAction(action: Action, target: Target): string[] {
       ];
     case "apply-get":
       if (
-        !(/^[A-Za-z][A-Za-z0-9]*$/.test(action.resource) ||
+        !(
+          /^[A-Za-z][A-Za-z0-9]*$/.test(action.resource) ||
           /^[A-Za-z][A-Za-z0-9]*\.v[0-9][a-z0-9]*(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*)?$/.test(
             action.resource,
-          )) ||
+          )
+        ) ||
         action.resource.split(".").slice(2).join(".").length > 253 ||
         /^(?:secrets?|[A-Za-z0-9]*List)(?:\.|$)/i.test(action.resource) ||
         !validResourceName(action.name)
