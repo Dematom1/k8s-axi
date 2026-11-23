@@ -1634,3 +1634,23 @@ test("remote exit survives remote stderr without a final newline; API denials st
     denied.clean();
   }
 });
+
+test("preview target echo masks a credential-bearing context name", () => {
+  const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJlLXZhbHVl";
+  const l = fixture([
+    { prefix: ["config", "get-contexts"], stdout: `default\n${jwt}\n` },
+  ]);
+  try {
+    const result = cli(
+      ["exec", "web-1", "-n", "sandbox", "--context", jwt, "--", "ls", "/app"],
+      l.env,
+    );
+    expect(result.status, result.stdout).toBe(0);
+    expect(result.stdout).not.toContain(jwt);
+    expect(JSON.stringify(object(result.data).help)).toContain(
+      "original invocation",
+    );
+  } finally {
+    l.clean();
+  }
+});

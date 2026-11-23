@@ -263,6 +263,14 @@ export async function execCommand(p: Parsed): Promise<string> {
   let launchAttempted = false;
   let completed = false;
   const safe = (s: string) => redactText(scrub.scrub(s).text).text;
+  // Kubernetes calls use the raw target; responses show a masked copy.
+  const shownTarget = () =>
+    Object.fromEntries(
+      Object.entries(targetEcho).map(([k, v]) => [
+        k,
+        typeof v === "string" ? safe(v) : v,
+      ]),
+    );
   const auditBase = () => ({
     id,
     action: "exec" as const,
@@ -350,7 +358,7 @@ export async function execCommand(p: Parsed): Promise<string> {
     const prepared = await prepareScrub(spec, container, target, d);
     scrub = prepared.scrub;
     const echo = () => ({
-      target: targetEcho,
+      target: shownTarget(),
       action: "exec",
       mode: execute ? "executed" : "preview - nothing ran",
       command: command.map(safe),
@@ -578,7 +586,7 @@ export async function execCommand(p: Parsed): Promise<string> {
           const notLaunched =
             !launchAttempted || error.code === "KUBECTL_NOT_INSTALLED";
           return encodeObject({
-            target: targetEcho,
+            target: shownTarget(),
             error: notLaunched
               ? "remote command did not start; audit end unavailable"
               : "action may have run; audit end unavailable",
@@ -600,7 +608,7 @@ export async function execCommand(p: Parsed): Promise<string> {
     }
     process.exitCode = exitCodeForError(error);
     return encodeObject({
-      target: targetEcho,
+      target: shownTarget(),
       action: "exec",
       mode: "refused - nothing ran",
       error: safe(error.message),
