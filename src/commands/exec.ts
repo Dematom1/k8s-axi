@@ -274,10 +274,10 @@ export async function execCommand(p: Parsed): Promise<string> {
   const auditBase = () => ({
     id,
     action: "exec" as const,
-    context: text(targetEcho.context),
-    server: text(targetEcho.server),
-    namespace: text(targetEcho.namespace),
-    target: `${text(targetEcho.pod)}/${text(targetEcho.container)}`,
+    context: safe(text(targetEcho.context)),
+    server: safe(text(targetEcho.server)),
+    namespace: safe(text(targetEcho.namespace)),
+    target: safe(`${text(targetEcho.pod)}/${text(targetEcho.container)}`),
   });
   try {
     const resolved = await resolveTarget(p.context, d);
