@@ -242,6 +242,23 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       ["exec", pod, "-A", "--", "ls"],
       ["exec", pod, "--execute", "-n", "fixtures", "--", "ls"],
       ["exec", pod, "--execute", "--context", context, "--", "ls"],
+      ...[
+        "--subresource",
+        "--subresource=exec",
+        "--subresource=portforward",
+      ].map((flag) => [
+        "exec",
+        pod,
+        "--context",
+        context,
+        "-n",
+        "fixtures",
+        "--execute",
+        flag,
+        ...(flag === "--subresource" ? ["exec"] : []),
+        "--",
+        "true",
+      ]),
       ...["-i", "-t", "--stdin", "--tty"].map((flag) => [
         "exec",
         pod,
@@ -251,6 +268,7 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
       ]),
     ])
       expect(run(args, 2).code).toBe("VALIDATION_ERROR");
+    expect(exec(["true"], { execute: true, target: pod }).remote_exit).toBe(0);
     const transcript = join(process.env.TMPDIR ?? "", "exec-session.jsonl");
     writeFileSync(
       transcript,
