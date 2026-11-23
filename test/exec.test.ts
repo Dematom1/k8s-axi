@@ -402,6 +402,9 @@ test("E8: missing Secret read permission fails closed in preview and execute", (
       expect(result.stdout + records(l)).not.toContain(C1);
     }
     expect(calls(l).some((argv) => argv[0] === "exec")).toBe(false);
+    expect(calls(l)).toContainEqual([
+      "auth", "can-i", "create", "pods", "--subresource=exec", "-n", "sandbox", "--context=default",
+    ]);
   } finally {
     l.clean();
   }
@@ -420,6 +423,7 @@ test("E9: denied permission is truthful in preview and execute", () => {
       expect(result.stdout).toContain("denied");
     }
     expect(calls(l).some((argv) => argv[0] === "exec")).toBe(false);
+    expect(calls(l).some((argv) => argv[0] === "get" && argv[1] === "secret")).toBe(false);
     expect(records(l)).toContain('"phase":"refused"');
   } finally {
     l.clean();
@@ -648,6 +652,10 @@ test("actions accept only their exact typed argv, with Secret reads isolated fro
       { kind: "can-i", resource: "pods/exec" },
     ] satisfies Action[]) {
       const argv = argvForAction(action, target);
+      if (action.kind === "can-i" && action.resource === "pods/exec")
+        expect(argv).toEqual([
+          "auth", "can-i", "create", "pods", "--subresource=exec", "-n", "sandbox", "--context=default",
+        ]);
       expect(() => assertSafeAction(action, target, argv)).not.toThrow();
       for (const extra of [
         "--token=x",

@@ -78,6 +78,29 @@ export function argvForAction(action: Action, target: Target): string[] {
         "json",
         ...base,
       ];
+    case "can-i":
+      if (!["pods/exec", "pods/portforward"].includes(action.resource))
+        throw new Error("invalid action permission");
+      return action.resource === "pods/exec"
+        ? [
+            "auth",
+            "can-i",
+            "create",
+            "pods",
+            "--subresource=exec",
+            "-n",
+            target.defaultNamespace,
+            ...base,
+          ]
+        : [
+            "auth",
+            "can-i",
+            "create",
+            action.resource,
+            "-n",
+            target.defaultNamespace,
+            ...base,
+          ];
     case "port-forward":
       if (
         !validResourceName(action.target) ||
