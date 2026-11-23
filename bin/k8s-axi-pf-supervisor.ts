@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { setTimeout as sleep } from "node:timers/promises";
 import { argvForAction, assertSafeAction } from "../src/actions/registry.js";
 import {
@@ -10,6 +11,29 @@ import {
   type ForwardSession,
 } from "../src/actions/port-forward.js";
 import { mapKubectlFailure, object } from "../src/kubectl.js";
+
+async function probeBind(
+  host: "127.0.0.1" | "::1",
+  port: number,
+): Promise<"available" | "unavailable" | "in-use" | "error"> {
+  const server = createServer((socket) => socket.destroy());
+  return new Promise((resolve) => {
+    server.once("error", (error) => {
+      const code = object(error).code;
+      resolve(
+        code === "EADDRINUSE"
+          ? "in-use"
+          : host === "::1" &&
+              ["EAFNOSUPPORT", "EADDRNOTAVAIL", "ENODEV"].includes(String(code))
+            ? "unavailable"
+            : "error",
+      );
+    });
+    server.listen({ host, port, exclusive: true }, () =>
+      server.close((error) => resolve(error ? "error" : "available")),
+    );
+  });
+}
 
 async function supervise(): Promise<void> {
   const [id = "", token = ""] = process.argv.slice(2);
@@ -36,6 +60,23 @@ async function supervise(): Promise<void> {
   } as const;
   const argv = argvForAction(action, current.target);
   assertSafeAction(action, current.target, argv);
+  const requestedPort = Number(current.mapping.split(":")[0]);
+  const ipv4 = requestedPort
+    ? await probeBind("127.0.0.1", requestedPort)
+    : "available";
+  const ipv6 = await probeBind("::1", requestedPort);
+  if (
+    ipv4 === "in-use" ||
+    ipv6 === "in-use" ||
+    ipv4 === "error" ||
+    ipv6 === "error"
+  ) {
+    current.state = "failed";
+    current.code =
+      ipv4 === "in-use" || ipv6 === "in-use" ? "PORT_IN_USE" : "UPSTREAM_ERROR";
+    saveSession(current);
+    return;
+  }
   const child = spawn("kubectl", argv, {
     detached: false,
     stdio: ["ignore", "pipe", "pipe"],
@@ -51,6 +92,8 @@ async function supervise(): Promise<void> {
   };
   let failureCode: string | undefined;
   let killTimer: ReturnType<typeof setTimeout> | undefined;
+  let partialTimer: ReturnType<typeof setTimeout> | undefined;
+  const families = new Set<string>();
   const stop = (outcome: typeof ending.reason, code?: string) => {
     if (closing) return;
     closing = true;
@@ -90,17 +133,34 @@ async function supervise(): Promise<void> {
     const lines = stdout.split(/\r?\n/);
     stdout = lines.pop() ?? "";
     for (const line of lines) {
-      const match = /^Forwarding from 127\.0\.0\.1:(\d+) -> (\d+)$/.exec(line);
+      const match =
+        /^Forwarding from (127\.0\.0\.1|\[::1\]):(\d+) -> (\d+)$/.exec(line);
       if (!match) continue;
-      const local = Number(match[1]);
+      const local = Number(match[2]);
       if (
         local < 1024 ||
         local > 65535 ||
-        Number(match[2]) !== current.remote
+        Number(match[3]) !== current.remote ||
+        (requestedPort && local !== requestedPort)
       ) {
         stop("exited", "UPSTREAM_ERROR");
         return;
       }
+      if (current.local && current.local !== local) {
+        stop("exited", "PORT_IN_USE");
+        return;
+      }
+      current.local = local;
+      families.add(match[1] ?? "");
+      if (
+        !families.has("127.0.0.1") ||
+        (ipv6 === "available" && !families.has("[::1]"))
+      ) {
+        // ponytail: 1s for the sibling bind report; increase only if hosts split reports longer.
+        partialTimer ??= setTimeout(() => stop("exited", "PORT_IN_USE"), 1000);
+        continue;
+      }
+      if (partialTimer) clearTimeout(partialTimer);
       const identity = child.pid ? processIdentity(child.pid) : undefined;
       if (!identity || identity.pgid !== current.pgid) {
         stop("exited", "UPSTREAM_ERROR");
@@ -140,6 +200,7 @@ async function supervise(): Promise<void> {
   clearTimeout(expiry);
   clearTimeout(startup);
   if (killTimer) clearTimeout(killTimer);
+  if (partialTimer) clearTimeout(partialTimer);
   if (!ready && ending.reason !== "expired" && ending.reason !== "stopped") {
     current.state = "failed";
     current.code =

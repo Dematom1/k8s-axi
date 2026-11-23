@@ -27,7 +27,14 @@ if (
 }
 const r = match ??
   scenario.default ?? { stdout: JSON.stringify({ items: [] }) };
-if (r.mode === "port-forward-ipv6-only") {
+if (r.mode === "port-forward-ipv6-silent") {
+  // Captured from kubectl v1.36.2: IPv4 collision leaves only this stdout and no stderr.
+  const [local, remote] = args[2].split(":");
+  process.stdout.write(
+    `Forwarding from [::1]:${local || "55874"} -> ${remote}\n`,
+  );
+  setInterval(() => {}, 1000);
+} else if (r.mode === "port-forward-ipv6-only") {
   const [local, remote] = args[2].split(":");
   process.stdout.write(`Forwarding from [::1]:${local} -> ${remote}\n`);
   process.stderr.write(
@@ -43,7 +50,7 @@ if (r.mode === "port-forward-ipv6-only") {
   });
   server.listen(Number(local) || 0, "127.0.0.1", () => {
     process.stdout.write(
-      `Forwarding from 127.0.0.1:${server.address().port} -> ${remote}\n`,
+      `Forwarding from 127.0.0.1:${server.address().port} -> ${remote}\nForwarding from [::1]:${server.address().port} -> ${remote}\n`,
     );
   });
 } else if (r.mode === "stdin") {
