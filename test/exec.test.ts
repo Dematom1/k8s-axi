@@ -15,11 +15,11 @@ import {
   assertSafeAction,
   type Action,
 } from "../src/actions/registry.js";
-import { parseArgs, validateNamespace } from "../src/args.js";
+import { NOUNS, parseArgs, validateNamespace } from "../src/args.js";
 import { object, type Obj } from "../src/kubectl.js";
 import { redactText } from "../src/redact.js";
 import { resolveTarget } from "../src/target.js";
-import { deadline } from "../src/registry.js";
+import { argvFor, assertSafe, deadline } from "../src/registry.js";
 import { summarizeTranscript } from "../src/sessionlog.js";
 import { cli } from "./helpers.js";
 import { lab, targetRules, type Rule } from "./lab.js";
@@ -659,8 +659,14 @@ test("actions accept only their exact typed argv, with Secret reads isolated fro
       { kind: "exec", target: "web-1", container: "app", command: ["ls"] },
       { kind: "secret-values", name: "db-creds" },
       { kind: "can-i", resource: "pods/exec" },
+      { kind: "can-i", resource: "pods/portforward" },
+      { kind: "port-forward", target: "web-1", ports: ["8080:80"] },
+      { kind: "apply", manifest: "{}" },
     ] satisfies Action[]) {
       const argv = argvForAction(action, target);
+      expect(argv.includes("--subresource=exec")).toBe(
+        action.kind === "can-i" && action.resource === "pods/exec",
+      );
       if (action.kind === "can-i" && action.resource === "pods/exec")
         expect(argv).toEqual([
           "auth",
@@ -685,6 +691,19 @@ test("actions accept only their exact typed argv, with Secret reads isolated fro
         expect(() =>
           assertSafeAction(action, target, [...argv, extra]),
         ).toThrow();
+      for (const flag of [
+        "--subresource",
+        "--subresource=exec",
+        "--subresource=portforward",
+      ])
+        for (let i = 0; i <= argv.length; i++)
+          expect(() =>
+            assertSafeAction(action, target, [
+              ...argv.slice(0, i),
+              flag,
+              ...argv.slice(i),
+            ]),
+          ).toThrow();
       for (let i = 0; i < argv.length; i++)
         expect(() =>
           assertSafeAction(
@@ -694,12 +713,81 @@ test("actions accept only their exact typed argv, with Secret reads isolated fro
           ),
         ).toThrow();
     }
+    const readArgv = argvFor(
+      {
+        op: "list",
+        resource: "pods",
+        scope: {
+          kind: "namespace",
+          name: target.defaultNamespace,
+          source: "flag",
+        },
+      },
+      target,
+      deadline(),
+    );
+    expect(() => assertSafe(readArgv)).not.toThrow();
+    for (const flag of [
+      "--subresource",
+      "--subresource=exec",
+      "--subresource=portforward",
+    ])
+      for (let i = 0; i <= readArgv.length; i++)
+        expect(() =>
+          assertSafe([...readArgv.slice(0, i), flag, ...readArgv.slice(i)]),
+        ).toThrow();
     expect(readdirSync(l.env.HOME)).toEqual([]);
   } finally {
     process.env = before;
     l.clean();
   }
 });
+
+for (const command of ["home", ...NOUNS] as const)
+  for (const flag of [
+    "--subresource",
+    "--subresource=exec",
+    "--subresource=portforward",
+  ])
+    test(`${command} rejects user-supplied ${flag}`, () => {
+      const args = [
+        ...(command === "exec" ? ["web-1"] : []),
+        flag,
+        ...(flag === "--subresource" ? ["exec"] : []),
+        ...(command === "exec" ? ["--", "ls"] : []),
+      ];
+      expect(() => parseArgs(command, args)).toThrow(
+        expect.objectContaining({ code: "VALIDATION_ERROR" }),
+      );
+    });
+for (const flag of [
+  "--subresource",
+  "--subresource=exec",
+  "--subresource=portforward",
+])
+  test(`exec CLI rejects ${flag} before any backend call`, () => {
+    const l = fixture();
+    try {
+      const result = cli(
+        [
+          "exec",
+          "web-1",
+          ...flags,
+          "--execute",
+          flag,
+          ...(flag === "--subresource" ? ["exec"] : []),
+          "--",
+          "ls",
+        ],
+        l.env,
+      );
+      expect(result.status, result.stdout).toBe(2);
+      expect(object(result.data).code).toBe("VALIDATION_ERROR");
+      expect(calls(l)).toEqual([]);
+    } finally {
+      l.clean();
+    }
+  });
 
 for (const mode of ["require-audit", "audit-end-fail"])
   test(`audit before effect and completion failure: ${mode}`, () => {
