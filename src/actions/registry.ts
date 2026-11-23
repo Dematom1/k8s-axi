@@ -13,7 +13,8 @@ export type Action =
     }
   | { kind: "port-forward"; target: string; ports: readonly string[] }
   | { kind: "apply"; manifest: string }
-  | { kind: "apply-get"; resource: string; name: string };
+  | { kind: "apply-get"; resource: string; name: string }
+  | { kind: "can-i"; resource: "pods/portforward" };
 
 function validResourceName(value: string): boolean {
   try {
@@ -28,10 +29,13 @@ function validPortMapping(value: string): boolean {
   const ports = value.split(":");
   return (
     ports.length === 2 &&
-    ports.every(
-      (port) =>
-        /^\d{1,5}$/.test(port) && Number(port) >= 1 && Number(port) <= 65535,
-    )
+    (ports[0] === "" ||
+      (/^\d{1,5}$/.test(ports[0] ?? "") &&
+        Number(ports[0]) >= 1024 &&
+        Number(ports[0]) <= 65535)) &&
+    /^\d{1,5}$/.test(ports[1] ?? "") &&
+    Number(ports[1]) >= 1 &&
+    Number(ports[1]) <= 65535
   );
 }
 
@@ -67,6 +71,18 @@ export function argvForAction(action: Action, target: Target): string[] {
         "port-forward",
         action.target,
         ...action.ports,
+        "-n",
+        target.defaultNamespace,
+        ...base,
+      ];
+    case "can-i":
+      if (action.resource !== "pods/portforward")
+        throw new Error("invalid permission action");
+      return [
+        "auth",
+        "can-i",
+        "create",
+        action.resource,
         "-n",
         target.defaultNamespace,
         ...base,

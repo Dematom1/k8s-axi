@@ -19,6 +19,7 @@ import { setupCommand } from "./commands/setup.js";
 import { contextCommand } from "./commands/context.js";
 import { auditCommand } from "./commands/audit.js";
 import { applyCommand } from "./commands/apply.js";
+import { portForwardCommand } from "./commands/port-forward.js";
 const kubectlNouns = new Set<Noun>([
   "nodes",
   "namespaces",
@@ -161,6 +162,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     topLevelHelp: encodeObject({ help: TOP_HELP }),
     commands: Object.assign(
       Object.create(null),
+      { "port-forward": portForwardCommand },
       Object.fromEntries(
         NOUNS.map((noun) => [
           noun,

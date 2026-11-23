@@ -16,7 +16,6 @@ export const REFUSALS = [
   "drain",
   "exec",
   "attach",
-  "port-forward",
   "proxy",
   "cp",
   "debug",

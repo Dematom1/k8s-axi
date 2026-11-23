@@ -1,12 +1,12 @@
 ---
 name: k8s-axi
-description: "Kubernetes diagnostics and server dry-run manifest previews for agents: triage pods, nodes, workloads, events, logs, and Secret metadata without changing the cluster; redaction is best effort."
+description: "Kubernetes diagnostics, server dry-run manifest previews, and guarded port forwarding for agents: triage pods, nodes, workloads, events, logs, and Secret metadata; preview changes or start bounded loopback sessions."
 user-invocable: false
 ---
 
 # k8s-axi
 
-k8s-axi: Kubernetes diagnostics and guarded-action foundations for agents.
+k8s-axi: Kubernetes diagnostics, guarded port forwarding, and manifest previews for agents.
 
 Run `npx -y k8s-axi <command>`. kubectl must be on PATH with a named kubeconfig context.
 Use `npx -y k8s-axi ctx` to inspect local configuration without contacting a cluster.
@@ -40,16 +40,20 @@ Carry `--context <name>` and `-n <namespace>` into detail commands. Lists use th
 - setup status: inspect integrations without writes
 - setup uninstall: remove managed hooks, preserve unrelated config
 - context: last session summary for this directory
-- context end: record command counts and most-used context from stdin hook payload
+- context end: stop directory-owned forwarding and record command counts from stdin hook payload
 - audit: show the local log of executed guarded actions
 - apply -f <path | ->: server dry-run with redacted structural changes; never applies Secrets
 - diff -f <path | ->: identical to apply preview; no real writes
+- port-forward <target> [local:]remote: preview loopback forwarding; --execute -n <ns> --context <ctx> starts an owned session (--ttl 15m, range 10s..60m)
+- port-forward list: owned forwarding sessions, at most 5 per user
+- port-forward stop <id> | --all: stop owned sessions
 
 Run `npx -y k8s-axi <command> --help` for flags and examples.
 
 ## Safety and results
 
-Enabled cluster operations are fixed reads and apply/diff server dry-run previews through kubectl. Use `npx -y k8s-axi apply -f <path> --context <name>` or diff with the same flags. No real apply --execute, exec, port-forward, raw passthrough, auth reviews, streaming, or self-update exists.
+Enabled cluster operations are fixed reads, apply/diff server dry-run previews, and guarded port forwarding through kubectl. Use `npx -y k8s-axi apply -f <path> --context <name>` or diff with the same flags. No real apply --execute, exec, raw passthrough, public auth reviews, streaming output, or self-update exists.
+Port-forward previews the target and permission without starting a session. --execute requires explicit --context and -n, echoes the target, and writes an audit record before launch. Sessions bind loopback only, expire after --ttl (15m by default, 10s–60m), and are limited to five per user. Stop them explicitly or through SessionEnd for the owner cwd and uid. Linux and macOS are supported.
 Apply/diff accept up to 1 MiB and 50 YAML/JSON objects, including typed List wrappers such as SecretList. Secret manifests with non-placeholder values are refused before any cluster call. Use the literal "<redacted>" for every data/stringData value to compare only keys and type; Secrets are never submitted to the server. Previews require real create/patch/get permissions; Secret manifests also require list on secrets. Previews do not write audit records.
 Cluster Secrets enter this process only as metadata and key names projected by a fixed template. --full never reveals Secret values. Apply/diff redact credential-named fields, credential env literals, adjacent credential flag arguments, and known text patterns, remove server-only fields and last-applied annotations, and truncate string changes to 120 characters unless --full. Non-Secret live field values may appear after pattern-based redaction; credentials in fields whose names do not look sensitive (such as an env var named `LICENSE`) can remain visible. Store credentials in Secrets.
 This is an output restriction, not server-side access control: Secret list permission also grants values to a direct API client.

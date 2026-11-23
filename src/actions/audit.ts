@@ -51,7 +51,8 @@ export interface AuditRecord {
     | "expired"
     | "stopped"
     | "reaped"
-    | "exited";
+    | "exited"
+    | "dropped";
   exit?: number;
   code?: string;
   duration_ms?: number;
@@ -67,7 +68,7 @@ export function auditPath(env: NodeJS.ProcessEnv = process.env): string {
   return join(state, "k8s-axi", "audit.jsonl");
 }
 
-function safeDirectoryExists(path: string): boolean {
+export function safeDirectoryExists(path: string): boolean {
   const absolute = resolve(path);
   const root = parse(absolute).root;
   let current = root;
@@ -228,6 +229,7 @@ function parseRecord(value: unknown): AuditRecord {
     "stopped",
     "reaped",
     "exited",
+    "dropped",
   ];
   if (
     record.v !== 1 ||
