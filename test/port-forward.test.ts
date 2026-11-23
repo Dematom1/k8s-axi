@@ -269,6 +269,36 @@ test.each(["port-forward-ipv6-only", "port-forward-ipv6-silent"])(
   },
 );
 test.each([
+  ["SIGTERM", "exited"],
+  ["SIGKILL", "exited"],
+  ["SIGTERM", "owned"],
+  ["SIGKILL", "owned"],
+])("group signal %s returns EPERM after group is %s", (signal, group) => {
+  const s = setup([
+    { prefix: ["port-forward"], mode: "port-forward-ipv6-silent" },
+  ]);
+  const r = cli(["port-forward", "echo", ":8080", ...flags, "--execute"], {
+    ...s.env,
+    NODE_OPTIONS: `--import ${JSON.stringify(resolve("test/fake-kubectl/exit-before-signal.mjs"))}`,
+    TEST_PF_SIGNAL: signal,
+    TEST_PF_GROUP: group,
+  });
+  expect(r.status, r.stdout + r.stderr).toBe(1);
+  expect(readFileSync(join(s.l.dir, "scenario.signals"), "utf8")).toBe(
+    `${signal}\n`,
+  );
+  if (group === "exited") {
+    expect(r.data, r.stdout + r.stderr).toMatchObject({ code: "PORT_IN_USE" });
+    expect(s.records()).toEqual([]);
+  } else {
+    expect(r.data).toMatchObject({
+      code: "UPSTREAM_ERROR",
+      error: "port-forward session startup or cleanup failed (EPERM)",
+    });
+    expect(s.records()).toHaveLength(1);
+  }
+});
+test.each([
   ["Error from server (Forbidden): CANARY_RAW_STDERR", "FORBIDDEN"],
   ["Error from server (NotFound): CANARY_RAW_STDERR", "NOT_FOUND"],
   ["CANARY_RAW_STDERR", "UPSTREAM_ERROR"],
