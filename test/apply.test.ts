@@ -360,6 +360,11 @@ test("normalizes server-only fields and safely truncates all string leaves", () 
     "canary",
   );
   expect(
+    mapApplyFailure(
+      'cannot get resource "widgets" in API group "team--ops.example.com" in the namespace "sandbox"',
+    ).code,
+  ).toBe("FORBIDDEN");
+  expect(
     structuralDiff(
       "x",
       { x: "old" },
