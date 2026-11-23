@@ -362,7 +362,7 @@ export async function execCommand(p: Parsed): Promise<string> {
       action: "exec",
       mode: execute ? "executed" : "preview - nothing ran",
       command: command.map(safe),
-      permission: `allowed (${permissionLabel})`,
+      permission: safe(`allowed (${permissionLabel})`),
     });
     if (!execute) {
       const replayTarget = `pod/${podName}`;
@@ -506,7 +506,7 @@ export async function execCommand(p: Parsed): Promise<string> {
       ...(outcome === "forbidden"
         ? {
             mode: "refused - nothing ran",
-            permission: `denied at exec (${permissionLabel})`,
+            permission: safe(`denied at exec (${permissionLabel})`),
           }
         : {}),
       remote_exit: remoteExit,
@@ -555,7 +555,7 @@ export async function execCommand(p: Parsed): Promise<string> {
     if (code) process.exitCode = 1;
     return encodeObject({
       ...output,
-      ...(code ? { error: message, code } : {}),
+      ...(code ? { error: message && safe(message), code } : {}),
       ...(truncated
         ? {
             help: [

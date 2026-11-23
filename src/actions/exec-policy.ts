@@ -414,7 +414,8 @@ export function execPolicy(
     }
     for (const [index, token] of commandArgv.entries()) {
       if (grepOperands && index > 0 && !grepOperands.has(index)) continue;
-      const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(token);
+      const isUrl = (value: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
+      const url = isUrl(token);
       if (
         !grepOperands &&
         index > 0 &&
@@ -427,7 +428,7 @@ export function execPolicy(
         ]) {
           // Embedded values such as dd if=/x, curl -d@/x and -F f=@/x.
           const embedded = value.replace(/^@/, "");
-          if (!embedded.includes("/")) continue;
+          if (!embedded.includes("/") || isUrl(embedded)) continue;
           if (!embedded.startsWith("/") && embedded.split("/").includes(".."))
             return refuse("relative parent paths are not supported", token);
           if (!embedded.startsWith("/") && !workingDir.startsWith("/"))
