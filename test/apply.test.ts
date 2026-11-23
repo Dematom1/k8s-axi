@@ -413,6 +413,12 @@ test("action allowlist rejects Secret/List apply and unprojected Secret reads", 
         target,
       ),
     ).toContain("Deployment.v1.team--ops.example.com/web");
+    expect(
+      argvForAction(
+        { kind: "apply-get", resource: "ConfigMap.v1.", name: "settings" },
+        target,
+      ),
+    ).toContain("ConfigMap.v1./settings");
     for (const kind of [
       "Secret",
       "List",
