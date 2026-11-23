@@ -1,5 +1,5 @@
 #!/bin/sh
-# Berth invokes kind synchronously; keep the lab's CPU cap during creation too.
+# Dibs invokes kind synchronously; keep the lab's CPU cap during creation too.
 set -eu
 kind_bin="$(dirname -- "$0")/kind-real"
 if [ "${1:-} ${2:-}" != 'create cluster' ]; then exec "$kind_bin" "$@"; fi

@@ -18,11 +18,12 @@ test.skipIf(process.env.K8S_AXI_LAB_LIVE !== "1")(
     expect(process.env.K8S_AXI_LAB_LIVE).toBe("1");
     const kubeconfigPath = process.env.KUBECONFIG;
     const leaseId = process.env.K8S_AXI_LAB_LEASE;
-    const berthState = process.env.BERTH_STATE;
-    if (!leaseId || !berthState)
-      throw new Error("lab berth lease and state are required");
+    const dibsState = process.env.DIBS_STATE;
+    if (!leaseId || !dibsState)
+      throw new Error("lab dibs lease and state are required");
+    expect(process.env.BERTH_STATE).toBe(dibsState);
     expect(kubeconfigPath).toBe(
-      resolve(berthState, "resources", leaseId, "kubeconfig"),
+      resolve(dibsState, "resources", leaseId, "kubeconfig"),
     );
     if (!kubeconfigPath) throw new Error("lab KUBECONFIG is required");
     const tmpDir = process.env.TMPDIR;
