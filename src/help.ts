@@ -1,5 +1,5 @@
 export const DESCRIPTION =
-  "k8s-axi: Kubernetes diagnostics and guarded-action foundations for agents";
+  "k8s-axi: Kubernetes diagnostics and guarded port forwarding for agents";
 export const COMMAND_LINES = [
   "triage: cluster checks and problems, all namespaces by default",
   "ctx: context, server, namespace and client version, local only",
@@ -26,8 +26,11 @@ export const COMMAND_LINES = [
   "setup status: inspect integrations without writes",
   "setup uninstall: remove managed hooks, preserve unrelated config",
   "context: last session summary for this directory",
-  "context end: record command counts and most-used context from stdin hook payload",
+  "context end: stop directory-owned forwarding and record command counts from stdin hook payload",
   "audit: show the local log of executed guarded actions",
+  "port-forward <target> [local:]remote: preview loopback forwarding; --execute -n <ns> --context <ctx> starts an owned session (--ttl 15m, range 10s..60m)",
+  "port-forward list: owned forwarding sessions, at most 5 per user",
+  "port-forward stop <id> | --all: stop owned sessions",
 ];
 export const TOP_HELP = [
   DESCRIPTION,
@@ -37,6 +40,6 @@ export const TOP_HELP = [
   "Lists: -n <namespace> or -A, --limit <n> (100, max 1000), --fields <a,b>, --problems",
   "Output is TOON. Exit 0: completed reads, including problems. Exit 1: failed or partial reads. Exit 2: usage.",
   "Secret values never enter this process. --full only untruncates allowlisted text.",
-  "Reads are the only enabled cluster operations. Guarded actions will be preview-only by default and require an explicit --execute to run.",
-  "Secret values are never shown. Executed guarded actions will be recorded in a local audit log.",
+  "Reads are default. Port-forward previews by default; --execute requires explicit --context and -n. Sessions bind loopback only and expire.",
+  "Secret values are never shown. Executed port-forward sessions are recorded in a local audit log.",
 ];

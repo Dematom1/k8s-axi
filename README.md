@@ -1,6 +1,6 @@
 # k8s-axi
 
-Strictly read-only Kubernetes diagnostics for agents. Output is TOON, including errors.
+Kubernetes diagnostics and bounded, opt-in port forwarding for agents. Output is TOON, including errors.
 
 ## Install
 
@@ -56,6 +56,8 @@ Run `k8s-axi` for an all-namespace overview or `k8s-axi <command> --help` for fl
 - `setup hooks`, `setup status`, `setup uninstall`: opt-in local agent integration.
 - `context`, `context end`: directory-scoped session summary.
 - `audit [--limit <n>] [--action exec|port-forward|apply]`: newest local guarded-action records; no network access.
+- `port-forward <pod|pod/name|service/name|deployment/name> [local:]remote`: previews one loopback-only forwarding session. `--execute` requires explicit `--context` and `-n`. The local port defaults to random; explicit local ports must be 1024–65535. `--ttl` defaults to 15m, with a range of 10s–60m. Deployments resolve to the newest Ready pod. Services resolve their TCP port to the selected pod's target port.
+- `port-forward list`, `port-forward stop <id>`, `port-forward stop --all`: manage up to five sessions per user. These commands make no cluster calls. `--address` is refused. Linux and macOS are supported.
 
 Global flags: `--context <name>`, `--timeout <seconds>` (default 20, range 1 to 120), `--help`, and `--version` (`-v`, `-V`).
 Namespaced lists default to the kubeconfig namespace, falling back to `default`. Home and triage default to all namespaces.
@@ -104,12 +106,17 @@ A missing context or namespace is an error. An empty namespace that cannot be ve
 | SECRET_MANIFEST       | A Secret manifest contains values instead of redacted placeholders.         |
 | INVALID_MANIFEST      | The manifest is invalid or unsupported.                                     |
 | LOGS_UNAVAILABLE      | The requested container logs are unavailable.                               |
+| UNSUPPORTED_PLATFORM  | Port-forward process groups require Linux or macOS.                         |
 
 ## Safety model
 
-Cluster access is read-only by default. The shared safety foundation for guarded `exec`, `port-forward`, apply preview, and diff is in place; those action commands are not enabled until their implementation lanes ship. When enabled, execution will require an explicit `--execute`, echo the target context, namespace, and target, and be recorded in a local audit log. `k8s-axi audit` reads that log without contacting the cluster. There is no arbitrary kubectl argument path, attach, proxy, raw output, auth review, or self-update.
+Cluster access is read-only by default. Port forwarding previews the resolved context, server, namespace, pod, ports, permission, and expiry. Only `--execute` starts a forwarding session, after its start record is written to the local audit log. `exec`, apply, and diff remain unavailable. `k8s-axi audit` reads the log without contacting the cluster. There is no arbitrary kubectl argument path, attach, proxy, raw output, public auth review, or self-update.
+
+Port-forward sessions live under `${XDG_STATE_HOME:-$HOME/.local/state}/k8s-axi/sessions/`, with 0700 directories and 0600 records. A detached supervisor owns each process group, waits up to 15 seconds for loopback readiness, and expires the session without reconnecting. Explicit stop, expiry, SessionEnd, and opportunistic reaping clean up sessions. SessionEnd stops sessions owned by the payload's real cwd and uid; agents in the same directory share ownership.
+
+Before signalling a live supervisor's process group, cleanup verifies its token in the process command. After supervisor death, cleanup requires the surviving child's pid, process group, exact start time, and exact command to match the saved identity. A mismatch or unreadable identity drops the record without signalling and audits `dropped`; it cannot safely promise cleanup of that unverified process.
 Every network call pins the resolved context. Namespace preflight distinguishes a missing namespace from an empty list.
-Subprocesses have closed stdin, a shared overall deadline, per-call timeouts, process-group cleanup, and a 128 MiB combined output cap. The audit log is stored at `${XDG_STATE_HOME:-$HOME/.local/state}/k8s-axi/audit.jsonl`, with private directory and file permissions.
+Read subprocesses have closed stdin, a shared overall deadline, per-call timeouts, process-group cleanup, and a 128 MiB combined output cap. Port-forward supervisors close stdin and cap each captured stream at 1 MiB; their lifetime is bounded by the session TTL. The audit log is stored at `${XDG_STATE_HOME:-$HOME/.local/state}/k8s-axi/audit.jsonl`, with private directory and file permissions.
 KUBERC is disabled so user defaults cannot silently rewrite a read. kubectl can write its own discovery cache, but k8s-axi never modifies kubeconfig or cluster resources.
 
 Secrets are read only through a fixed go-template. Only namespace, name, type, creation time, and key names reach this process. Secret data, stringData, annotations, and labels do not.
@@ -122,7 +129,7 @@ Free text is redacted before truncation, including `--full`. Log redaction is **
 Either integration path is sufficient. Neither is installed automatically.
 
 - **Skill:** `npx skills add Dematom1/k8s-axi --skill k8s-axi -g`, or copy `skills/k8s-axi/SKILL.md` into your agent's skills directory. Examples use `npx -y k8s-axi`.
-- **Hooks:** after a persistent install, run `k8s-axi setup hooks`. Claude Code and Codex get SessionStart context. OpenCode gets a managed ambient plugin. Claude Code SessionEnd records command names, counts, and the most-used context, not command arguments or output.
+- **Hooks:** after a persistent install, run `k8s-axi setup hooks`. Claude Code and Codex get SessionStart context. OpenCode gets a managed ambient plugin. Claude Code SessionEnd records command names, counts, and the most-used context, not command arguments or output. It also stops port-forward sessions owned by the payload directory.
 
 The dedicated `k8s-axi-ctx` hook is local only and does not make a health claim. Setup refuses ephemeral npx installations.
 `setup status` reopens destinations. `setup uninstall` removes SessionStart and SessionEnd hooks and the managed plugin, preserving unrelated settings and the shared Codex feature flag. When `CLAUDE_CONFIG_DIR` is set, k8s-axi's SessionEnd hook and its setup status/install/uninstall use that directory; setup creates a missing directory with mode `0700` and `settings.json` with mode `0600`. The SDK-managed SessionStart hook also updates `~/.claude/settings.json`. In `~/.claude/settings.json` and `~/.codex/hooks.json`, axi-sdk-js treats any `SessionStart` hook command (including legacy `session_start` entries) containing `k8s-axi` as managed, so `setup uninstall` may also remove an unrelated hook whose command contains that text. This substring rule does not apply to k8s-axi's own SessionEnd handling or its custom `CLAUDE_CONFIG_DIR` SessionStart handling, which use narrower command matching.

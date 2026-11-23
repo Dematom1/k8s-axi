@@ -30,6 +30,7 @@ export const CODES = [
   "SECRET_MANIFEST",
   "INVALID_MANIFEST",
   "LOGS_UNAVAILABLE",
+  "UNSUPPORTED_PLATFORM",
 ] as const;
 export type ErrorCode = (typeof CODES)[number];
 export function fail(
