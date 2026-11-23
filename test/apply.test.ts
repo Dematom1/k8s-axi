@@ -291,10 +291,11 @@ test("A10/A12 rejects unsupported input locally", () => {
 });
 
 test("YAML parses Kubernetes defaultMode using YAML 1.1 octal", () => {
-  const [manifest] = parseManifests(
+  const manifests = parseManifests(
     `apiVersion: v1\nkind: Pod\nmetadata: {name: scalars}\nspec:\n  containers: [{name: app, image: busybox}]\n  volumes:\n    - name: settings\n      configMap: {name: settings, defaultMode: 0644}`,
   );
-  expect(manifest.value).toMatchObject({
+  expect(manifests).toHaveLength(1);
+  expect(manifests[0]?.value).toMatchObject({
     spec: { volumes: [{ configMap: { defaultMode: 0o644 } }] },
   });
 });
