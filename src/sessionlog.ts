@@ -37,6 +37,7 @@ const COMMANDS = new Set([
   "setup",
   "context",
   "audit",
+  "port-forward",
 ]);
 const CONTEXTS = COMMANDS;
 
@@ -240,7 +241,9 @@ function errorCode(error: unknown): string | undefined {
     : undefined;
 }
 
-async function acquireLock(path: string): Promise<SessionLock | undefined> {
+export async function acquireSessionLock(
+  path: string,
+): Promise<SessionLock | undefined> {
   const lockPath = `${path}.lock`;
   const deadline = Date.now() + LOCK_WAIT_MS;
   while (Date.now() < deadline) {
@@ -326,7 +329,7 @@ export async function recordSession(
 ): Promise<boolean> {
   const path = sessionsPath();
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  const lock = await acquireLock(path);
+  const lock = await acquireSessionLock(path);
   if (lock === undefined) return false;
   try {
     const directories = readSessions();

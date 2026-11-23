@@ -1,12 +1,12 @@
 ---
 name: k8s-axi
-description: "Strictly read-only Kubernetes diagnostics for agents: triage pods, nodes, workloads, events, logs, and Secret metadata never changes the cluster and redacts secrets best effort."
+description: "Kubernetes diagnostics and guarded port forwarding for agents: triage pods, nodes, workloads, events, logs, and Secret metadata; preview or start bounded loopback sessions."
 user-invocable: false
 ---
 
 # k8s-axi
 
-k8s-axi: Kubernetes diagnostics and guarded-action foundations for agents.
+k8s-axi: Kubernetes diagnostics and guarded port forwarding for agents.
 
 Run `npx -y k8s-axi <command>`. kubectl must be on PATH with a named kubeconfig context.
 Use `npx -y k8s-axi ctx` to inspect local configuration without contacting a cluster.
@@ -40,14 +40,17 @@ Carry `--context <name>` and `-n <namespace>` into detail commands. Lists use th
 - setup status: inspect integrations without writes
 - setup uninstall: remove managed hooks, preserve unrelated config
 - context: last session summary for this directory
-- context end: record command counts and most-used context from stdin hook payload
+- context end: stop directory-owned forwarding and record command counts from stdin hook payload
 - audit: show the local log of executed guarded actions
+- port-forward <target> [local:]remote: preview loopback forwarding; --execute -n <ns> --context <ctx> starts an owned session (--ttl 15m, range 10s..60m)
+- port-forward list: owned forwarding sessions, at most 5 per user
+- port-forward stop <id> | --all: stop owned sessions
 
 Run `npx -y k8s-axi <command> --help` for flags and examples.
 
 ## Safety and results
 
-Enabled cluster operations are fixed reads through kubectl. Guarded exec, port-forward, apply preview, and diff are not enabled yet. When available, actions will default to preview, require explicit --execute for effects, show the target, and write an audit record. No raw passthrough, auth reviews, streaming, or self-update exists.
+Cluster operations are fixed reads by default. Port-forward previews the target and permission without starting a session. --execute requires explicit --context and -n, echoes the target, and writes an audit record before launch. Sessions bind loopback only, expire after --ttl (15m by default, 10s–60m), and are limited to five per user. Stop them explicitly or through SessionEnd for the owner cwd and uid. Linux and macOS are supported. Guarded exec, apply preview, and diff are not enabled yet. No raw passthrough, public auth reviews, streaming output, or self-update exists.
 Secrets enter this process only as metadata and key names projected by a fixed template. --full never adds fields or reveals values.
 This is an output restriction, not server-side access control: Secret list permission also grants values to a direct API client.
 Pods omit env, args, commands, and volumes. Object annotations are not output.

@@ -154,3 +154,38 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: emptyns
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo
+  namespace: fixtures
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: echo }
+  template:
+    metadata:
+      labels: { app: echo }
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command:
+            [
+              "sh",
+              "-c",
+              "mkdir -p /www; printf 'k8s-axi-echo\\n' > /www/index.html; exec httpd -f -p 8080 -h /www",
+            ]
+          ports: [{ name: http, containerPort: 8080 }]
+          readinessProbe:
+            httpGet: { path: /, port: http }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo
+  namespace: fixtures
+spec:
+  selector: { app: echo }
+  ports: [{ port: 80, targetPort: http }]

@@ -9,6 +9,11 @@ import {
 import { encodeObject } from "../toon.js";
 import { object, text } from "../kubectl.js";
 import { fail } from "../errors.js";
+import {
+  stopOwnedSessions,
+  withSessions,
+  reapSessions,
+} from "../actions/port-forward.js";
 function directory(path: string): string {
   try {
     return realpathSync(path);
@@ -25,6 +30,8 @@ export async function contextCommand(p: Parsed): Promise<string> {
         : "no recorded session in this directory",
     });
   }
+  if (process.platform === "darwin" || process.platform === "linux")
+    await withSessions(false, reapSessions);
   let raw = "";
   const payload = await new Promise<string>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("stdin deadline")), 5000);
@@ -56,6 +63,7 @@ export async function contextCommand(p: Parsed): Promise<string> {
   }
   const v = object(parsed),
     path = text(v.transcript_path);
+  await stopOwnedSessions(text(v.cwd, process.cwd()));
   if (!path)
     fail("VALIDATION_ERROR", "SessionEnd payload needs transcript_path");
   try {

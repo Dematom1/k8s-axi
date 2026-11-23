@@ -1,5 +1,6 @@
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { SECRET_TEMPLATE } from "../../dist/src/registry.js";
 const args = process.argv.slice(2);
 const scenario = JSON.parse(readFileSync(process.env.K8S_AXI_SCENARIO, "utf8"));
@@ -26,7 +27,19 @@ if (
 }
 const r = match ??
   scenario.default ?? { stdout: JSON.stringify({ items: [] }) };
-if (r.mode === "stdin") {
+if (r.mode === "port-forward") {
+  const [local, remote] = args[2].split(":");
+  const server = createServer((_req, res) => res.end("k8s-axi-echo\n"));
+  server.on("error", () => {
+    process.stderr.write("Unable to listen on port: address already in use\n");
+    process.exitCode = 1;
+  });
+  server.listen(Number(local) || 0, "127.0.0.1", () => {
+    process.stdout.write(
+      `Forwarding from 127.0.0.1:${server.address().port} -> ${remote}\n`,
+    );
+  });
+} else if (r.mode === "stdin") {
   let bytes = 0;
   process.stdin.on("data", (b) => (bytes += b.length));
   process.stdin.on("end", () =>

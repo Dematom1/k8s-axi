@@ -1,6 +1,6 @@
 import { COMMAND_LINES, DESCRIPTION } from "./help.js";
 export const SKILL_DESCRIPTION =
-  "Strictly read-only Kubernetes diagnostics for agents: triage pods, nodes, workloads, events, logs, and Secret metadata never changes the cluster and redacts secrets best effort.";
+  "Kubernetes diagnostics and guarded port forwarding for agents: triage pods, nodes, workloads, events, logs, and Secret metadata; preview or start bounded loopback sessions.";
 export function createSkillMarkdown(): string {
   return `---
 name: k8s-axi
@@ -25,7 +25,7 @@ Run \`npx -y k8s-axi <command> --help\` for flags and examples.
 
 ## Safety and results
 
-Enabled cluster operations are fixed reads through kubectl. Guarded exec, port-forward, apply preview, and diff are not enabled yet. When available, actions will default to preview, require explicit --execute for effects, show the target, and write an audit record. No raw passthrough, auth reviews, streaming, or self-update exists.
+Cluster operations are fixed reads by default. Port-forward previews the target and permission without starting a session. --execute requires explicit --context and -n, echoes the target, and writes an audit record before launch. Sessions bind loopback only, expire after --ttl (15m by default, 10s–60m), and are limited to five per user. Stop them explicitly or through SessionEnd for the owner cwd and uid. Linux and macOS are supported. Guarded exec, apply preview, and diff are not enabled yet. No raw passthrough, public auth reviews, streaming output, or self-update exists.
 Secrets enter this process only as metadata and key names projected by a fixed template. --full never adds fields or reveals values.
 This is an output restriction, not server-side access control: Secret list permission also grants values to a direct API client.
 Pods omit env, args, commands, and volumes. Object annotations are not output.
