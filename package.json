@@ -1,7 +1,7 @@
 {
   "name": "k8s-axi",
   "version": "0.1.4",
-  "description": "Strictly read-only Kubernetes diagnostics for agents",
+  "description": "Kubernetes diagnostics and server dry-run manifest previews for agents",
   "type": "module",
   "license": "MIT",
   "author": "Laszlo Horanszky",

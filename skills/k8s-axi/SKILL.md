@@ -1,6 +1,6 @@
 ---
 name: k8s-axi
-description: "Strictly read-only Kubernetes diagnostics for agents: triage pods, nodes, workloads, events, logs, and Secret metadata never changes the cluster and redacts secrets best effort."
+description: "Kubernetes diagnostics and server dry-run manifest previews for agents: triage pods, nodes, workloads, events, logs, and Secret metadata without changing the cluster; redaction is best effort."
 user-invocable: false
 ---
 
